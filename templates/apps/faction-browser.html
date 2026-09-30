@@ -1,0 +1,155 @@
+{{!--
+  Faction Entry Display.
+
+  SECTION ORDER IS ASSERTED HERE, and it is the book's: the intro
+  paragraph with no heading of its own, then Summary, the aside where one
+  exists, Goals, Allies, Enemies, Allied Monsters, Joining, Triumphant,
+  NPCs, and the Gaining REP table last. It is not the roster's field
+  order and the two must not be confused — 161.3 asks for the book's
+  order specifically, so it is written out rather than iterated.
+
+  The aside sits between Summary and Goals because that is where the
+  vault puts it: only Seekers of Eyeless Wisdom has one (The Gestalt
+  Choirs) and it is printed there.
+
+  TWO HEADINGS ARE GENERIC WHERE THE BOOK'S ARE NOT, and that is the
+  roster's shape rather than a shortcut here. The book heads each
+  faction's own sections "The Faa Triumphant", "Gaining Seeker
+  Reputation" and so on; faction-data.js stores neither heading, only the
+  content. Allied Monsters DOES carry its heading, because Titan Cults
+  heads its list "Possible Allied Monsters" where Faa Nomads heads its
+  "Allied Monsters", and that difference is the book's.
+
+  Several sections are legitimately absent and each says so in its own
+  words rather than vanishing. A missing Joining is the book printing a
+  literal "xx"; a missing REP table is only ever the Court, which prints
+  the Autarch Figment table in its place.
+--}}
+<div class="vaarn-factions">
+
+  {{#if empty}}
+  <p class="vaarn-factions-empty">
+    This world has no factions. Every book faction is hidden and none has
+    been added &mdash; see the Factions entry in Game Settings.
+  </p>
+  {{else}}
+
+  <div class="vaarn-factions-list">
+    {{#each list}}
+    <a class="vaarn-factions-tab{{#if this.selected}} active{{/if}}"
+       data-action="select-faction" data-faction="{{this.name}}">
+      {{this.name}}
+      {{#if this.added}}<span class="vaarn-factions-added" title="Added in this world, not a book faction">house</span>{{/if}}
+    </a>
+    {{/each}}
+  </div>
+
+  <div class="vaarn-factions-entry">
+    <h2>{{entry.name}}</h2>
+
+    {{#each entry.intro}}
+    <p class="vaarn-factions-intro">{{this}}</p>
+    {{/each}}
+
+    {{#if entry.summary.length}}
+    <h3>Summary</h3>
+    {{#each entry.summary}}<p>{{this}}</p>{{/each}}
+    {{/if}}
+
+    {{#if entry.aside}}
+    <h3>{{entry.aside.heading}}</h3>
+    {{#each entry.aside.paragraphs}}<p>{{this}}</p>{{/each}}
+    {{/if}}
+
+    {{#if entry.goals.length}}
+    <h3>Goals</h3>
+    <ul class="vaarn-factions-bullets">
+      {{#each entry.goals}}<li>{{{this}}}</li>{{/each}}
+    </ul>
+    {{/if}}
+
+    <h3>Allies</h3>
+    {{#if entry.allies.length}}
+    <ul class="vaarn-factions-bullets">
+      {{#each entry.allies}}<li>{{{this.html}}}</li>{{/each}}
+    </ul>
+    {{else}}
+    <p class="vaarn-factions-none">No allies are listed.</p>
+    {{/if}}
+
+    <h3>Enemies</h3>
+    {{#if entry.enemies.length}}
+    <ul class="vaarn-factions-bullets">
+      {{#each entry.enemies}}<li>{{{this.html}}}</li>{{/each}}
+    </ul>
+    {{else}}
+    <p class="vaarn-factions-none">No enemies are listed.</p>
+    {{/if}}
+
+    {{#if entry.alliedMonsters}}
+    <h3>{{entry.alliedMonsters.heading}}</h3>
+    <ul class="vaarn-factions-bullets">
+      {{#each entry.alliedMonsters.names}}<li>{{this}}</li>{{/each}}
+    </ul>
+    {{/if}}
+
+    <h3>Joining this Faction</h3>
+    {{#if entry.joining}}
+    {{#each entry.joining}}<p>{{this}}</p>{{/each}}
+    {{else}}
+    <p class="vaarn-factions-none">The book has not written this section.</p>
+    {{/if}}
+
+    {{#if entry.triumphant.lines.length}}
+    <h3>Triumphant</h3>
+    <div class="{{#if entry.triumphant.verse}}vaarn-factions-verse{{/if}}">
+      {{#each entry.triumphant.lines}}<p>{{this}}</p>{{/each}}
+    </div>
+    {{/if}}
+
+    <h3>NPCs</h3>
+    {{#if entry.npcs.length}}
+    <ul class="vaarn-factions-npcs">
+      {{#each entry.npcs}}
+      <li>
+        {{#if this.spawnable}}
+        <button type="button" data-action="spawn-npc" data-creature="{{this.creature}}"
+                title="Spawn {{this.creature}} from the Bestiary compendium">
+          <i class="fas fa-paw"></i> {{this.label}}
+        </button>
+        {{else}}
+        <span class="vaarn-factions-unspawnable"
+              title="The Bestiary compendium has no creature under this name">{{this.label}}</span>
+        {{/if}}
+      </li>
+      {{/each}}
+    </ul>
+    {{else}}
+    <p class="vaarn-factions-none">No NPCs are listed.</p>
+    {{/if}}
+
+    {{#if entry.rep}}
+    <h3>Gaining Reputation</h3>
+    <table class="vaarn-factions-rep">
+      <thead><tr><th>REP</th><th>Actions</th></tr></thead>
+      <tbody>
+        {{#each entry.rep}}
+        <tr><td class="vaarn-factions-repval">{{this.rep}}</td><td>{{this.actions}}</td></tr>
+        {{/each}}
+      </tbody>
+    </table>
+    {{else if entry.rollTable}}
+    <h3>{{entry.rollTable.heading}}</h3>
+    <p class="vaarn-factions-none">
+      This faction has no Gaining Reputation table. The book prints
+      <b>{{entry.rollTable.name}}</b> in its place &mdash; it is a Roll Table
+      rather than a section, and lives in the Roll Tables directory.
+    </p>
+    {{else}}
+    <h3>Gaining Reputation</h3>
+    <p class="vaarn-factions-none">No Gaining Reputation table is recorded.</p>
+    {{/if}}
+  </div>
+
+  {{/if}}
+</div>

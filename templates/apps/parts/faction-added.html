@@ -1,0 +1,87 @@
+{{!-- One Referee-added faction, in faction-config.html.
+
+      Book-shaped, on Matt's ruling 2026-09-14: an addition carries the
+      book's own sections rather than a name and a note.
+
+      Only `name` is structured, and it has to be, because it is the key
+      every later row stores against — Faction Reputation keys REP by it,
+      Faction Membership Tag tags NPCs with it, Faction Relationship Graph
+      links pairs. That is the one place this departs from the gambit
+      precedent, where an addition is free text all the way down because
+      nothing ever refers back to a gambit.
+
+      Everything else is ONE PER LINE. Splitting on newline cannot misread
+      a line; a syntax would be a parser, and a parser that misreads
+      returns a clean, plausible, wrong result.
+
+      Allies and enemies are in two parts on purpose. The picker holds real
+      factions, which the Relationship Graph will have to resolve; the free
+      lines hold everything else, which is what the book itself does when
+      Titan Cults ally with "Powerful Synthetic Creatures".
+
+      Rendered once per existing addition plus once blank, so there is
+      always an empty row to type into. --}}
+<div class="vaarn-faction-added">
+
+  <div class="flexrow" style="gap: 0.4em; align-items: flex-end;">
+    <div style="flex: 1;">
+      <label for="added-name-{{row.i}}">Name</label>
+      <input type="text" id="added-name-{{row.i}}" data-role="name"
+             name="added.{{row.i}}.name" value="{{row.name}}"
+             placeholder="The Rust Syndicate"/>
+    </div>
+    <button type="button" class="vaarn-faction-remove" data-action="remove-added"
+            title="Remove this faction">
+      <i class="fas fa-trash"></i>
+    </button>
+  </div>
+
+  <label>Opening description <span class="hint">one paragraph per blank line</span></label>
+  <textarea name="added.{{row.i}}.intro" rows="2">{{row.intro}}</textarea>
+
+  <label>Summary <span class="hint">one bullet per line</span></label>
+  <textarea name="added.{{row.i}}.summary" rows="3">{{row.summary}}</textarea>
+
+  <label>Goals <span class="hint">one per line; anything before an em dash (&mdash;) is bolded</span></label>
+  <textarea name="added.{{row.i}}.goals" rows="3">{{row.goals}}</textarea>
+
+  <label>Allied factions</label>
+  <select name="added.{{row.i}}.allyFactions" multiple size="4">
+    {{#each allNames as |n|}}
+      <option value="{{n}}" {{#if (inList ../row.allyFactions n)}}selected{{/if}}>{{n}}</option>
+    {{/each}}
+  </select>
+  <label>Other allies <span class="hint">one per line, for anything that is not a faction</span></label>
+  <textarea name="added.{{row.i}}.allies" rows="2">{{row.allies}}</textarea>
+
+  <label>Enemy factions</label>
+  <select name="added.{{row.i}}.enemyFactions" multiple size="4">
+    {{#each allNames as |n|}}
+      <option value="{{n}}" {{#if (inList ../row.enemyFactions n)}}selected{{/if}}>{{n}}</option>
+    {{/each}}
+  </select>
+  <label>Other enemies <span class="hint">one per line</span></label>
+  <textarea name="added.{{row.i}}.enemies" rows="2">{{row.enemies}}</textarea>
+
+  <label>Joining this faction</label>
+  <textarea name="added.{{row.i}}.joining" rows="2">{{row.joining}}</textarea>
+
+  <label>If they triumph</label>
+  <textarea name="added.{{row.i}}.triumphant" rows="2">{{row.triumphant}}</textarea>
+
+  <label>NPCs <span class="hint">one per line</span></label>
+  <textarea name="added.{{row.i}}.npcs" rows="2">{{row.npcs}}</textarea>
+
+  <label>Gaining reputation <span class="hint">the book uses +1 to +4; leave a row blank to omit it</span></label>
+  <table class="vaarn-faction-rep">
+    <tbody>
+      {{#each row.repRows as |r|}}
+      <tr>
+        <th>{{r.key}}</th>
+        <td><input type="text" name="added.{{../row.i}}.rep.{{r.key}}" value="{{r.actions}}"/></td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+</div>

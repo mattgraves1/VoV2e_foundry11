@@ -1,0 +1,61 @@
+<!-- Vaarn: Death and Resurrection -->
+<p>The system announces a character's death in chat, but it doesn't lock the character or stop anyone using the sheet. What happens next is up to you and the player. A Fatality, General Systems Failure or Ego-Engine Destroyed death is also listed on the character's Wounds tab, so you can see how they died.</p>
+
+<h2>How characters die</h2>
+<p>Each of these posts a line in chat saying the character is dead, and why:</p>
+<ul>
+  <li><strong>Fatality</strong>: HP reaches −20 (−19 or −20 for a Synth).</li>
+  <li><strong>Death's Door</strong>: a character on the Death's Door wound takes any further damage.</li>
+  <li><strong>No room for Wounds</strong>: a new Wound needs slots the character doesn't have.</li>
+  <li><strong>An ability bonus falls below −10.</strong></li>
+  <li><strong>Maximum HP reaches 0.</strong></li>
+  <li><strong>A failed save against instant death</strong>, such as a neurotoxin.</li>
+  <li><strong>Lithlings</strong> crumble to dust at 0 HP (see below).</li>
+</ul>
+<p>At exactly 0 HP, other characters are knocked out and roll a CON save instead of dying.</p>
+<p>To kill a character deliberately, use <strong>Inflict a Wound</strong> on their Wounds tab. It lists every row of their Wounds table, the deadly ones included.</p>
+
+<h2>Things that stop death</h2>
+<ul>
+  <li><strong>Immortality Injector</strong>: while it lasts, the death line becomes "would have died … but the Immortality Injector holds them together". HP and Wounds still apply.</li>
+  <li><strong>Look Out Sire</strong>: a bodyguard creature can guard one token (chapter 2). When a blow would kill the guarded token, the blow is held and a card is whispered to you. Click <strong><em>Name</em> dies instead</strong> to have the bodyguard take it, or <strong>Let it land</strong>.</li>
+</ul>
+
+<h2>Bringing someone back</h2>
+<p>Run <strong>Resurrect Character</strong> from the Vaarn Macros. Choose the dead character and a route. Each route checks that it suits the character, and posts a card explaining what happened.</p>
+<ul>
+  <li><strong>Mycomorph Spores</strong> (Biological): the character is reborn as a Mycomorph within d4 days, with the same sheet and items. An INT save decides whether they remember who they were; on a failure they drop to Level 1.</li>
+  <li><strong>Necrotech</strong> (Biological): Phoenix Core and Lazarus implants bring them back as partly Synthetic, on the same sheet.</li>
+  <li><strong>Pseudo-Womb clone</strong> (Biological): the same sheet. A failed CON save adds two new mutations.</li>
+  <li><strong>Returning as a Spirit</strong> (anyone): roll d20 + Level against 16. On a success, a new <em>Spirit of …</em> actor is made for the player (see below).</li>
+  <li><strong>Ego-Engine Transplant</strong> (Synth, unless the death was Ego-Engine Destroyed): a new Level 1 body with the same name and player. STR, DEX, CON and HP are rerolled; INT, PSY, EGO, personality and Gifts are kept. Items and wounds stay on the old sheet, so give across whatever the party recovered.</li>
+</ul>
+<p>For the three routes that bring the character back on the same sheet (Spores, Necrotech and Pseudo-Womb), the macro also offers three clean-ups:</p>
+<ul>
+  <li><strong>Remove all wounds</strong>, and with them anything a wound caused, such as Vischip Disabled's blindness or the daily fading of Deathblight.</li>
+  <li><strong>Heal all ability damage</strong>, including a Severed Limb's STR and DEX.</li>
+  <li><strong>End everything on their Active Effects board</strong>: afflictions, conditions, a Toxin Die, curses and the rest. Your GM reminders stay.</li>
+</ul>
+<p>All three are ticked for Spores and Pseudo-Womb; for Necrotech only ability damage is. Change them as you see fit. The card lists what was removed. Lost maximum HP is not restored.</p>
+<p>Nothing is charged. Track any cost or waiting time yourself.</p>
+
+<h2>Spirits</h2>
+<p>A returned spirit is a new actor owned by the same player, with the character's Level, maximum HP and abilities. It is incorporeal. Its sheet has three abilities:</p>
+<ul>
+  <li><strong>Manipulate Object</strong>, which costs d6 HP.</li>
+  <li><strong>Possess</strong> a single targeted creature, which costs d6 + the creature's Level in HP.</li>
+  <li><strong>Long Rest</strong>, which restores full HP and needs no rations.</li>
+</ul>
+<p>At 0 HP it fades away and can return at the next sunrise.</p>
+
+<h2>Lithlings</h2>
+<p>A Lithling at 0 HP crumbles into dust and leaves a seed item in their inventory. Whether and how the seed grows again is up to you; the system doesn't track it.</p>
+
+<h2>Creatures</h2>
+<p>A creature at 0 HP is killed and chat says so. Mark it defeated in the Combat Tracker yourself; only a death from a failed save does that for you. Effects that last until their source dies end when it does.</p>
+
+<h2>Try it</h2>
+<ol>
+  <li>Make a test character with <strong>Create Character (Vaarn)</strong>, of any ancestry but Synth (Pseudo-Womb needs a biological character, and only the creator sets that), and, on its Wounds tab, use <strong>Inflict a Wound</strong> to apply its Fatality row. Read the chat line.</li>
+  <li>Run <strong>Resurrect Character</strong>, pick that character and <strong>Pseudo-Womb clone</strong>, and read the card.</li>
+</ol>

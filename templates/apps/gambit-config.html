@@ -1,0 +1,64 @@
+{{!--
+  Gambit List Override. Two halves, deliberately different shapes.
+
+  The book's seven get a checkbox and a field each, because hiding and
+  rewording a shipped entry needs no syntax that way — and a syntax would
+  be a parser, which is the thing this project keeps getting caught by.
+  The shipped text is printed beside each row so it is obvious what a
+  replacement is replacing.
+
+  Additions are one free-text line each, rendered verbatim on the card.
+--}}
+<form autocomplete="off">
+
+  <p class="notes">
+    Shown on an attack whose total is higher than {{threshold}} and which hit.
+    The book's list is never altered — everything here is stored separately,
+    so clearing a field restores the book's own wording.
+  </p>
+
+  <h3>From the book</h3>
+  <table class="vaarn-gambit-book">
+    <thead>
+      <tr>
+        <th style="width: 4em;">Hide</th>
+        <th>Gambit</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each book as |row|}}
+      <tr>
+        <td style="text-align: center; vertical-align: top; padding-top: 0.6em;">
+          <input type="checkbox" name="book.{{row.i}}.hidden" {{checked row.hidden}}/>
+        </td>
+        <td>
+          <div class="vaarn-gambit-shipped">{{{row.shipped}}}</div>
+          <input type="text" name="book.{{row.i}}.replacement" value="{{row.replacement}}"
+                 placeholder="Reword it — leave blank to use the book's text"/>
+        </td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <h3>Your own</h3>
+  <p class="notes">
+    One per line. Anything before an em dash (—) is bolded, so
+    <em>Trip — DEX Save, the target falls prone.</em> reads like the
+    entries above. A line without one is shown as written.
+  </p>
+  <textarea name="added" rows="6"
+            placeholder="Trip — DEX Save, the target falls prone.">{{added}}</textarea>
+
+  <footer class="sheet-footer flexrow" style="margin-top: 0.5em;">
+    <button type="submit"><i class="fas fa-save"></i> Save</button>
+  </footer>
+</form>
+
+<style>
+  .vaarn-gambit-config .vaarn-gambit-book { width: 100%; border-collapse: collapse; }
+  .vaarn-gambit-config .vaarn-gambit-book td { padding: 0.25em 0.4em; border-top: 1px solid var(--color-border-light-tertiary, #bbb); }
+  .vaarn-gambit-config .vaarn-gambit-shipped { font-size: 0.9em; opacity: 0.8; margin-bottom: 0.2em; }
+  .vaarn-gambit-config textarea { width: 100%; font-family: inherit; }
+  .vaarn-gambit-config p.notes { font-size: 0.9em; opacity: 0.85; }
+</style>

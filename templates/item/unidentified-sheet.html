@@ -1,0 +1,14 @@
+<form class="{{cssClass}}" autocomplete="off">
+    {{!-- Exotica Identification: what a player sees of an item nobody has
+          identified yet. No inputs, so nothing on it can be edited, and nothing
+          on it names the item. item-sheet.js chooses this template. --}}
+    <header class="sheet-header">
+        <img class="profile-img" src="{{standInImg}}" title="{{standInName}}"/>
+        <div class="header-fields">
+            <h1 class="charname">{{standInName}}</h1>
+        </div>
+    </header>
+    <section class="sheet-body">
+        <p>Nobody knows what this device does. The Referee can ask for an INT save to work it out, or it can be appraised at a settlement.</p>
+    </section>
+</form>

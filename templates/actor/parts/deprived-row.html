@@ -1,0 +1,37 @@
+{{!-- Deprived State (Core Rules/Deprivation.md) — on EVERY actor sheet, the same
+      as toxin-row.html, and for the same reason: the book applies it to
+      creatures as readily as to PCs. Doom Song makes "all creatures" Deprived
+      and Amaranthine Venom afflicts "creatures".
+
+      It shipped character-only for one commit on 2026-09-11. RULED that day
+      (Matt): creature sheets too, "and future pet and steed sheets - it doesn't
+      take much real estate and could come in handy". The getData side is
+      therefore not typed-gated at all, so a later sheet type inherits this row
+      rather than having to opt in.
+
+      THE READOUT IS PUBLIC, THE TOGGLE IS NOT. A Deprived character cannot heal
+      lost HP, so a player who cannot see the condition cannot understand why
+      their healing refused — and the book's own Referee advice for Gnomon is
+      "Make them aware of this, and punish them when they aren't drinking."
+      Switching it is the Referee's, because the book states no rule for
+      removing it and the decision is theirs.
+
+      This mirrors the split effect-board.js documents for entry visibility: a
+      PC-sheet effect is public because it is the player's own business, and
+      addEntry stamps origin "pc" here, so the board agrees with this row rather
+      than contradicting it.
+
+      THE ROW IS ABSENT WHEN THERE IS NOTHING TO SAY — not Deprived and not the
+      Referee means no markup at all, rather than a permanently visible "Not
+      Deprived" on every sheet. --}}
+{{#if deprived.show}}
+<div class="flex-group-center knave-deprived">
+  <span class="resource-label">STATE</span>
+  {{#if @root.isGM}}
+  <button type="button" class="knave-deprived-toggle{{#if deprived.on}} knave-encumbered{{/if}}"
+          title="{{deprived.title}}">{{deprived.label}}</button>
+  {{else}}
+  <span class="knave-deprived-status" title="{{deprived.title}}">{{deprived.label}}</span>
+  {{/if}}
+</div>
+{{/if}}

@@ -1,0 +1,301 @@
+{
+  "Actor":
+  {
+    "types": ["character", "npc", "container", "vehicle"],
+    "templates":
+    {
+      "base":
+      {
+        "health":
+        {
+          "value": 8,
+          "min": 0,
+          "max": 8,
+          "temp": 0
+        },
+        "armor":
+        {
+          "value": 11,
+          "bonus": 1,
+          "damage": 0
+        },
+        "xp":
+        {
+          "value": 0
+        },
+        "level":
+        {
+          "value": 1,
+          "min": 1
+        },
+        "abilities":
+        {
+          "str":
+          {
+            "value": 0,
+            "max":10,
+            "woundDamage": 0
+          },
+          "dex":
+          {
+            "value": 0,
+            "max":10,
+            "woundDamage": 0
+          },
+          "con":
+          {
+            "value": 0,
+            "max":10,
+            "woundDamage": 0
+          },
+          "int":
+          {
+            "value": 0,
+            "max":10,
+            "woundDamage": 0
+          },
+          "psy":
+          {
+            "value": 0,
+            "max":10,
+            "woundDamage": 0
+          },
+          "ego":
+          {
+            "value": 0,
+            "max":10,
+            "woundDamage": 0
+          }
+        },
+        "movement":"",
+        "morale":
+        {
+          "value":0,
+          "max":20,
+          "min":0,
+          "mode":"",
+          "note":""
+        },
+        "creatureTypes":
+        {
+          "biological": false,
+          "synthetic": false,
+          "psychic": false,
+          "fungal": false,
+          "mineral": false,
+          "hypergeometric": false,
+          "outsider": false
+        },
+        "toxinDie":
+        {
+          "die": "",
+          "source": ""
+        },
+        "noHealRule": ""
+      }
+    },
+    "character":
+    {
+      "templates": ["base"],
+      "biography": "",
+      "ancestry": "",
+      "inventorySlots":
+      {
+        "used":0,
+        "value":0,
+        "max":20
+      },
+      "hands":
+      {
+        "used":0,
+        "max":2
+      },
+      "cargo":
+      {
+        "capacity":0
+      },
+      "wounds": [],
+      "advancement": [],
+      "reputation": [],
+      "spark": [],
+      "hypergeometricLockout": false,
+      "sporeLockout": false
+    },
+    "npc":
+    {
+      "templates": ["base"],
+      "biography": "",
+      "enc": "",
+      "itemSlots": 0,
+      "itemSlotsSpecial": false
+    },
+    "container":
+    {
+      "biography": ""
+    },
+    "vehicle":
+    {
+      "templates": ["base"],
+      "biography": "",
+      "vehicleKind": "",
+      "speed": "",
+      "itemSlots": 0,
+      "crew":
+      {
+        "text": "",
+        "passengers": 0,
+        "pilotLabel": "Pilot",
+        "pilotSlots": 0,
+        "gunnerSlots": 0,
+        "attacks": "none",
+        "pilots": [],
+        "gunners": []
+      }
+    }
+  },
+  "Item":
+  {
+    "types": ["item", "weaponMelee", "weaponRanged", "armor", "light", "spell", "wound", "exhaustion", "affliction", "gift", "codex", "implant", "exotica", "crucible", "mutation", "figment", "ancestry"],
+    "templates":
+    {
+      "base":
+      {
+        "name": "",
+        "description": "",
+        "quantity": 1,
+        "slots": 1,
+        "tradeValue":1,
+        "intrinsic": false,
+        "suppressedBy": [],
+      "attuned": false,
+      "declaredSpan": null,
+      "metal": false
+      },
+      "quality":
+      {
+        "quality": { "value":1, "min":0, "max":1}
+      },
+      "broken":
+      {
+        "broken": false
+      },
+      "weapon":
+      {
+        "damageDice":"1d3",
+        "hands": 1,
+        "tags": []
+      },
+      "usageDie":
+      {
+        "usageDie": { "die":"", "max":"" }
+      },
+      "equippable":
+      {
+        "equipped": false
+      }
+    },
+    "item":
+    {
+      "templates": ["base", "usageDie"],
+      "consumable": false
+    },
+    "weaponMelee":
+    {
+      "templates":["base", "broken", "weapon", "equippable"]
+    },
+    "weaponRanged":
+    {
+      "templates":["base", "broken", "weapon", "usageDie", "equippable"]
+    },
+    "armor":
+    {
+      "templates":["base", "quality", "equippable", "usageDie"],
+      "defense": 11,
+      "armorSlot": "body",
+      "avBonus": 0,
+      "liveAbilityBonus": {},
+      "toxSaveAdv": false
+    },
+    "light":
+    {
+      "templates": ["base"],
+      "duration": 1
+    },
+    "spell":
+    {
+      "templates": ["base"],
+      "used": false,
+      "level": 0
+    },
+    "wound":
+    {
+      "templates": ["base"],
+      "hp": 0,
+      "deathsDoor": false
+    },
+    "exhaustion":
+    {
+      "templates": ["base"]
+    },
+    "affliction":
+    {
+      "templates": ["base"],
+      "slots": 0,
+      "afflictionKey": "",
+      "virulence": 0,
+      "abilitySlot": "",
+      "contractedAt": 0,
+      "displaced": [],
+      "stomaObject": null,
+      "location": null,
+      "stage": 0
+    },
+    "gift":
+    {
+      "templates": ["base"],
+      "source": ""
+    },
+    "codex":
+    {
+      "templates": ["base"],
+      "equation": ""
+    },
+    "implant":
+    {
+      "templates": ["base"],
+      "usesRemaining": 0
+    },
+    "exotica":
+    {
+      "templates": ["base", "usageDie"],
+      "usesRemaining": 0,
+      "sealedImplant": ""
+    },
+    "crucible":
+    {
+      "templates": ["base"]
+    },
+    "mutation":
+    {
+      "templates": ["base"],
+      "slots": 0,
+      "roll": 0,
+      "usesRemaining": 0
+    },
+    "figment":
+    {
+      "templates": ["base"],
+      "slots": 0,
+      "roll": 0
+    },
+    "ancestry":
+    {
+      "templates": ["base"],
+      "slots": 0,
+      "rule": "",
+      "ancestry": "",
+      "variant": "",
+      "roll": 0
+    }
+  }
+}

@@ -1,0 +1,106 @@
+<form class="{{cssClass}}" autocomplete="off">
+    <header class="sheet-header">
+        <img class="profile-img" src="{{item.img}}" data-edit="img" title="{{item.name}}"/>
+        <div class="header-fields">
+            <h1 class="charname"><input name="name" type="text" value="{{item.name}}" placeholder="Name"/></h1>
+            <div class="grid grid-2col">
+              <div class="resource">
+                <label class="resource-label">Quantity</label>
+                  <input type="text" name="system.quantity" value="{{data.system.quantity}}" data-dtype="Number"/>
+              </div>
+              <div class="resource">
+                <label class="resource-label">Slots</label>
+                  <input type="text" name="system.slots" value="{{data.system.slots}}" data-dtype="Number"/>
+              </div>
+              <div class="resource">
+                <label title="Made of metal: rust, corrosion, magnets and metal-eaters can reach it. Set from the book when the item is made; tick or untick it for anything made by hand."><input type="checkbox" name="system.metal" {{checked data.system.metal}}/> Metal</label>
+              </div>
+              <div class="resource">
+                <label class="resource-label">Units per Slot</label>
+                  <input type="text" class="units-per-slot" value="{{unitsPerSlot}}" placeholder="—" title="How many of this fit in one item slot. Writes Slots (3 = 0.33). Blank: the stack costs its Slots value whole."/>
+              </div>
+              <div class="resource">
+                <label title="Spent one at a time: puts a use control on the character sheet that lowers Quantity by one, and removes the item when the last is used. Set automatically for gear the book prints with a count, like Antitoxin (x3). Tick it for gear you made by hand."><input type="checkbox" name="system.consumable" {{checked data.system.consumable}}/> Consumable</label>
+              </div>
+              <div class="resource">
+                <label class="resource-label">{{valueLabel}}</label>
+                  <input type="text" name="system.tradeValue" value="{{data.system.tradeValue}}" data-dtype="Number"/>
+                  {{#if conditionalValue}}
+                    <div class="conditional-trade-value">{{conditionalValue.value}} to {{conditionalValue.buyer}}</div>
+                  {{/if}}
+                  {{!-- Quality Roll on Generated Good. GM ONLY: qualityReadout is
+                       null for every non-GM viewer, so this whole block is absent
+                       from a player's sheet rather than hidden in it. --}}
+                  {{#if qualityReadout}}
+                    <div class="trade-good-quality">
+                      <div class="trade-good-quality-name">GM — Quality: <b>{{qualityReadout.name}}</b></div>
+                      {{#each qualityReadout.lines}}
+                        <div class="trade-good-quality-line">{{this}}</div>
+                      {{/each}}
+                      {{#if falseSale}}
+                        <button type="button" class="false-sale" title="Some or all of it is sold: say how many and note the buyer, then roll {{falseSale.amount}} days until the trader discovers the deception, counted down on the board where only the Referee sees it.">Sold — start the {{falseSale.amount}}-day clock</button>
+                      {{/if}}
+                    </div>
+                  {{/if}}
+              </div>
+              {{!-- Usage Die Field Visibility. Every generic item carries the
+                    usageDie FIELD, because the gear that needs it is of this
+                    type; only the ones actually rated for a die draw the
+                    controls. The GM's sheet gets a link to start one on an
+                    item that has none — a player's does not. --}}
+              {{#if hasUsageDie}}
+              <div class="resource">
+                <div class="grid grid-3col">
+                  <label class="resource-label">Current</label><span></span><label class="resource-label">Max</label>
+                  <select name="system.usageDie.die">
+                    {{#select data.system.usageDie.die}}
+                    <option value="">None</option>
+                    <option value="d20">Ud20</option>
+                    <option value="d12">Ud12</option>
+                    <option value="d10">Ud10</option>
+                    <option value="d8">Ud8</option>
+                    <option value="d6">Ud6</option>
+                    <option value="d4">Ud4</option>
+                    <option value="expended">Expended</option>
+                    {{/select}}
+                  </select>
+                  <label class="resource-label">Usage Die</label>
+                  <select name="system.usageDie.max">
+                    {{#select data.system.usageDie.max}}
+                    <option value="">None</option>
+                    <option value="d20">Ud20</option>
+                    <option value="d12">Ud12</option>
+                    <option value="d10">Ud10</option>
+                    <option value="d8">Ud8</option>
+                    <option value="d6">Ud6</option>
+                    <option value="d4">Ud4</option>
+                    {{/select}}
+                  </select>
+                </div>
+                <p class="resource-label-small">{{data.system.usageDie.statusLine1}}<br>{{data.system.usageDie.statusLine2}}</p>
+                <a class="usage-die-step">+1 Step</a> &nbsp; <a class="usage-die-refill">Refill to Max</a>
+              </div>
+              {{else}}
+              {{#if canAddUsageDie}}
+              <div class="resource">
+                <a class="usage-die-add" title="Rate this item with a usage die. Starts at Ud8, the die most of the book's gear carries; change it with the selectors that appear.">+ Add usage die</a>
+              </div>
+              {{/if}}
+              {{/if}}
+            </div>
+        </div>
+    </header>
+
+    {{!-- Sheet Tab Navigation --}}
+    <nav class="sheet-tabs tabs" data-group="primary">
+        <a class="item" data-tab="description">Description</a>        
+    </nav>
+
+    {{!-- Sheet Body --}}
+    <section class="sheet-body">
+        {{!-- Description Tab --}}
+        <div class="tab" data-group="primary" data-tab="description">
+            {{editor content=data.system.description target="system.description" button=true owner=owner editable=editable}}
+        </div>        
+    </section>
+</form>

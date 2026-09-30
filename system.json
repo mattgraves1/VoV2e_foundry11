@@ -1,0 +1,124 @@
+{
+  "id": "vaarn",
+  "name": "vaarn",
+  "title": "Vaults of Vaarn",
+  "description": "A game system for Vaults of Vaarn (second edition) by Leo Hunt. Forked from the unofficial Knave system. Not affiliated with Leo Hunt, Ben Milton or the original Knave system's authors.",
+  "version": "0.1.0",
+  "minimumCoreVersion": "11",
+  "compatibleCoreVersion": "11",
+  "compatibility": {
+    "minimum": 11,
+    "verified": "11.302"
+  },
+  "templateVersion": 11,
+  "authors": [{ "name": "Matt Graves" }],
+  "url": "https://github.com/mattgraves1/VoV2e_foundry11",
+  "manifest": "https://github.com/mattgraves1/VoV2e_foundry11/releases/latest/download/system.json",
+  "download": "https://github.com/mattgraves1/VoV2e_foundry11/releases/download/v0.1.0/vaarn-0.1.0.zip",
+  "esmodules": ["module/knave.js"],
+  "styles": ["css/knave.css"],
+  "scripts": [],
+  "packs": [
+    {
+      "name": "bestiary",
+      "label": "Bestiary",
+      "system": "vaarn",
+      "path": "./packs/bestiary.db",
+      "type": "Actor",
+      "ownership": { "PLAYER": "NONE", "TRUSTED": "NONE", "ASSISTANT": "OWNER" },
+      "flags": {}
+    },
+    {
+      "name": "pets",
+      "label": "Pets",
+      "system": "vaarn",
+      "path": "./packs/pets.db",
+      "type": "Actor",
+      "ownership": { "PLAYER": "NONE", "TRUSTED": "NONE", "ASSISTANT": "OWNER" },
+      "flags": {}
+    },
+    {
+      "name": "steeds",
+      "label": "Steeds",
+      "system": "vaarn",
+      "path": "./packs/steeds.db",
+      "type": "Actor",
+      "ownership": { "PLAYER": "NONE", "TRUSTED": "NONE", "ASSISTANT": "OWNER" },
+      "flags": {}
+    },
+    {
+      "name": "vehicles",
+      "label": "Vehicles",
+      "system": "vaarn",
+      "path": "./packs/vehicles.db",
+      "type": "Actor",
+      "ownership": { "PLAYER": "NONE", "TRUSTED": "NONE", "ASSISTANT": "OWNER" },
+      "flags": {}
+    },
+    {
+      "name": "rolltables",
+      "label": "Vaarn RollTables",
+      "system": "vaarn",
+      "path": "./packs/rolltables.db",
+      "type": "RollTable",
+      "ownership": { "PLAYER": "NONE", "TRUSTED": "NONE", "ASSISTANT": "OWNER" },
+      "flags": {}
+    },
+    {
+      "name": "macros",
+      "label": "Vaarn Macros",
+      "system": "vaarn",
+      "path": "./packs/macros.db",
+      "type": "Macro",
+      "ownership": { "PLAYER": "NONE", "TRUSTED": "NONE", "ASSISTANT": "OWNER" },
+      "flags": {}
+    },
+    {
+      "name": "items",
+      "label": "Vaarn Items",
+      "system": "vaarn",
+      "path": "./packs/items.db",
+      "type": "Item",
+      "ownership": { "PLAYER": "NONE", "TRUSTED": "NONE", "ASSISTANT": "OWNER" },
+      "flags": {}
+    },
+    {
+      "name": "guide-players",
+      "label": "Vaarn Player's Guide",
+      "system": "vaarn",
+      "path": "./packs/guide-players.db",
+      "type": "JournalEntry",
+      "flags": {}
+    },
+    {
+      "name": "guide-referee",
+      "label": "Vaarn Referee's Guide",
+      "system": "vaarn",
+      "path": "./packs/guide-referee.db",
+      "type": "JournalEntry",
+      "ownership": { "PLAYER": "NONE", "TRUSTED": "NONE", "ASSISTANT": "OWNER" },
+      "flags": {}
+    },
+    {
+      "name": "ancestries",
+      "label": "Vaarn Ancestries",
+      "system": "vaarn",
+      "path": "./packs/ancestries.db",
+      "type": "JournalEntry",
+      "flags": {}
+    },
+    {
+      "name": "music",
+      "label": "Vaarn Music",
+      "system": "vaarn",
+      "path": "./packs/music.db",
+      "type": "Playlist",
+      "flags": {}
+    }
+  ],
+  "gridDistance": 5,
+  "gridUnits": "ft",
+  "primaryTokenAttribute": "health",
+  "socket": true,
+  "license": "LICENSE.txt"
+}

@@ -1,0 +1,61 @@
+{{!--
+  Dropped Item Container — the world's one "ground" box.
+
+  Take on every row, for anyone who owns the container, moves the item onto
+  one of their characters (2026-09-19). A treasure cache (flags.vaarn.cache)
+  uses this sheet too, as one plain list rather than scene groups. See
+  container-sheet.js.
+--}}
+<form class="{{cssClass}} flexcol" autocomplete="off">
+
+  <header class="sheet-header flexrow">
+    <img class="profile-img" src="{{actor.img}}" data-edit="img" title="{{actor.name}}" height="64" width="64"/>
+    <div class="header-fields flexcol">
+      <h1 class="charname"><input name="name" type="text" value="{{actor.name}}" placeholder="Name"/></h1>
+      {{#if isCache}}
+      <span class="resource-label">A treasure cache. Take moves an item onto one of your characters.</span>
+      {{else}}
+      <span class="resource-label">Items left on the ground, grouped by where they were dropped. Take picks one up.</span>
+      {{/if}}
+    </div>
+  </header>
+
+  <div class="sheet-body flexcol">
+    {{#if isEmpty}}
+      <p class="resource-label">{{#if isCache}}The cache is empty.{{else}}Nothing has been dropped.{{/if}}</p>
+    {{else}}
+      {{#each groups as |group|}}
+        {{#if group.name}}
+        <div class="item-list-header">
+          <h3 class="{{#if group.orphan}}knave-encumbered{{/if}}">{{group.name}}</h3>
+        </div>
+        {{/if}}
+        <ol class="item-list">
+          {{#each group.items as |item|}}
+            <li class="item flexrow" data-item-id="{{item.id}}">
+              <div class="item-image"><img src="{{itemImg item}}" title="{{displayName item}}" width="24" height="24"/></div>
+              <h4 class="item-control item-view">{{displayName item}}{{#unless (isHiddenExotica item)}}{{#if (isUnidentified item)}} (unidentified){{/if}}{{/unless}}</h4>
+              <div class="item-controls">
+                <a class="item-quality" title="Quality or Quantity">{{#if (hasQuality item)}}{{item.system.quality.value}}/{{item.system.quality.max}}{{else}}{{item.system.quantity}}{{/if}}&nbsp;&nbsp;</a>
+                {{#if @root.canTake}}
+                <a class="item-control item-take" title="Take"><i class="fas fa-hand-holding"></i></a>
+                {{/if}}
+                {{#if @root.isGM}}
+                {{!-- Exotica Identification: mark a found item before the players take it. --}}
+                {{#if (isUnidentified item)}}
+                <a class="item-control item-identify-save" title="Ask for an INT save to work out what it does"><i class="fas fa-brain"></i></a>
+                <a class="item-control item-identify" title="Identify it (appraised)"><i class="fas fa-eye"></i></a>
+                {{else if (isExoticaItem item)}}
+                <a class="item-control item-unidentify" title="Mark unidentified — hides it from the players and withholds its use"><i class="fas fa-eye-slash"></i></a>
+                {{/if}}
+                <a class="item-control item-delete" title="{{#if @root.isCache}}Delete from the cache{{else}}Remove from the ground{{/if}}"><i class="fas fa-trash"></i></a>
+                {{/if}}
+              </div>
+            </li>
+          {{/each}}
+        </ol>
+      {{/each}}
+    {{/if}}
+  </div>
+
+</form>

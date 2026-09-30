@@ -1,0 +1,675 @@
+{{!-- vaarn-character-form is a HOOK FOR ONE CSS RULE and nothing else. The
+     layout below needs this form bounded (min-height: 0) so its regions cannot
+     grow past the window; scoping that rule to a bare `form` reached the NPC and
+     container sheets too, which share the .knave class and have none of this
+     structure. Caught by testing (166.12) - the NPC form went from 1288px to
+     574px with its content overflowing the box. --}}
+<form class="{{cssClass}} flexcol vaarn-character-form" autocomplete="off">
+  {{!-- SHEET LAYOUT. Two regions, not three columns.
+
+       The tab body used to sit INSIDE the second column, so every tab got about
+       a third of the sheet and shared that third with the ancestry block and the
+       lockout checkboxes above it. Abilities and details now sit side by side in
+       the upper half of a LEFT region, and the tab strip spans the whole of that
+       region beneath them - roughly doubling what a tab has to work with.
+
+       THE ITEM LIST IS NOT A TAB and is deliberately untouched. It carries
+       data-tab="items" with no matching nav link and sits outside
+       description-tabs-content, so Foundry never hides it: it is simply the right
+       region, permanently visible. Matt declined making it a real tab
+       (2026-09-14) - clicking back to the inventory mid-combat costs more than
+       the width it would buy.
+
+       npc-sheet.html has no description-tabs at all, so none of this applies
+       there and it is not kept in step. --}}
+  <div class="vaarn-sheet-layout">
+    <div class="vaarn-sheet-main">
+
+      {{!-- THE TAB STRIP RUNS ALONG THE TOP and the stats are a tab like any
+            other. RULED 2026-09-14 (Matt) over the arrangement built earlier the
+            same day, which put the strip BELOW the abilities and details: the
+            strip then began under 661px of content, so the sheet had to be 950
+            tall to reach it and a reserve had to be held open to stop it being
+            pushed off the bottom. With the stats in a tab nothing sits above the
+            strip, every tab gets the same full height, and the sheet is shorter.
+
+            THE COST, named because it is the same trade the item list was kept
+            out of the tabs to avoid: HP, the ability saves, AV and the charge and
+            flee row are behind a click. It is a far smaller cost here, because
+            Stats is the tab you sit on and leave only to consult something, which
+            is exactly what the item list would NOT have been.
+
+            NOTHING IS HELD ABOVE THE STRIP, ruled the same day: no portrait or
+            name header. The window title bar already names the actor. --}}
+          {{!-- Sheet Tab Navigation --}}
+          <nav class="description-tabs tabs" data-group="primary">
+            <a class="item" data-tab="stats">Stats</a>
+            <a class="item" data-tab="description">Description</a>
+            <a class="item" data-tab="wounds">Wounds{{#if data.system.wounds.length}} ({{data.system.wounds.length}}){{/if}}</a>
+            <a class="item" data-tab="forgettable">Forgettable{{#if forgettableEffectsCount}} ({{forgettableEffectsCount}}){{/if}}</a>
+            <a class="item" data-tab="reputation">Reputation{{#if reputationStandingCount}} ({{reputationStandingCount}}){{/if}}</a>
+          </nav>
+          <section class="description-tabs-content align-left">
+
+          {{!-- Stats Tab. The two columns are unchanged; only their container
+                moved, so everything the sheet used to show above the strip is
+                here and in the same arrangement. --}}
+          <div class="tab" data-group="primary" data-tab="stats">
+      <div class="vaarn-sheet-columns">
+    <!-- LEFT COLUMN: LEVEL | XP | GLEAM, HP, ARMOR, ABILITIES.
+         Order ruled 2026-09-15 (Matt). The LEVEL row came across from the
+         centre column, where it sat under the portrait. -->
+    <div class="flex-group-center">
+              <div class="abilities grid grid-3col">
+                <div class="flex-group-center">
+                <label class="resource-label">LEVEL</label>
+                {{!-- Read-only: the LEVEL UP button is the only thing that
+                      raises it and a level loss the only thing that lowers it,
+                      so system.advancement always explains the number. --}}
+                <input type="text" value="{{data.system.level.value}}" class="vaarn-level-readout" readonly disabled/>
+                <button type="button" class="vaarn-level-up" {{#unless levelUpAvailable}}disabled{{/unless}}
+                        title="{{#if levelUpAvailable}}Spend {{data.system.level.value}} XP to gain a Level{{else}}Needs {{data.system.level.value}} XP to level up{{/if}}">LEVEL UP</button>
+                {{!-- Referee-Invoked Level Loss. Beside the control that raises
+                      the Level because the readout above is read-only and these
+                      two are between them the whole explanation of its value.
+                      GM-only: taking a Level is a ruling, so it is ABSENT for a
+                      player rather than present and refusing. --}}
+                {{#if @root.isGM}}
+                <a class="vaarn-level-loss" title="Take a Level (Referee)"><i class="fas fa-arrow-down"></i></a>
+                {{/if}}
+              </div>
+              <div class="flex-group-center">
+                <label class="resource-label">XP</label>
+                {{!-- Arrows rather than a typed field (Matt, 2026-09-13). One
+                      Exotica traded is one XP, so a step of 1 is the only
+                      edit the book ever asks for. --}}
+                <div class="vaarn-xp-control">
+                  <a class="vaarn-xp-step" data-step="-1" title="Lose 1 XP"><i class="fas fa-caret-left"></i></a>
+                  <span class="vaarn-xp-value">{{data.system.xp.value}}</span>
+                  <a class="vaarn-xp-step" data-step="1" title="Trade an Exotica: +1 XP"><i class="fas fa-caret-right"></i></a>
+                </div>
+              </div>
+              <div class="flex-group-center">
+                <label class="resource-label" title="Equipped Gift count + PSY bonus">GLEAM</label>
+                <span>{{data.system.gleam}}</span>
+              </div>
+              </div>
+
+      <div class="flex-group-center">
+        <div class="abilities grid grid-3col">
+          <span class="resource-label">CURRENT</span> <span class="resource-label"></span><span class="resource-label">MAX</span>
+          {{!-- Hidden Hit Points (Analgesia): a player gets "?" and no name
+                attribute, so the form never writes HP back from this box. --}}
+          {{#if hpHidden}}
+          <input type="text" value="?" readonly title="Analgesia — the Referee tracks your HP"/>
+            <span class="resource-label center">HP</span>
+            <input type="text" value="?" readonly title="Analgesia — the Referee tracks your HP"/>
+          {{else}}
+          <input type="text" name="system.health.value" value="{{data.system.health.value}}" data-dtype="Number"/>
+            <span class="resource-label center">HP</span>
+            <input type="text" name="system.health.max" value="{{data.system.health.max}}" data-dtype="Number"/>
+          {{!-- Temporary HP (2026-09-26, Matt): spent by damage before HP. Hidden
+                with HP under Analgesia, since it is part of the same number. --}}
+          <span class="resource-label"></span><span class="resource-label center">TEMP</span>
+            <input type="text" name="system.health.temp" value="{{data.system.health.temp}}" data-dtype="Number" title="Temporary HP - damage spends it before HP"/>
+          {{/if}}
+          </div>
+        </div>
+
+        <div class="flex-group-center">
+          {{!-- Armour Damage (2026-09-22, Matt): the same four columns the
+                abilities block below uses, for the same reason — a player
+                needs to see that something has been done to their armour.
+                DEFENSE is the damaged figure rolls actually use; DAMAGE is
+                the stored loss, and it is an INPUT because nothing in the
+                book repairs armour, so clearing it is the Referee's.
+
+                LABELLED "DAMAGE" AND NOT "WOUND" (Matt, 2026-09-22), though
+                the abilities block below borrows the word for the same idea:
+                armour is not flesh and does not take wounds. DAMAGE also
+                matches what the field is called (system.armor.damage) and
+                what every chat line already says ("Armour damage +4"), so
+                the label, the data and the log are one word rather than
+                three names for one thing. --}}
+          <div class="abilities grid grid-4col">
+            <span class="resource-label">DEFENSE</span><span class="resource-label"></span><span class="resource-label">BONUS</span><span class="resource-label">DAMAGE</span>
+            {{#if isCharacterSheet}}
+            <span class="resource-value" title="Derived from equipped armor/helm/shield + mutations, less armour damage — work-queue item 11">{{data.system.armor.effective}}</span>
+            {{else}}
+            <input type="text" name="system.armor.value" value="{{data.system.armor.value}}" data-dtype="Number"/>
+            {{/if}}
+            <span class="resource-label armor">ARMOR</span>
+            <span>{{data.system.armor.bonus}}</span>
+            <input type="text" name="system.armor.damage" value="{{data.system.armor.damage}}" data-dtype="Number" maxlength="2" min="0" title="Cumulative armour damage — subtracted from DEFENSE. Acid and the Synthskin Damaged wound write here. Nothing in the book repairs armour, so the Referee clears this by hand."/>
+          </div>
+        </div>
+
+        <div class="flex-group-center">
+          <div class="abilities grid grid-4col">
+            <span class="resource-label">DEFENSE</span><span class="resource-label">ABILITY</span><span class="resource-label">BONUS</span><span class="resource-label">WOUND</span>
+              {{#each data.system.abilities as |ability key|}}
+              <span class="ability-mod">{{numberFormat ability.defense decimals=0 sign=false}}</span>
+              <button type="button" class="knave-ability-button resource-label {{key}}" id="{{key}}">{{key}}</button>
+              <input type="text" name="system.abilities.{{key}}.value" value="{{ability.value}}" data-dtype="Number" maxlength="2" max="10" min="-10"/>
+              <input type="text" name="system.abilities.{{key}}.woundDamage" value="{{ability.woundDamage}}" data-dtype="Number" maxlength="2" min="0" title="Cumulative wound damage — subtracted from BONUS to get the effective bonus used for rolls. A Long Rest taken at full HP restores one point on every damaged ability, as the alternative to healing a Wound."/>
+              {{/each}}
+          </div>
+        </div>
+      </div>
+   <!--end left column-->
+   <!--CENTRE COLUMN: portrait, name, REST, lockouts, TOX, MOVEMENT, STATE.
+        Order ruled 2026-09-15 (Matt).
+
+        DECLARE CHARGE and FLEE are inside the MOVEMENT block and travelled
+        with it; the TOX source field travelled with TOX. Neither was named in
+        the order, and their absence from it is not a deletion.
+
+        STATE is last and is NOT GM-only, though it reads that way on a healthy
+        character: the row is absent entirely unless the character is Deprived
+        or the viewer is the Referee, and a player then sees a read-only label
+        where the GM gets a toggle. Matt asked whether it was GM-only and ruled
+        2026-09-15 to leave the split alone - see deprived-row.html for why the
+        readout has to stay public. -->
+      <div class="flex-group-center">
+          <img class="profile-img" src="{{actor.img}}" data-edit="img" title="{{actor.name}}" height="200" width="200"/>
+          <h1 class="charname"><input name="name" type="text" value="{{actor.name}}" placeholder="Name"/></h1>
+
+        {{> "systems/vaarn/templates/actor/parts/rest-row.html"}}
+
+          {{!-- Hypergeometric Lockout --}}
+          <div class="flex-group-center">
+            <label title="Set automatically on a failed equation read; cleared by a Long Rest, or by hand here"><input type="checkbox" name="system.hypergeometricLockout" {{checked data.system.hypergeometricLockout}}/> Locked out of reading equations (needs a Long Rest)</label>
+          </div>
+          {{#if hasSporeRule}}
+          {{!-- Spore Lockout (Mycomorph) --}}
+          <div class="flex-group-center">
+            <label title="Set automatically on a failed spore release; cleared by a Long Rest, or by hand when the day turns over"><input type="checkbox" name="system.sporeLockout" {{checked data.system.sporeLockout}}/> Out of spores for today</label>
+          </div>
+          {{/if}}
+
+        {{> "systems/vaarn/templates/actor/parts/toxin-row.html"}}
+
+        <div class="flex-group-center">
+          <span class="resource-label">MOVEMENT</span>
+          <input type="text" name="system.movement" value="{{data.system.movement}}" data-dtype="String"/>
+          {{!-- Charge Declaration State. Nothing in this system models
+                movement, so this is the player DECLARING a charge, not the
+                system detecting one — the label says so deliberately. Rolling
+                any melee damage clears it again, which is what stops a
+                declared charge silently inflating later rounds. --}}
+          {{#if isCharacterSheet}}
+          <button type="button" class="charge-toggle{{#if (isCharging actor)}} charge-on{{/if}}"
+                  title="Declare that this attack is a charge. Cleared automatically when you roll melee damage.">
+            {{#if (isCharging actor)}}CHARGING — declared{{else}}DECLARE CHARGE{{/if}}
+          </button>
+          {{!-- The Corrosive tag's either/or (2026-09-22, Matt): "deals damage
+                OR reduces target's AV score by one (attacker's choice)". The
+                same toggle shape as the charge above, and spent the same way
+                by the roll that uses it. SHOWN ONLY WITH A CORROSIVE WEAPON
+                EQUIPPED, unlike the charge — a charge is a declaration anyone
+                can make, this one is meaningless without the tag. --}}
+          {{#if (hasCorrosiveChoice actor)}}
+          <button type="button" class="corrode-toggle{{#if (isDegradingArmour actor)}} charge-on{{/if}}"
+                  title="Corrosive: strike for the armour instead of the target. The next hit degrades AV by 1 and deals no damage. Cleared by the attack that uses it.">
+            {{#if (isDegradingArmour actor)}}GOING FOR THE ARMOUR{{else}}DEGRADE ARMOUR{{/if}}
+          </button>
+          {{/if}}
+          {{/if}}
+          {{!-- Fleeing Combat. JADE IBIS: a bare d20 that must equal or exceed
+                total used item slots; on a failure the card offers to drop
+                items until the roll stands. Taken on
+                the character's own turn. Character sheet only and deliberately
+                so — Matt 2026-09-11: "this is a player-facing mechanic only. I
+                would never use this from the GM side since item slots are
+                primarily a player hindrance." The title carries the target
+                number because it is the character's own slot count rather than
+                the usual 15, and that is the whole point of the rule. --}}
+          {{#if isCharacterSheet}}
+          <button type="button" class="knave-flee-button"
+                  title="Flee combat: roll d20 and equal or exceed your {{data.system.slotsUsed}} used item slots. Success takes you out of the encounter. On a failure you may drop items until the roll stands, or stay and fight another round.">
+            FLEE (d20 vs {{data.system.slotsUsed}})
+          </button>
+          {{/if}}
+          {{!-- No MORALE block here on purpose: Morale Saves are an NPC rule
+                (Combat/Morale.md), and PCs never make one. The field itself
+                still exists on the shared `base` template, so nothing breaks
+                by not rendering it — see npc-sheet.html, which does. --}}
+        </div>
+
+        {{> "systems/vaarn/templates/actor/parts/deprived-row.html"}}
+      </div>
+   <!--end centre column-->
+      </div>
+   <!--end of the side-by-side pair-->
+          </div>
+          {{!-- end Stats tab --}}
+
+          {{!-- Reputation Tab (foundry-system-index.csv "Faction Reputation").
+
+                EVERY faction is listed, not only the ones a number is stored
+                against: absence and 0 both mean Neutral, and "you have no
+                standing with them" is worth seeing. A faction HIDDEN in the
+                registry drops off this list, unless REP is already recorded
+                against it - in which case it stays, flagged, because dropping
+                it would silently hide a number the character has.
+
+                The +/- controls and the number field both go through setRep,
+                so typing a value propagates exactly as pressing a control
+                does. Only GAINS propagate, and only to factions opposed by an
+                enemy link in either direction - see faction-reputation.js. --}}
+          <div class="tab" data-group="primary" data-tab="reputation">
+            <table class="vaarn-rep-table">
+              <tbody>
+              {{#each reputation as |row|}}
+              <tr class="vaarn-rep-row vaarn-rep-{{row.standingKey}}{{#if row.hidden}} vaarn-rep-hidden{{/if}}" data-faction="{{row.faction}}">
+                <td class="vaarn-rep-name">
+                  {{row.faction}}
+                  {{#if row.hidden}}<span class="vaarn-rep-flag">hidden in this world</span>{{/if}}
+                  <div class="vaarn-rep-effect">{{row.effect}}</div>
+                  {{!-- The book prints a Gaining REP table per faction: what an
+                        action is worth with THEM. Collapsed, because four rows of
+                        it under each of eight factions would bury the standings,
+                        and because it is reference the Referee reaches for rather
+                        than something read every session. The Court of the Jigsaw
+                        Autarch is the one faction with no such table - it prints
+                        Autarch Figment Effects in that slot - so this is absent
+                        for exactly one row and that is the book, not a gap. --}}
+                  {{#if row.gaining}}
+                  <details class="vaarn-rep-gaining">
+                    <summary>How you gain REP with them</summary>
+                    <ul>
+                      {{#each row.gaining as |g|}}<li><b>{{g.rep}}</b> {{g.actions}}</li>{{/each}}
+                    </ul>
+                  </details>
+                  {{/if}}
+                </td>
+                <td class="vaarn-rep-standing">{{row.standing}}</td>
+                <td class="vaarn-rep-controls">
+                  <a class="vaarn-rep-step" data-faction="{{row.faction}}" data-delta="-1" title="Lose 1 REP. A loss never moves any other faction.">&minus;</a>
+                  <input type="text" class="vaarn-rep-value" data-faction="{{row.faction}}" value="{{row.rep}}" data-dtype="Number"/>
+                  <a class="vaarn-rep-step" data-faction="{{row.faction}}" data-delta="1" title="Gain 1 REP. Opposed factions lose the same amount.">+</a>
+                </td>
+              </tr>
+              {{/each}}
+              </tbody>
+            </table>
+
+            <p class="vaarn-rep-note">
+              Gaining reputation with a faction costs the same amount with every
+              faction opposed to it. Losing reputation does not.
+            </p>
+
+            {{!-- Reference text, never a mechanism. Factions.md says the Referee
+                  CAN consider positive REP a currency and lists these five with
+                  no prices attached. RULED 2026-09-14 (Matt): displayed only,
+                  adjusted by hand - both a spend control and a price list were
+                  declined. --}}
+            <h3>Spending Reputation</h3>
+            <p class="vaarn-rep-note">
+              The Referee can consider positive REP a currency. There are no prices:
+              agree what it buys and adjust the number by hand.
+            </p>
+            <ul class="vaarn-rep-spend">
+              {{#each reputationSpendExamples as |ex|}}<li>{{ex}}</li>{{/each}}
+            </ul>
+          </div>
+
+          {{!-- Wounds Tab --}}
+          <div class="tab" data-group="primary" data-tab="wounds">
+            {{#if @root.isGM}}
+            {{!-- Wound-Table Resolution: the Referee-chosen wound (2026-09-17).
+                  GM-only here and in the handler. --}}
+            <div class="wounds-inflict">
+              <button type="button" class="wound-inflict" title="Apply any row of this character's Wounds table without changing HP">Inflict a Wound</button>
+            </div>
+            {{/if}}
+            <ol class="wounds-list">
+              {{#each data.system.wounds as |wound index|}}
+              <li class="item flexrow" data-wound-index="{{index}}">
+                <div class="item-name"><b>{{wound.name}}</b> ({{#if wound.named}}named Wound{{else}}HP {{wound.hp}}{{/if}}, {{wound.slots}} slots)<br/>{{wound.effect}}{{#if wound.restProof}}<br/><i>A rest will not heal this — {{wound.restProof}}.</i>{{/if}}</div>
+                <div class="item-controls">
+                  {{#if wound.tally}}<a class="item-control wound-tally" title="{{wound.tally.label}} ({{wound.tally.done}} of {{wound.tally.count}})">{{wound.tally.done}}/{{wound.tally.count}} <i class="fas fa-plus"></i></a>{{/if}}
+                  <a class="item-control wound-delete" title="Heal (remove) this Wound"><i class="fas fa-trash"></i></a>
+                </div>
+              </li>
+              {{else}}
+              <li class="item flexrow">No Wounds.</li>
+              {{/each}}
+            </ol>
+          </div>
+          {{!-- Forgettable Effects Tab (work-queue item 12) --}}
+          <div class="tab" data-group="primary" data-tab="forgettable">
+            {{#unless forgettableEffectsCount}}
+            <p>No forgettable effects currently active.</p>
+            {{/unless}}
+            {{#if forgettableEffects.alwaysActive.count}}
+            <h3>Always Active</h3>
+            <ul class="forgettable-list">
+              {{#each forgettableEffects.alwaysActive.detriment as |entry|}}
+              <li class="forgettable-detriment"><b>{{entry.name}}</b> <span class="forgettable-category">[{{entry.category}}]</span> — {{entry.note}}</li>
+              {{/each}}
+              {{#each forgettableEffects.alwaysActive.benefit as |entry|}}
+              <li class="forgettable-benefit"><b>{{entry.name}}</b> <span class="forgettable-category">[{{entry.category}}]</span> — {{entry.note}}</li>
+              {{/each}}
+            </ul>
+            {{/if}}
+            {{#if forgettableEffects.onDemand.count}}
+            <h3>On-Demand</h3>
+            <ul class="forgettable-list">
+              {{#each forgettableEffects.onDemand.detriment as |entry|}}
+              <li class="forgettable-detriment"><b>{{entry.name}}</b> <span class="forgettable-category">[{{entry.category}}]</span> — {{entry.note}}</li>
+              {{/each}}
+              {{#each forgettableEffects.onDemand.benefit as |entry|}}
+              <li class="forgettable-benefit"><b>{{entry.name}}</b> <span class="forgettable-category">[{{entry.category}}]</span> — {{entry.note}}</li>
+              {{/each}}
+            </ul>
+            {{/if}}
+          </div>
+          {{!-- Description Tab --}}
+          <div class="tab" data-group="primary" data-tab="description">
+            {{!-- Ancestry (read-only; set during character creation) --}}
+            <div class="knave-ancestry-block">
+              {{#if ancestryName}}
+              <h3>Ancestry: {{ancestryName}}</h3>
+              {{#if ancestryNote}}
+              <p><i>{{ancestryNote}}</i></p>
+              {{/if}}
+              {{#if ancestrySpecialRules.length}}
+              <ul>
+                {{#each ancestrySpecialRules as |rule|}}
+                <li>{{rule}}</li>
+                {{/each}}
+              </ul>
+              {{/if}}
+              {{else}}
+              <h3>Ancestry: <i>None set</i></h3>
+              <p>This character was created before the ancestry field existed. Recreate it via the character creator wizard to set one.</p>
+              {{/if}}
+            </div>
+            {{!-- Spark descriptors and creature types, side by side beneath the
+                  ancestry block. RULED 2026-09-15 (Matt), who asked for the
+                  creature-type checkboxes off the Stats tab and put here.
+
+                  The descriptors are STORED now rather than written into the
+                  biography below as prose - see Structured Spark Descriptors. A
+                  character created before that field exists shows none, and its
+                  rolled columns are still in the biography where chargen used to
+                  seed them. Nothing backfills.
+
+                  Read-only, like the ancestry block above: they record what was
+                  rolled, and the biography directly below is where anything the
+                  player wants to say in their own words goes. --}}
+            <div class="vaarn-desc-pair">
+              <div class="vaarn-desc-spark">
+                <h3>Description</h3>
+                {{#if spark.length}}
+                <dl class="vaarn-spark-list">
+                  {{#each spark as |row|}}<dt>{{row.label}}</dt><dd>{{row.value}}</dd>{{/each}}
+                </dl>
+                {{else}}
+                <p class="vaarn-desc-none">Nothing rolled. A character made before this was
+                  stored keeps its descriptors in the text below.</p>
+                {{/if}}
+              </div>
+              <div class="vaarn-desc-types">
+                <h3>Creature Types</h3>
+                <div class="npc-creature-types grid grid-2col">
+              <label {{#if grantedCreatureTypes.biological}}title="{{grantedCreatureTypes.biological}}"{{/if}}><input type="checkbox" name="system.creatureTypes.biological" {{checked data.system.creatureTypes.biological}} {{#if grantedCreatureTypes.biological}}disabled{{/if}}/> Biological</label>
+              <label {{#if grantedCreatureTypes.synthetic}}title="{{grantedCreatureTypes.synthetic}}"{{/if}}><input type="checkbox" name="system.creatureTypes.synthetic" {{checked data.system.creatureTypes.synthetic}} {{#if grantedCreatureTypes.synthetic}}disabled{{/if}}/> Synthetic</label>
+              <label {{#if grantedCreatureTypes.psychic}}title="{{grantedCreatureTypes.psychic}}"{{/if}}><input type="checkbox" name="system.creatureTypes.psychic" {{checked data.system.creatureTypes.psychic}} {{#if grantedCreatureTypes.psychic}}disabled{{/if}}/> Psychic</label>
+              <label {{#if grantedCreatureTypes.fungal}}title="{{grantedCreatureTypes.fungal}}"{{/if}}><input type="checkbox" name="system.creatureTypes.fungal" {{checked data.system.creatureTypes.fungal}} {{#if grantedCreatureTypes.fungal}}disabled{{/if}}/> Fungal</label>
+              <label {{#if grantedCreatureTypes.mineral}}title="{{grantedCreatureTypes.mineral}}"{{/if}}><input type="checkbox" name="system.creatureTypes.mineral" {{checked data.system.creatureTypes.mineral}} {{#if grantedCreatureTypes.mineral}}disabled{{/if}}/> Mineral</label>
+              <label {{#if grantedCreatureTypes.hypergeometric}}title="{{grantedCreatureTypes.hypergeometric}}"{{/if}}><input type="checkbox" name="system.creatureTypes.hypergeometric" {{checked data.system.creatureTypes.hypergeometric}} {{#if grantedCreatureTypes.hypergeometric}}disabled{{/if}}/> Hypergeometric</label>
+              <label {{#if grantedCreatureTypes.outsider}}title="{{grantedCreatureTypes.outsider}}"{{/if}}><input type="checkbox" name="system.creatureTypes.outsider" {{checked data.system.creatureTypes.outsider}} {{#if grantedCreatureTypes.outsider}}disabled{{/if}}/> Outsider</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="description-editor knave-character-description">
+                {{editor content=data.system.biography target="system.biography" button=true owner=owner editable=editable}}
+            </div>
+          </div>
+        </section>
+      </div>
+     <!--end left region-->
+     <!--right region: the item list, always visible-->
+      <div class="flex-group-center">
+          {{!-- Owned Items Tab --}}
+          <div class="items" data-group="primary" data-tab="items">
+              <ol class="items-list">
+                  <li class="item flexrow item-header">
+                    <div class="item-name">Slots {{inventorySlots data.system.inventorySlots data.system.encumbered}}{{#if isCharacterSheet}} — Hands {{hands data.system.hands}}{{/if}}</div>
+                    <div class="item-name">Name</div>
+                    <div class="item-controls">
+                      <a class="item-control item-create" title="Create item" data-type="item"><i class="fas fa-plus"></i> Add item</a>
+                    </div>
+                  </li>
+              {{!-- carriedItems, not actor.items: what is stowed in a cargo
+                    compartment is billed there and listed there. See the
+                    Cargo section below and actor.js's slot loop. --}}
+              {{#each carriedItems as |item id|}}
+                  <li class="item flexrow knave-item-type-{{item.type}}" data-item-id="{{item.id}}">
+                      <div class="item-image"><img src="{{itemImg item}}" title="{{displayName item}}" width="24" height="24"/></div>
+                      {{!-- Exotica Identification: a player cannot use an
+                            unidentified item, so every equip, attack and use
+                            control below is withheld from them until it is
+                            identified. The GM keeps them, to adjudicate use. --}}
+                      {{#unless (isHiddenExotica item)}}
+                      {{#if ../isCharacterSheet}}
+                      {{#if (isEquippable item)}}
+                      <div class="item-image item-equip" title="{{#if item.system.equipped}}unequip{{else}}equip{{/if}}"><i class="fas {{#if item.system.equipped}}fa-check-square{{else}}fa-square{{/if}}"></i></div>
+                      {{/if}}
+                      {{/if}}
+                      {{!-- Item Attunement Gate. Only ever rendered for the
+                            one ancestry the rule applies to, and only on an
+                            item that is not yet attuned — an intrinsic is
+                            exempt, so a Planeyfolk's own claws never show
+                            this. The effort control is open to the player
+                            because starting it advances no clock; the direct
+                            mark is the Referee's adjudication route. --}}
+                      {{#if (needsAttunement @root.actor item)}}
+                      <div class="item-image item-attune" title="Attune — begins an hour of quiet concentration"><i class="fas fa-hourglass-start"></i></div>
+                      {{#if @root.isGM}}
+                      <div class="item-image item-attune-mark" title="Mark attuned now (Referee)"><i class="fas fa-link"></i></div>
+                      {{/if}}
+                      {{else if (isAttunedGear @root.actor item)}}
+                      {{#if @root.isGM}}
+                      <div class="item-image item-attune-mark" title="Attuned — click to un-attune (Referee)"><i class="fas fa-link-slash"></i></div>
+                      {{/if}}
+                      {{/if}}
+                      {{!-- A damage add-on keeps its place on the sheet and
+                            stays visible (Matt's Q5 ruling), but it is not an
+                            attack of its own: its dice are folded into the
+                            parent weapon's damage roll, so it shows what it
+                            contributes instead of two icons that would each
+                            over-apply it. --}}
+                      {{#if (isWeapon item)}}
+                      {{#if (isDamageAddOn item)}}
+                      <div class="item-image damage-add-on" title="Folded into your weapon's damage roll — this is a bonus, not an attack of its own.">{{damageAddOnLabel item}}</div>
+                      {{else}}
+                      <div class="item-image item-roll" title="attack"><img src="systems/vaarn/module/icons/d20.svg" title="attack" width="24" height="24"/></div>
+                      <div class="item-image item-roll" title="damage"><img src="systems/vaarn/module/icons/crossed-sabres.svg" title="damage" width="24" height="24"/></div>
+                      {{!-- A weapon that names its reload (the Tempest Cannon, RULED
+                            2026-09-26 by Matt) can be reloaded without attacking. --}}
+                      {{#if item.flags.vaarn.reload}}
+                      <div class="item-image weapon-reload" title="reload"><i class="fas fa-rotate"></i></div>
+                      {{/if}}
+                      {{/if}}
+                      {{/if}}
+                      {{!-- A corroded item keeps its row and loses every use control (Item
+                            Corrosion on a Hit, 2026-09-24). A weapon is broken instead, which
+                            already refuses its attack, so the weapon icons stay above. --}}
+                      {{#unless (isCorroded item)}}
+                      {{#if (isGift item)}}
+                      <div class="item-image gift-use" title="use"><img src="systems/vaarn/module/icons/d20.svg" title="use" width="24" height="24"/></div>
+                      {{/if}}
+                      {{#if (isCodex item)}}
+                      <div class="item-image codex-read" title="read"><img src="systems/vaarn/module/icons/d20.svg" title="read" width="24" height="24"/></div>
+                      {{/if}}
+                      {{#if (hasAncestryUse item)}}
+                      <div class="item-image ancestry-use" title="use"><img src="systems/vaarn/module/icons/d20.svg" title="use" width="24" height="24"/></div>
+                      {{/if}}
+                      {{#if (hasSaveGated item)}}{{#unless (isAncestryRule item)}}
+                      <div class="item-image save-gated-use" title="{{saveGatedLabel item}}"><img src="systems/vaarn/module/icons/d20.svg" title="{{saveGatedLabel item}}" width="24" height="24"/></div>
+                      {{/unless}}{{/if}}
+                      {{#if (hasFigmentTargetSave item)}}
+                      <div class="item-image figment-target-save" title="compel a save"><img src="systems/vaarn/module/icons/d20.svg" title="compel a save" width="24" height="24"/></div>
+                      {{/if}}
+                      {{#if (hasMutationUse item)}}
+                      <div class="item-image mutation-use" title="use"><img src="systems/vaarn/module/icons/d20.svg" title="use" width="24" height="24"/></div>
+                      {{/if}}
+                      {{#if (hasMutationUsePool item)}}
+                      <div class="item-image mutation-refresh" title="refresh"><img src="systems/vaarn/module/icons/hourglass.svg" title="refresh" width="24" height="24"/></div>
+                      {{/if}}
+                      {{#if (hasImplantUse item)}}
+                      <div class="item-image implant-use" title="use"><img src="systems/vaarn/module/icons/d20.svg" title="use" width="24" height="24"/></div>
+                      {{/if}}
+                      {{#if (hasImplantUsePool item)}}
+                      <div class="item-image implant-refresh" title="refresh"><img src="systems/vaarn/module/icons/hourglass.svg" title="refresh" width="24" height="24"/></div>
+                      {{/if}}
+                      {{#if (hasItemUse item)}}
+                      <div class="item-image generic-item-use" title="use"><img src="systems/vaarn/module/icons/d20.svg" title="use" width="24" height="24"/></div>
+                      {{/if}}
+                      {{!-- Fixed-Charge Consumable. d20.svg because every use
+                           control on this sheet is the d20 — implant, mutation
+                           and generic-item use are not rolls either. The count
+                           is NOT repeated in the name here: the quantity column
+                           below already shows it. --}}
+                      {{#if (isConsumableUse item)}}
+                      <div class="item-image consumable-use" title="spend one"><img src="systems/vaarn/module/icons/d20.svg" title="spend one" width="24" height="24"/></div>
+                      {{/if}}
+                      {{#unless (isWeapon item)}}
+                      {{#if (hasUsageDie item)}}
+                      <div class="item-image usage-die-roll" title="use"><img src="systems/vaarn/module/icons/d20.svg" title="use" width="24" height="24"/></div>
+                      {{/if}}
+                      {{/unless}}
+                      {{#if (hasExoticaCharges item)}}
+                      <div class="item-image exotica-charge-use" title="use"><img src="systems/vaarn/module/icons/d20.svg" title="use" width="24" height="24"/></div>
+                      {{/if}}
+                      {{#if (hasExoticaUse item)}}
+                      <div class="item-image exotica-use" title="use"><img src="systems/vaarn/module/icons/d20.svg" title="use" width="24" height="24"/></div>
+                      {{/if}}
+                      {{#if (hasSealedImplant item)}}
+                      <div class="item-image sealed-implant-install" title="install"><img src="systems/vaarn/module/icons/d20.svg" title="install" width="24" height="24"/></div>
+                      {{/if}}
+                      {{/unless}}
+                      {{/unless}}
+                      {{#if (isHiddenExotica item)}}
+                      <h4 class="item-control item-view">{{displayName item}}</h4>
+                      {{else if (isWound item)}}
+                      <h4>{{displayName item}}</h4>
+                      {{else}}
+                      <h4 class="item-control item-view {{#if (isItemBroken item)}}knave-encumbered{{else if (isItemSuppressed item)}}knave-encumbered{{/if}}">{{displayName item}}{{#if (isUnidentified item)}} <span title="Unidentified — the players see it only as Unidentified Exotica, and only you can use it until it is identified — cards it posts do not name it.">(unidentified)</span>{{/if}}{{#if (isItemSuppressed item)}} <span title="Suppressed by {{suppressedByLabel item}} — its ongoing effect does nothing until that is cured or lifted. It still occupies its slots.">(suppressed)</span>{{/if}}{{#if (hasMutationUsePool item)}} ({{item.system.usesRemaining}} left){{/if}}{{#if (hasImplantUsePool item)}} ({{item.system.usesRemaining}} left){{/if}}{{#if (hasExoticaCharges item)}} ({{item.system.usesRemaining}} left){{/if}}{{#if (eq item.name "Berserker StimRig")}}{{#if (isBerserkerActive actor)}} (ACTIVE){{/if}}{{/if}}</h4>
+                      {{/if}}
+
+                    </span>
+                      <div class="item-controls">
+                          {{#unless (isWound item)}}
+                          <a class="item-quality {{#if (isItemBroken item)}}knave-encumbered{{/if}}" title="Quality or Quantity">{{#if (hasQuality item)}}{{item.system.quality.value}}/{{item.system.quality.max}}{{else}}{{item.system.quantity}}{{/if}}&nbsp;&nbsp;</a>
+                          {{!-- Per-Round Effect Reminder. Outside the isGM gate on purpose: a
+                                PC-owned effect (an elixir, a codex duration, a Toxin Die) is the
+                                player's own to switch on, and its reminder is public. Creature-owned
+                                effects only ever sit on an npc sheet, which players do not open, so
+                                origin already decides visibility without a second gate here. --}}
+                          {{!-- Activity Time Cost. Shown only where the rule DECLARES it,
+                                never inferred from the text: eight creature rules mention a
+                                span and one of them is an effort. --}}
+                          {{#unless (isHiddenExotica item)}}
+                          {{#if (hasActivity item)}}
+                          <a class="item-control item-activity-start" title="Begin this effort on the clock"><i class="fas fa-hourglass-start"></i></a>
+                          {{/if}}
+                          {{!-- Token Light from an Item. Shown only where the Item DECLARES a
+                                light; lit or not is read from the tokens. --}}
+                          {{#if (isLightSource item)}}
+                          <a class="item-control item-light-toggle{{#if (isLightOn item)}} knave-encumbered{{/if}}" title="{{#if (isLightOn item)}}Lit on your token — click to switch off{{else}}Switch on the light on your token{{/if}}"><i class="fas fa-lightbulb"></i></a>
+                          {{/if}}
+                          {{!-- Compel-a-Target Save. Shown only where the Item DECLARES a save.
+                                Posts a card naming the save; the target's controller rolls it. --}}
+                          {{#if (hasCompelledSave item)}}
+                          <a class="item-control item-save-compel" title="Compel the target to save"><i class="fas fa-shield-halved"></i></a>
+                          {{/if}}
+                          {{#if (canRoundRemind item)}}
+                          <a class="item-control item-round-remind{{#if (isRoundEffectActive item)}} knave-encumbered{{/if}}" title="{{#if (isRoundEffectActive item)}}Reminding each round — click to stop{{else}}Remind me about this each round{{/if}}"><i class="fas fa-hourglass-half"></i></a>
+                          {{/if}}
+                          {{/unless}}
+                          {{!-- Drop is deliberately OUTSIDE the isGM gate: it exists
+                                because Item Control Visibility hid Delete from players,
+                                and a player shedding gear under the slot cap is the
+                                whole case it was built for. --}}
+                          {{#if (isDroppable item)}}
+                          <a class="item-control item-drop" title="Drop on the ground"><i class="fas fa-hand-holding"></i></a>
+                          {{/if}}
+                          {{!-- Bloomboon Growth: shed a grown part, any time, by
+                                anyone who can drop. Its cost becomes ability damage. --}}
+                          {{#if (isGrownPart item)}}
+                          <a class="item-control item-shed" title="Shed this part — its cost becomes ordinary ability damage"><i class="fas fa-leaf"></i></a>
+                          {{/if}}
+                          {{!-- Grafted Limb Creation: the player may remove the graft, which ends it. --}}
+                          {{#if (isGraft item)}}
+                          <a class="item-control item-graft-remove" title="Remove the graft — it ends, and so does its daily CON loss"><i class="fas fa-leaf"></i></a>
+                          {{/if}}
+                          {{!-- Stow, only for a character who has a compartment
+                                to stow it in. Same visibility as Drop above and
+                                for the same reason. --}}
+                          {{#if @root.cargo}}
+                          <a class="item-control item-stow" title="Stow in the cargo compartment"><i class="fas fa-box-archive"></i></a>
+                          {{/if}}
+                          {{#if @root.isGM}}
+                          {{!-- Exotica Identification: the Referee's controls. The
+                                save is asked for, never fired; appraisal reveals it. --}}
+                          {{#if (isUnidentified item)}}
+                          <a class="item-control item-identify-save" title="Ask for an INT save to work out what it does"><i class="fas fa-brain"></i></a>
+                          <a class="item-control item-identify" title="Identify it (appraised)"><i class="fas fa-eye"></i></a>
+                          {{else if (isExoticaItem item)}}
+                          <a class="item-control item-unidentify" title="Mark unidentified — hides it from the players and withholds its use"><i class="fas fa-eye-slash"></i></a>
+                          {{/if}}
+                          {{#if (isTransferable item)}}
+                          <a class="item-control item-transfer" title="Give to another actor"><i class="fas fa-right-left"></i></a>
+                          {{/if}}
+                          <a class="item-control item-delete" title="Delete Item"><i class="fas fa-trash"></i></a>
+                          {{/if}}
+                          {{/unless}}
+                          {{#if (isWound item)}}
+                          <span class="item-quality" title="Heal this Wound from the Wounds tab">Wound</span>
+                          {{/if}}
+                      </div>
+                  </li>
+              {{/each}}
+              </ol>
+
+              {{!-- The cargo compartment — Container Slot Capacity, 2026-09-20.
+                    Rendered only when there is one, so an unpoxed character
+                    sees nothing new; same principle as the usage-die controls.
+                    What is in here does not count against the character's own
+                    slots and does not make them Encumbered, which is the whole
+                    point of it being a compartment. --}}
+              {{#if cargo}}
+              <ol class="items-list">
+                  <li class="item flexrow item-header">
+                    <div class="item-name">Cargo {{cargoSlots cargo}}</div>
+                    <div class="item-name">Stowed</div>
+                    <div class="item-controls"></div>
+                  </li>
+              {{#each cargoItems as |item id|}}
+                  <li class="item flexrow knave-item-type-{{item.type}}" data-item-id="{{item.id}}">
+                      <div class="item-image"><img src="{{itemImg item}}" title="{{displayName item}}" width="24" height="24"/></div>
+                      <div class="item-name">{{displayName item}}</div>
+                      <div class="item-controls">
+                          {{!-- Stowed gear is out of reach until it is taken back
+                                out, which is why no equip, attack or use control
+                                is rendered here. The Manifold Box states the same
+                                rule in the book: retrieving takes an action. --}}
+                          <a class="item-control item-unstow" title="Take back out"><i class="fas fa-hand-holding"></i></a>
+                          {{#if @root.isGM}}
+                          <a class="item-control item-delete" title="Delete Item"><i class="fas fa-trash"></i></a>
+                          {{/if}}
+                      </div>
+                  </li>
+              {{/each}}
+              </ol>
+              {{/if}}
+          </div>
+      </div>
+    <!--end right region-->
+  </div>
+</form>

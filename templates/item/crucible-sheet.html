@@ -1,0 +1,58 @@
+<form class="{{cssClass}}" autocomplete="off">
+    <header class="sheet-header">
+        <img class="profile-img" src="{{item.img}}" data-edit="img" title="{{item.name}}"/>
+        <div class="header-fields">
+            <h1 class="charname"><input name="name" type="text" value="{{item.name}}" placeholder="Name"/></h1>
+            {{#if kindLabel}}<div class="item-kind">{{kindLabel}}</div>{{/if}}
+            <div class="grid grid-2col">
+              <div class="resource">
+                <label class="resource-label">Slots</label>
+                  <input type="text" name="system.slots" value="{{data.system.slots}}" data-dtype="Number"/>
+              </div>
+              <div class="resource">
+                <label class="resource-label">{{valueLabel}}</label>
+                  <input type="text" name="system.tradeValue" value="{{data.system.tradeValue}}" data-dtype="Number"/>
+                  {{#if conditionalValue}}
+                    <div class="conditional-trade-value">{{conditionalValue.value}} to {{conditionalValue.buyer}}</div>
+                  {{/if}}
+              </div>
+            </div>
+        </div>
+    </header>
+
+    {{!-- Sheet Tab Navigation --}}
+    <nav class="sheet-tabs tabs" data-group="primary">
+        <a class="item" data-tab="description">Description</a>
+        <a class="item" data-tab="recipes">Recipes</a>
+    </nav>
+
+    {{!-- Sheet Body --}}
+    <section class="sheet-body">
+        {{!-- Description Tab --}}
+        <div class="tab" data-group="primary" data-tab="description">
+            {{editor content=data.system.description target="system.description" button=true owner=owner editable=editable}}
+        </div>
+
+        {{!-- Recipes Tab — Crucible Recipe Inscription (2026-09-19). A record
+              only: nothing reads it to allow or refuse a brew. --}}
+        <div class="tab crucible-recipes" data-group="primary" data-tab="recipes">
+            <p class="notes">Elixir recipes inscribed on this crucible. Drop an Elixir here to copy its recipe.</p>
+            {{#each recipes as |r|}}
+            <div class="crucible-recipe" data-recipe-index="{{r.index}}">
+                <div class="flexrow">
+                    <input class="recipe-field" data-field="name" type="text" value="{{r.name}}" placeholder="Elixir name" {{#unless ../editable}}disabled{{/unless}}/>
+                    <input class="recipe-field" data-field="potency" type="number" min="1" max="5" value="{{r.potency}}" placeholder="POT" style="flex: 0 0 4em;" {{#unless ../editable}}disabled{{/unless}}/>
+                    {{#if ../editable}}<a class="recipe-delete" title="Strike out this recipe" style="flex: 0 0 1.5em;"><i class="fas fa-trash"></i></a>{{/if}}
+                </div>
+                <input class="recipe-field" data-field="component" type="text" value="{{r.component}}" placeholder="Component" {{#unless ../editable}}disabled{{/unless}}/>
+                <textarea class="recipe-field" data-field="effect" rows="2" placeholder="Effect" {{#unless ../editable}}disabled{{/unless}}>{{r.effect}}</textarea>
+                {{#if r.essenceNote}}<p class="notes">{{r.essenceNote}}</p>{{/if}}
+                <hr/>
+            </div>
+            {{else}}
+            <p class="notes"><i>No recipes inscribed.</i></p>
+            {{/each}}
+            {{#if editable}}<button type="button" class="recipe-add"><i class="fas fa-plus"></i> Add recipe</button>{{/if}}
+        </div>
+    </section>
+</form>

@@ -1,0 +1,38 @@
+{{!-- Toxin Die (Core Rules/Toxins.md) — shared by actor-sheet.html and
+      npc-sheet.html. It is on BOTH, unlike MORALE, because the TOX
+      notation reads "Biological creatures hit must make a CON save vs a
+      Toxin Die": a poisoned monster is as real as a poisoned PC, and the
+      field already lived on the shared `base` template.
+
+      One copy of the markup on purpose. This block is 23 lines with four
+      conditionals in it, and the two sheets would drift — the same reason
+      Bestiary Art Table Duplication and RollTable Build Helper Duplication
+      are their own rows.
+
+      Timing is adjudicated: the book's "each combat round, before taking
+      their action" is a table procedure, so whoever runs the actor gets
+      buttons rather than a hook. SAVE is the entry gate; ROLL is the
+      recurring damage. --}}
+<div class="flex-group-center knave-toxin">
+  {{#if toxin.immune}}
+  <span class="resource-label">TOX</span>
+  <span class="knave-toxin-immune" title="Immune to TOX damage, so no Toxin Die is ever incurred.">Immune — {{toxin.sourceLabel}}</span>
+  {{else}}
+  <span class="resource-label">TOX</span>
+  <div class="knave-toxin-controls">
+    <select name="system.toxinDie.die" data-dtype="String" title="Toxin Die. One at a time, and a new failed save only ever raises it.">
+      {{#each toxin.options as |opt|}}
+      <option value="{{opt.value}}" {{#if opt.selected}}selected{{/if}}>{{opt.label}}</option>
+      {{/each}}
+    </select>
+    <button type="button" class="knave-tox-save" {{#unless toxin.has}}disabled{{/unless}}
+            title="{{toxin.saveTitle}}">Save</button>
+    <button type="button" class="knave-tox-roll" {{#unless toxin.has}}disabled{{/unless}}
+            title="Roll the Toxin Die and subtract it from HP — each round before acting, or each exploration turn. On a 1-2 it steps one size down the chain.">Roll</button>
+  </div>
+  {{#if toxin.advantage}}
+  <span class="knave-toxin-adv" title="Sources of ADV and DIS cancel out, so shift-clicking Save still nets a plain roll.">ADV — {{toxin.sourceLabel}}</span>
+  {{/if}}
+  <input type="text" name="system.toxinDie.source" value="{{data.system.toxinDie.source}}" data-dtype="String" placeholder="source" title="What inflicted it. Free text, for the table's own reference."/>
+  {{/if}}
+</div>

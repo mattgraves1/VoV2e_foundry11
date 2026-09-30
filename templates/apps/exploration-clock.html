@@ -1,0 +1,158 @@
+{{!-- THE SECTIONS FOLLOW THE "WHERE" DROPDOWN. Matt 2026-09-13: "keeping time
+      in a vault is where we need to track turns and do special vault stuff...
+      start the day and travel day are desert procedures".
+
+      What stays visible in BOTH is not a leftover. The two dropdowns above are
+      shared: startDay() in day-start.js takes the same envKey AND the same
+      encounter-die formula this window sets, so hiding them under Vault would
+      break the desert sequence that reads them. Longer spans is environment-
+      neutral by the same test — it marks time and rolls nothing. --}}
+<div class="vaarn-clock-app">
+
+  <div class="vaarn-clock-readout">
+    <div class="vaarn-clock-time">{{time.label}}</div>
+    <div class="vaarn-clock-turns">{{turnsElapsed}} Exploration {{turnPlural}} elapsed</div>
+  </div>
+
+  <div class="vaarn-clock-row">
+    <label>Where</label>
+    <select class="vaarn-clock-env">
+      {{#each environments}}
+      <option value="{{this.key}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+      {{/each}}
+    </select>
+  </div>
+
+  <div class="vaarn-clock-row">
+    <label>Encounter die</label>
+    <select class="vaarn-clock-dice">
+      {{#each diceOptions}}
+      <option value="{{this.key}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+      {{/each}}
+    </select>
+  </div>
+
+  {{#if encumbranceHint}}
+  <p class="vaarn-clock-hint">{{encumbranceHint}}</p>
+  {{/if}}
+  {{#if encounterDisHint}}
+  <p class="vaarn-clock-hint">{{encounterDisHint}}</p>
+  {{/if}}
+
+  {{#if isVault}}
+  {{!-- Vault Encounters from the Exploration Clock (Matt 2026-09-27): the generated
+        vault level the party is on. An Encounter then rolls that level's table
+        and an Omen names a creature from it. Also set from a level's encounter
+        page. The list is the party's own vault and "Other vault..."; a vault
+        journal filed in an "Explored Vaults" folder drops off it. --}}
+  <div class="vaarn-clock-row">
+    <label>Party location</label>
+    <select class="vaarn-clock-vault-location">
+      <option value="">(not set - encounters use the book's table only)</option>
+      {{#each vaultLocation.options}}
+      <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+      {{/each}}
+    </select>
+    {{#if vaultLocation.label}}<button type="button" class="vaarn-clock-vault-clear">Clear</button>{{/if}}
+  </div>
+
+  <div class="vaarn-clock-row">
+    <label class="vaarn-clock-checkbox">
+      <input type="checkbox" class="vaarn-clock-auto" {{#if autoCheck}}checked{{/if}}>
+      Roll an encounter check each turn
+    </label>
+  </div>
+
+  <h3>Spend a turn</h3>
+  {{!-- Vault Traversal Penalties. The one clause of the darkness rule that is
+        enforced rather than adjudicated (Matt 2026-09-13), so Search carries a
+        disabled attribute and a title saying why. The other three clauses ride
+        the board entry's text where the players read them. --}}
+  <div class="vaarn-clock-actions">
+    {{#each actions}}
+    <button type="button" data-turns="{{this.turns}}" data-key="{{this.key}}"
+            {{#if this.blocked}}disabled title="{{this.blocked}}"{{/if}}>
+      {{this.label}}{{#if this.multi}} <span class="vaarn-clock-cost">({{this.turns}} turns)</span>{{/if}}
+    </button>
+    {{/each}}
+  </div>
+  {{#if darkness}}
+  <p class="vaarn-clock-note">{{darkness}}</p>
+  {{/if}}
+
+  <div class="vaarn-clock-row vaarn-clock-custom-row">
+    <label>Other</label>
+    <input type="number" class="vaarn-clock-custom" min="1" step="1" value="1">
+    <span>turns</span>
+    <button type="button" class="vaarn-clock-custom-go">Advance</button>
+  </div>
+
+  {{!-- Resting Underground, inside Spend a turn because it is the vault's own
+        time-keeping rather than a procedure of its own (Matt 2026-09-13).
+
+        TWO BUTTONS RATHER THAN A CHECKBOX WITH A DEFAULT. A default-secure
+        tickbox makes "no check" the outcome of forgetting, and a rule whose
+        default is silence is the failure the travel cluster was prioritised to
+        avoid. Neither state is preselected, so the campsite is answered every
+        time it is asked. --}}
+  <p class="vaarn-clock-note">A Long Rest spends {{longRestTurns}} turns and rolls no per-turn checks — the night has its own. No HP and no rations: those are each character's own Long Rest, on their sheet.</p>
+  <div class="vaarn-clock-actions">
+    <button type="button" class="vaarn-clock-long-rest" data-secure="1">Long Rest — secure campsite</button>
+    <button type="button" class="vaarn-clock-long-rest" data-secure="0">Long Rest — no secure campsite, 3-in-6</button>
+  </div>
+  {{/if}}
+
+  <h3>Longer spans</h3>
+  <p class="vaarn-clock-note">Marking time only — nothing is rolled.</p>
+  <div class="vaarn-clock-actions">
+    <button type="button" data-unit="hour" data-amount="1">+1 hour</button>
+    <button type="button" data-unit="hour" data-amount="8">+8 hours</button>
+    <button type="button" data-unit="day"  data-amount="1">+1 day</button>
+  </div>
+
+  {{#if isDesert}}
+  {{!-- The start-of-day sequence. It rolls and posts only: the clock does not
+        move and no rations are drawn, so Push and Camp below still own the
+        day's advance and the Rest still owns the ration draw. --}}
+  <h3>Start the day</h3>
+  <p class="vaarn-clock-note">Weather, then the day's encounter check, then the Vigilance Die — in that order, because the weather sets the Vigilance dice.</p>
+  <div class="vaarn-clock-actions">
+    <button type="button" class="vaarn-clock-day-start">Start the day</button>
+  </div>
+
+  {{!-- Exhaustion. The two buttons are travel days of their own and each
+        advances one day, so +1 day above stays what it always was: an
+        ordinary day at normal pace. --}}
+  <h3>Travel day</h3>
+  <p class="vaarn-clock-note">Pushing costs every PC an item slot until they camp a full day and night.</p>
+  <div class="vaarn-clock-actions">
+    <button type="button" class="vaarn-clock-push">Push — double distance</button>
+    <button type="button" class="vaarn-clock-camp">Camp a day and night</button>
+  </div>
+  {{/if}}
+
+  {{!-- Exhaustion stays in BOTH, deliberately. It is carried state rather than
+        a desert procedure: a PC who pushed across the sand still has the slots
+        filled underground, and the readout is where the Referee sees who is
+        one push from the death rule. Not asserted as Matt's call - he named
+        four sections and not this one. --}}
+  {{#if exhaustion}}
+  <ul class="vaarn-clock-exhaustion">
+    {{#each exhaustion}}
+    <li>
+      <b>{{this.name}}</b> — {{this.count}} Exhaustion, {{this.used}}/{{this.max}} slots
+      {{#if this.atRisk}}<span class="knave-encumbered"> — no room and nothing to discard: the next one kills</span>{{/if}}
+    </li>
+    {{/each}}
+  </ul>
+  {{/if}}
+
+  {{!-- Desert Foraging row 32 is the book's other source: "CON save vs
+        Exhaustion". The save is descriptive, as every compelled save here is;
+        Apply is what the Referee clicks on a failure. --}}
+  <div class="vaarn-clock-row vaarn-clock-actions">
+    <button type="button" class="vaarn-clock-exh-save">CON save vs Exhaustion</button>
+    <button type="button" class="vaarn-clock-exh-apply">Apply to selected</button>
+  </div>
+
+</div>

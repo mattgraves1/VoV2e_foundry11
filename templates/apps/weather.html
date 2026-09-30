@@ -1,0 +1,92 @@
+<div class="vaarn-weather-app">
+
+  <div class="vaarn-weather-readout">
+    <div class="vaarn-weather-now">{{weather.name}}</div>
+    <div class="vaarn-weather-where">
+      {{#if started}}Day {{day}} &middot; {{/if}}hex {{hex}} on the chart
+    </div>
+    {{#if overridden}}
+    <div class="vaarn-weather-where">
+      Set by the Referee. The chart says: {{chartName}}.
+      <a class="vaarn-weather-clear" title="Undo the override. Posts nothing."><i class="fas fa-times"></i> Clear</a>
+    </div>
+    {{/if}}
+  </div>
+
+  <p class="vaarn-weather-text">{{weather.text}}</p>
+
+  {{#if weather.rule}}
+  <p class="vaarn-weather-rule">{{weather.rule}}</p>
+  {{else}}
+  <p class="vaarn-weather-norule">The book states no rule for this weather.</p>
+  {{/if}}
+
+  <div class="vaarn-weather-actions">
+    <button type="button" class="vaarn-weather-roll">
+      <i class="fas fa-dice-d6"></i> Roll the day&rsquo;s weather
+    </button>
+    <button type="button" class="vaarn-weather-forecast-btn" title="Whispered to you, never to the players.">
+      <i class="fas fa-eye"></i> Forecast
+    </button>
+  </div>
+
+  {{!-- Weather Override for the Day. The marker does not move; the next
+        roll ends the override. --}}
+  <div class="vaarn-weather-actions">
+    <select class="vaarn-weather-pick">
+      {{#each types}}<option value="{{this.key}}" {{#if this.selected}}selected{{/if}}>{{this.name}}</option>{{/each}}
+    </select>
+    <button type="button" class="vaarn-weather-set" title="Today only. The chart marker stays where it is.">
+      <i class="fas fa-wind"></i> Set for today
+    </button>
+  </div>
+
+  <div class="vaarn-clock-row">
+    <label class="vaarn-clock-checkbox">
+      <input type="checkbox" class="vaarn-weather-public" {{#if isPublic}}checked{{/if}}>
+      Announce the weather to the players
+    </label>
+  </div>
+
+  <h3>Tomorrow, out of six</h3>
+  <ul class="vaarn-weather-outlook">
+    {{#each outlook}}
+    <li>
+      <span class="vaarn-weather-odds">{{this.count}}/6</span>
+      <span class="vaarn-weather-oname">{{this.name}}</span>
+      <span class="vaarn-weather-rolls">on {{this.rolls}}{{#if this.stays}} &mdash; impassable edge{{/if}}</span>
+    </li>
+    {{/each}}
+  </ul>
+
+  {{#if trail.length}}
+  <h3>Days behind</h3>
+  <ul class="vaarn-weather-trail">
+    {{#each trail}}
+    <li>
+      <span class="vaarn-weather-day">{{this.day}}</span>
+      <span class="vaarn-weather-oname">{{this.type}}</span>
+      <span class="vaarn-weather-rolls">
+        rolled {{this.roll}} {{this.dir}}{{#if this.sealed}}, stayed put{{/if}}{{#if this.set}}; set by hand to {{this.set}}{{/if}}
+      </span>
+    </li>
+    {{/each}}
+  </ul>
+  {{/if}}
+
+  <h3>The chart</h3>
+  <p class="vaarn-weather-census">
+    {{#each census}}<span class="{{#if this.here}}vaarn-weather-here{{/if}}">{{this.name}} {{this.hexes}}</span>{{/each}}
+  </p>
+  <p class="vaarn-weather-note">
+    Thirty-seven hexes, and the walk is reversible, so a weather&rsquo;s share of
+    them is its share of the days.
+  </p>
+
+  <div class="vaarn-weather-actions">
+    <button type="button" class="vaarn-weather-reset">
+      <i class="fas fa-crosshairs"></i> Back to the centre
+    </button>
+  </div>
+
+</div>

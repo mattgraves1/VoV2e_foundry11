@@ -1,0 +1,2193 @@
+@import url("https://fonts.googleapis.com/css2?family=Martel:wght@400;800&family=Roboto:wght@300;400;500&display=swap");
+/* The Vaarn UI Reskin's palettes. Imported rather than listed in system.json
+   so adding it needed an F5, not a relaunch. The --vt-* variables used below
+   are defined there; each one's fallback is the colour this file always had,
+   so with no theme chosen nothing changes. */
+@import url("vaarn-theme.css");
+/* Global styles */
+.window-app {
+  font-family: "Roboto", sans-serif;
+}
+
+.grid,
+.grid-2col {
+  display: grid;
+  grid-column: span 2 / span 2;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 10px 0;
+  padding: 0;
+}
+
+.grid-3col {
+  grid-column: span 3 / span 3;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid-4col {
+  grid-column: span 4 / span 4;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.grid-5col {
+  grid-column: span 5 / span 5;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.grid-6col {
+  grid-column: span 5 / span 5;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.grid-7col {
+  grid-column: span 7 / span 7;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.grid-8col {
+  grid-column: span 8 / span 8;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.grid-9col {
+  grid-column: span 9 / span 9;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+}
+
+.grid-10col {
+  grid-column: span 10 / span 10;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+}
+
+.grid-11col {
+  grid-column: span 11 / span 11;
+  grid-template-columns: repeat(11, minmax(0, 1fr));
+}
+
+.grid-12col {
+  grid-column: span 12 / span 12;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+.flex-group-center,
+.flex-group-left,
+.flex-group-right {
+  -webkit-box-pack: center;
+  -ms-flex-pack: center;
+  justify-content: center;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  text-align: center;
+  padding: 5px;
+  border: 1px solid var(--vt-line, #999);
+}
+
+.flex-group-left {
+  -webkit-box-pack: start;
+  -ms-flex-pack: start;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.flex-group-right {
+  -webkit-box-pack: end;
+  -ms-flex-pack: end;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.flex-center {
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  -webkit-box-pack: center;
+  -ms-flex-pack: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.flex-between {
+  -webkit-box-pack: justify;
+  -ms-flex-pack: justify;
+  justify-content: space-between;
+}
+
+/* Styles limited to knave sheets */
+.knave .item-form {
+  font-family: "Roboto", sans-serif;
+}
+
+.knave .sheet-header {
+  -webkit-box-flex: 0;
+  -ms-flex: 0 0 120px;
+  flex: 0 0 120px;
+  overflow: hidden;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-orient: horizontal;
+  -webkit-box-direction: normal;
+  -ms-flex-direction: row;
+  flex-direction: row;
+  -ms-flex-wrap: wrap;
+  flex-wrap: wrap;
+  -webkit-box-pack: start;
+  -ms-flex-pack: start;
+  justify-content: flex-start;
+  margin-bottom: 10px;
+}
+
+.knave .sheet-header .profile-img {
+  -webkit-box-flex: 0;
+  -ms-flex: 0 0 100px;
+  flex: 0 0 100px;
+  height: 100px;
+  margin-right: 10px;
+}
+
+.knave .sheet-header .header-fields {
+  -webkit-box-flex: 1;
+  -ms-flex: 1;
+  flex: 1;
+}
+
+.knave .sheet-header h1.charname {
+  height: 50px;
+  padding: 0px;
+  margin: 5px 0;
+  border-bottom: 0;
+}
+
+/* Item Type on Item Sheet: the kind reads as a subtitle under the name, so it
+   is available at a glance and never competes with the name itself. */
+.knave .sheet-header .item-kind {
+  margin: -2px 0 6px;
+  font-size: 12px;
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+}
+
+.knave .sheet-header h1.charname input {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+/* CHARACTER SHEET LAYOUT (foundry-system-index.csv "Character Sheet Tab Body
+   Width"). Two regions rather than three columns.
+
+   The tab body used to live inside the middle column of a grid-3col, so a tab
+   got roughly a third of a 1000px sheet and shared it with the ancestry block
+   above. The left region now holds abilities and details side by side with the
+   tab strip spanning beneath both, which about doubles a tab’s width.
+
+   min-width: 0 on both regions is load-bearing, not tidiness: a flex item’s
+   default min-width is auto, so the item list’s long rows would otherwise
+   refuse to shrink and push the whole layout wider than the window.
+
+   This is the character sheet only. npc-sheet.html has no description-tabs and
+   keeps its grid-3col. */
+/* CHARACTER SHEET LAYOUT. Two regions: a left region that is entirely tab, and
+   the item list on the right.
+
+   THE STRIP RUNS ALONG THE TOP and the stats are a tab like any other, ruled
+   2026-09-14 (Matt). The arrangement built earlier the same day put the strip
+   BELOW the abilities and details, which began under 661px of content: the
+   sheet had to be 950 tall to reach it, and a max-height reserve had to be held
+   open on the columns or the strip was pushed off the bottom entirely. Both of
+   those are gone - nothing sits above the strip now, so there is nothing to
+   reserve space against and every tab gets the same full height.
+
+   min-height: 0 on every link in the chain is still load-bearing. A column flex
+   item defaults to min-height: auto and grows past its container, so without it
+   the form stretches and the whole sheet scrolls instead of the tab body. */
+.knave .vaarn-sheet-layout {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* SCOPED TO THE CHARACTER FORM. As a bare form selector this reached the NPC and
+   container sheets, which share .knave and have none of this structure - the NPC
+   form dropped from 1288px to 574px with its content spilling out of the box.
+   Caught by testing (166.12). */
+.knave .window-content > form.vaarn-character-form {
+  min-height: 0;
+}
+
+.knave .vaarn-sheet-main {
+  flex: 2 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The strip itself never shrinks - it is the thing everything else is reached
+   through, and the bug this layout replaced was it being squeezed out. */
+.knave .vaarn-sheet-main .description-tabs {
+  flex: 0 0 auto;
+}
+
+/* Every tab, the stats included, scrolls inside this region rather than
+   stretching the sheet.
+
+   A 14px padding-right was added here 2026-09-15 and REVERTED the same day. The
+   theory was that a scrollbar on this element overlays the editor control
+   Foundry positions at `right: 5px`, so a gutter would move the control clear.
+   Matt tested it: no change, still cut off. A gutter would have shifted the
+   control 14px left, so whatever clips it is not this element is right edge.
+
+   Left as a comment rather than deleted so the next reader does not spend the
+   same afternoon on it. See the Editor Control Clipped At The Tab Edge row. */
+.knave .vaarn-sheet-main .description-tabs-content {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* The abilities and details, side by side, inside the Stats tab. No max-height:
+   there is nothing below them to protect any more. */
+.knave .vaarn-sheet-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  align-items: start;
+}
+
+/* The item list keeps a column of its own, full height, and scrolls in place
+   rather than making the sheet taller. It is deliberately NOT a tab: Matt ruled
+   2026-09-14 that clicking back to the inventory mid-combat costs more than the
+   width it would buy. */
+.knave .vaarn-sheet-layout > .flex-group-center {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Description tab: the rolled spark descriptors and the creature types, side by
+   side beneath the ancestry block.
+
+   The descriptors are a dl rather than a table because that is what they are -
+   a label and its value - and because the columns VARY BY ANCESTRY, so there is
+   no fixed set of rows a table could be built around. A True-kin has Caste where
+   a Mycomorph has Spores. */
+.knave .vaarn-desc-pair {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.knave .vaarn-desc-spark { flex: 1 1 14em; min-width: 0; }
+.knave .vaarn-desc-types { flex: 1 1 12em; min-width: 0; }
+.knave .vaarn-desc-pair h3 { margin: 0.2em 0 0.3em; }
+
+/* Label left, value right, one pair per row. grid rather than float so a long
+   value wraps under itself instead of under the next label. */
+.knave .vaarn-spark-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.1em 0.6em;
+  margin: 0;
+}
+.knave .vaarn-spark-list dt { font-weight: bold; opacity: 0.8; }
+.knave .vaarn-spark-list dd { margin: 0; }
+.knave .vaarn-desc-none { font-size: 0.85em; opacity: 0.7; font-style: italic; }
+
+/* Faction Reputation tab. The standing is the readable thing, not the number,
+   so it is what gets weight; the effect line under each name is the books own
+   wording for that standing and is why the rows are tall. */
+/* The inactive biography editor must be tall enough to hold the edit control
+   Foundry puts inside it (foundry-system-index.csv "Editor Control Clipped At
+   The Tab Edge").
+
+   MEASURED ON MATTS CLIENT 2026-09-15, by outlining both boxes: the .editor was
+   a strip about 20px tall while the control inside it is about 28px, and .editor
+   carries overflow: auto - so the control was clipped at the BOTTOM, and the
+   overflow it caused is what drew the scrollbar sliver beside it. One cause, both
+   symptoms.
+
+   IT IS NOT A RIGHT-EDGE PROBLEM, which is what two earlier attempts assumed. A
+   14px gutter on the tab body did nothing, and moving the control to right: 40px
+   on his machine did nothing either. Both are recorded because the screenshots
+   read as a horizontal cut and that reading survived two rounds of measurement.
+
+   The height varies by how much sits above the editor on the Description tab: on
+   the test machine it stretches to 321px and the control has always fitted, which
+   is why this never reproduced there. min-height puts a floor under the case that
+   collapses without touching the case that does not. */
+.knave .description-editor .editor {
+  min-height: 44px;
+}
+
+.knave .vaarn-rep-table { width: 100%; border-collapse: collapse; }
+.knave .vaarn-rep-table td {
+  padding: 0.3em 0.4em;
+  border-top: 1px solid var(--color-border-light-tertiary, var(--vt-line, #ddd));
+  vertical-align: top;
+}
+.knave .vaarn-rep-name { font-weight: bold; width: 56%; }
+.knave .vaarn-rep-effect { font-weight: normal; font-size: 0.82em; opacity: 0.72; margin-top: 0.1em; }
+.knave .vaarn-rep-standing { width: 22%; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.04em; }
+.knave .vaarn-rep-controls { width: 22%; white-space: nowrap; text-align: right; }
+.knave .vaarn-rep-value { width: 3.2em; text-align: center; display: inline-block; }
+.knave .vaarn-rep-step {
+  display: inline-block; width: 1.4em; text-align: center;
+  border: 1px solid var(--color-border-light-tertiary, var(--vt-line, #bbb)); border-radius: 3px;
+  cursor: pointer; user-select: none;
+}
+/* A faction hidden in the registry that this character still has REP with.
+   It stays on the sheet rather than vanishing with the number attached. */
+.knave .vaarn-rep-hidden .vaarn-rep-name { opacity: 0.6; }
+.knave .vaarn-rep-flag { font-weight: normal; font-size: 0.75em; font-style: italic; opacity: 0.7; margin-left: 0.4em; }
+.knave .vaarn-rep-gaining { font-weight: normal; font-size: 0.8em; margin-top: 0.25em; }
+.knave .vaarn-rep-gaining summary { cursor: pointer; opacity: 0.7; }
+.knave .vaarn-rep-gaining ul { margin: 0.2em 0 0.3em 1.1em; opacity: 0.85; }
+
+.knave .vaarn-rep-note { font-size: 0.82em; opacity: 0.75; margin: 0.5em 0 0.2em; }
+.knave .vaarn-rep-spend { font-size: 0.85em; opacity: 0.85; margin: 0.2em 0 0.6em 1.2em; }
+
+.knave .sheet-tabs {
+  -webkit-box-flex: 0;
+  -ms-flex: 0;
+  flex: 0;
+}
+
+.knave .sheet-body,
+.knave .sheet-body .tab,
+.knave .sheet-body .tab .editor {
+  height: 100%;
+}
+
+.description-editor .tox {
+    min-height: 200px;
+    resize: vertical;
+}
+
+.description-editor .tox-editor-container {
+  min-height: 200px;
+  resize: vertical;
+}
+
+.knave .tox .tox-editor-container {
+  background: #fff;
+}
+
+.knave .tox .tox-edit-area {
+  padding: 0 8px;
+}
+
+.knave .resource-label {
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.knave .tabs {
+  height: 40px;
+  border-top: 1px solid var(--vt-line, #AAA);
+  border-bottom: 1px solid var(--vt-line, #AAA);
+}
+
+.knave .tabs .item {
+  line-height: 40px;
+  font-weight: bold;
+}
+
+.knave .tabs .item.active {
+  text-decoration: underline;
+  text-shadow: none;
+}
+
+.knave .items-list {
+  list-style: none;
+  margin: 7px 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.knave .items-list .item-header {
+  font-weight: bold;
+}
+
+/* min-height, not height: a fixed 30px let a wrapped line print over the next
+   row - the Slots/Hands header at 1000px, a long item name, the delete icon
+   that did not fit beside three others. Found in the Vaarn UI Reskin's test
+   (Group 441) and applied to every look, Knave included (Matt, 2026-09-27). */
+.knave .items-list .item {
+  min-height: 30px;
+  line-height: 24px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--vt-line, #BBB);
+}
+
+.knave .items-list .item .item-image {
+  -webkit-box-flex: 0;
+  -ms-flex: 0 0 24px;
+  flex: 0 0 24px;
+  margin-right: 5px;
+}
+
+.knave .items-list .item img {
+  display: block;
+}
+
+.knave .items-list .item-name {
+  margin: 0;
+}
+
+/* The item's name is an h4, and Foundry gives every h4 an 8px bottom margin.
+   While rows were a fixed 30px that margin overflowed unseen; once they grow to
+   fit it made every row 39px. Zeroed so a row with nothing to wrap stays 30px. */
+.knave .items-list .item h4 {
+  margin: 0;
+}
+
+.knave .items-list .item-controls {
+  -webkit-box-flex: 0;
+  -ms-flex: 0 0 86px;
+  flex: 0 0 86px;
+  text-align: right;
+}
+
+.knave .item-roll img:hover
+{
+    opacity: .5;
+}
+
+/* Dedicated background tint per item type, so gift/codex/gear/weapon/
+   armor/light are distinguishable in the inventory list at a glance
+   instead of only differing by hover tooltip. */
+.knave .items-list .item.knave-item-type-weaponMelee,
+.knave .items-list .item.knave-item-type-weaponRanged {
+  background: rgba(139, 58, 26, 0.12);
+}
+
+.knave .items-list .item.knave-item-type-armor {
+  background: rgba(74, 143, 160, 0.12);
+}
+
+.knave .items-list .item.knave-item-type-light {
+  background: rgba(200, 128, 42, 0.12);
+}
+
+.knave .items-list .item.knave-item-type-gift {
+  background: rgba(147, 51, 234, 0.12);
+}
+
+.knave .items-list .item.knave-item-type-codex {
+  background: rgba(20, 130, 130, 0.12);
+}
+
+.knave .items-list .item.knave-item-type-implant {
+  background: rgba(30, 90, 220, 0.12);
+}
+
+.knave .items-list .item.knave-item-type-exotica {
+  background: rgba(219, 39, 119, 0.12);
+}
+
+.knave .items-list .item.knave-item-type-crucible {
+  background: rgba(34, 139, 34, 0.12);
+}
+
+.knave .items-list .item.knave-item-type-mutation {
+  background: rgba(190, 30, 60, 0.12);
+}
+
+.knave .items-list .item.knave-item-type-ancestry {
+  background: rgba(120, 160, 40, 0.12);
+}
+
+/* Work-queue item 12 — Forgettable Effects tab. Benefit/detriment shown
+   via semantic classes (never inline styles) so item 9's eventual Vaarn
+   reskin only has to touch these two rules, same reasoning as the
+   knave-item-type-* tints above. */
+.knave .forgettable-list {
+  list-style: none;
+  margin: 7px 0;
+  padding: 0;
+}
+
+.knave .forgettable-list li {
+  padding: 3px 6px;
+  margin-bottom: 2px;
+  border-left: 4px solid transparent;
+}
+
+.knave .forgettable-list .forgettable-benefit {
+  background: rgba(34, 139, 34, 0.12);
+  border-left-color: rgba(34, 139, 34, 0.6);
+}
+
+.knave .forgettable-list .forgettable-detriment {
+  background: rgba(190, 30, 60, 0.12);
+  border-left-color: rgba(190, 30, 60, 0.6);
+}
+
+.knave .forgettable-category {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.knave .wounds-list {
+  list-style: none;
+  margin: 7px 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.knave .wounds-list .item {
+  height: auto;
+  line-height: 1.3;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--vt-line, #BBB);
+}
+
+.knave-ability-button {width: 60px; height: 28px;}
+.knave-armor-button {width: 60px; height: 28px;}
+.knave-morale-button {width: 70px; height: 28px;}
+
+.knave-ability-crit
+{
+  font-size: 1.2em;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+.knave-ability-critSuccess
+{
+  color: var(--vt-good, green);
+}
+.knave-ability-critFailure
+{
+  color: var(--vt-bad, red);
+}
+.knave-adv-dis
+{
+  font-weight: bold;
+  font-style: italic;
+}
+
+/* Toxin Die row (Core Rules/Toxins.md) — character sheet only. */
+.knave-toxin-controls
+{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.knave-toxin-controls select
+{
+  flex: 0 0 52px;
+  font-size: 0.85em;
+  height: 20px;
+}
+/* Foundry core style.css sets `button { width: 100%; margin: 0 1px }`. A
+   flex-basis of `auto` resolves to that width, so each button asked for the
+   whole row; the original `flex: 0 0 auto` then forbade shrinking, and two
+   of them overflowed the panel instead of sitting side by side. Both halves
+   have to be undone: an explicit width to kill the 100% basis, and a
+   shrink factor so a narrow sheet squeezes them rather than overflowing. */
+.knave-toxin-controls button
+{
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  line-height: 1.2;
+  height: 20px;
+  padding: 0 8px;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.knave-toxin input[name="system.toxinDie.source"]
+{
+  margin-top: 3px;
+  height: 20px;
+  font-size: 0.85em;
+}
+/* Disabled rather than hidden, deliberately: an immune character should be
+   reminded they have the ability, not silently lose the row. */
+.knave-toxin-controls button:disabled
+{
+  opacity: 0.5;
+  cursor: default;
+}
+.knave-toxin-immune
+{
+  font-style: italic;
+  opacity: 0.75;
+  text-align: center;
+}
+.knave-toxin-adv
+{
+  font-size: 0.85em;
+  font-style: italic;
+  text-align: center;
+}
+
+.editor-content:empty:before
+{
+  content: "This text is editable";
+}
+
+.knave-character-description {
+  min-height: 200px;
+  height: 100%;
+  resize: both;
+}
+
+.knave-encumbered
+{
+  color: var(--vt-bad, red);
+}
+
+.knave-capped
+{
+  color: var(--vt-bad, red);
+  font-weight: bold;
+}
+
+.knave .resource-label-small
+{
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: .8em;
+  vertical-align: middle;
+}
+
+.knave .align-left
+{
+  text-align: left;
+}
+
+.knave .usage-die-step,
+.knave .usage-die-refill
+{
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ================================================== */
+/* Character Creator wizard                            */
+/* ================================================== */
+
+/* The progress row and each step's title and nav stay put; only the step's
+   body scrolls (Matt, 2026-09-28). */
+.knave-chargen .window-content
+{
+  overflow: hidden;
+}
+
+.knave-chargen-app
+{
+  font-family: "Roboto", sans-serif;
+  padding: 4px 8px 0;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.knave-chargen-app .chargen-step
+{
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chargen-step-head
+{
+  flex: none;
+}
+
+.chargen-step-body
+{
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+
+.chargen-progress
+{
+  flex: none;
+  display: flex;
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  gap: 4px;
+}
+
+.chargen-progress li
+{
+  flex: 1;
+  text-align: center;
+  font-size: 0.72em;
+  font-weight: bold;
+  text-transform: uppercase;
+  padding: 4px 2px;
+  border-bottom: 3px solid var(--vt-line, #999);
+  color: var(--vt-muted, #777);
+}
+
+.chargen-progress li.active
+{
+  border-bottom-color: var(--vt-accent, #c8802a);
+  color: var(--vt-accent, #c8802a);
+}
+
+.chargen-progress li.done
+{
+  border-bottom-color: var(--vt-accent-deep, #8a5510);
+  color: var(--vt-muted, #555);
+}
+
+.chargen-step h2
+{
+  border-bottom: 1px solid var(--vt-line, #AAA);
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+}
+
+.chargen-info
+{
+  font-style: italic;
+  color: var(--vt-muted, #666);
+  margin-bottom: 8px;
+}
+
+.chargen-warning
+{
+  background: rgba(139, 58, 26, 0.12);
+  border: 1px solid rgba(196, 82, 42, 0.4);
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+
+.chargen-warning-inline
+{
+  color: var(--vt-bad, #8b3a1a);
+  font-weight: bold;
+  margin-top: 4px;
+}
+
+.chargen-note
+{
+  font-size: 0.9em;
+  color: var(--vt-muted, #555);
+  margin: 4px 0;
+}
+
+.chargen-note-accent
+{
+  font-size: 0.9em;
+  color: var(--vt-accent-2, #2a6070);
+  font-style: italic;
+  margin: 4px 0;
+}
+
+.chargen-card
+{
+  border: 1px solid var(--vt-line, #BBB);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+
+.chargen-section-label
+{
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 0.8em;
+  color: var(--vt-accent-deep, #8a5510);
+  margin-bottom: 4px;
+}
+
+.chargen-btn-row
+{
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+
+.chargen-nav
+{
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--vt-line, #AAA);
+}
+
+.chargen-btn-primary
+{
+  font-weight: bold;
+}
+
+.chargen-toggle-row
+{
+  display: flex;
+  gap: 0;
+  margin-bottom: 8px;
+  max-width: 320px;
+  border: 1px solid var(--vt-line, #999);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.chargen-toggle-row button,
+.chargen-hp-mode,
+.chargen-weapon-type,
+.chargen-boon-mode,
+.chargen-boon-weapon-type,
+.chargen-gift-mode
+{
+  flex: 1;
+  border-radius: 0;
+}
+
+.chargen-hp-mode.active,
+.chargen-weapon-type.active,
+.chargen-boon-mode.active,
+.chargen-boon-weapon-type.active,
+.chargen-gift-mode.active,
+.chargen-armour-mode.active
+{
+  background: rgba(200, 128, 42, 0.25);
+  font-weight: bold;
+  /* The chosen option keeps the look a button has under the mouse (Matt, 2026-09-28). */
+  box-shadow: inset 0 0 6px var(--color-shadow-primary, #ff0000);
+  border: 1px solid var(--color-shadow-primary, #ff0000);
+}
+
+.chargen-checkbox-row
+{
+  display: block;
+  margin-bottom: 8px;
+}
+
+.chargen-ability-grid
+{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chargen-ability-card
+{
+  border: 1px solid var(--vt-line, #BBB);
+  border-radius: 4px;
+  padding: 8px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.chargen-ability-card.selected
+{
+  border-color: var(--vt-accent, #c8802a);
+  background: rgba(200, 128, 42, 0.12);
+}
+
+.chargen-ability-card.candidate
+{
+  border-color: var(--vt-accent-2, #4a8fa0);
+  background: rgba(74, 143, 160, 0.12);
+}
+
+.chargen-ability-name
+{
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 0.75em;
+  color: var(--vt-muted, #777);
+}
+
+.chargen-ability-bonus
+{
+  font-size: 1.5em;
+  font-weight: bold;
+}
+
+.chargen-ability-dice
+{
+  font-size: 0.8em;
+  color: var(--vt-muted, #777);
+}
+
+.chargen-ability-defense
+{
+  font-size: 0.78em;
+  font-style: italic;
+  color: var(--vt-muted, #555);
+}
+
+.chargen-review-abilities
+{
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+
+.chargen-review-ability
+{
+  text-align: center;
+  border: 1px solid var(--vt-line, #BBB);
+  border-radius: 4px;
+  padding: 4px;
+}
+
+.chargen-ancestry-grid
+{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.chargen-ancestry-check-item
+{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--vt-line, #BBB);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.chargen-ancestry-check-item.checked
+{
+  border-color: var(--vt-accent, #c8802a);
+  background: rgba(200, 128, 42, 0.1);
+}
+
+.chargen-result-box
+{
+  background: var(--vt-wash, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--vt-line, #CCC);
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-top: 6px;
+}
+
+.chargen-result-row
+{
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--vt-line, #DDD);
+  font-size: 0.92em;
+}
+
+.chargen-result-row:last-child
+{
+  border-bottom: none;
+}
+
+.chargen-result-label
+{
+  color: var(--vt-muted, #666);
+}
+
+.chargen-result-value
+{
+  font-weight: bold;
+}
+
+.chargen-list
+{
+  margin: 4px 0 4px 18px;
+  font-size: 0.9em;
+  color: var(--vt-muted, #555);
+}
+
+.chargen-spark-columns
+{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chargen-spark-column label
+{
+  display: block;
+  font-weight: bold;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.chargen-spark-column select
+{
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.chargen-boon-grid
+{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chargen-boon-option
+{
+  border: 1px solid var(--vt-line, #BBB);
+  border-radius: 4px;
+  padding: 8px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.chargen-boon-title
+{
+  font-weight: bold;
+  font-size: 0.85em;
+}
+
+.chargen-boon-sub
+{
+  font-size: 0.75em;
+  color: var(--vt-muted, #777);
+}
+
+/* Buyer-conditional trade value, shown beneath the value field. Three weapon
+   tags (Bone, Nomad's, Ritual) double an item's worth only to a named faction,
+   so the figure is a second, situational number rather than a correction to
+   the first. Deliberately quiet: smaller and dimmer than the real value, so a
+   glance reads the everyday price and not the special case. */
+.knave .conditional-trade-value {
+  font-size: 11px;
+  opacity: 0.75;
+  text-align: center;
+  font-style: italic;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+/* Trade Good Quality, GM only (Quality Roll on Generated Good). Marked as the
+   Referee's, not styled as another value: the whole point is that this is a
+   note to the person running the table, so it is boxed and left-aligned rather
+   than sitting under the number like the conditional line above. A player
+   never receives it - getData withholds it, so there is nothing here to
+   un-hide with CSS. */
+.knave .trade-good-quality {
+  margin-top: 4px;
+  padding: 4px 6px;
+  border-left: 2px solid rgba(120, 90, 160, 0.7);
+  background: rgba(120, 90, 160, 0.08);
+  text-align: left;
+}
+
+.knave .trade-good-quality-name {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.knave .trade-good-quality-line {
+  font-size: 11px;
+  opacity: 0.75;
+  font-style: italic;
+  margin-top: 2px;
+}
+
+/* ---------------------------------------------------------------------
+   Exploration Clock — foundry-system-index.csv "Exploration Turn
+   Structure". A Referee-facing window, so it borrows the sheet's type
+   scale but none of its chrome; it sits over the map while the party
+   moves and has to stay readable at a glance.
+   --------------------------------------------------------------------- */
+
+.vaarn-clock-app
+{
+  padding: 8px 10px 12px;
+}
+
+.vaarn-clock-readout
+{
+  text-align: center;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid var(--vt-line, rgba(0, 0, 0, 0.15));
+  margin-bottom: 10px;
+}
+
+.vaarn-clock-time
+{
+  font-size: 1.5em;
+  font-weight: bold;
+  line-height: 1.2;
+}
+
+.vaarn-clock-turns
+{
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+.vaarn-clock-row
+{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.vaarn-clock-row > label
+{
+  flex: 0 0 92px;
+  font-weight: bold;
+  font-size: 0.85em;
+}
+
+.vaarn-clock-row select
+{
+  flex: 1;
+}
+
+.vaarn-clock-checkbox
+{
+  flex: 1 !important;
+  font-weight: normal !important;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vaarn-clock-custom-row .vaarn-clock-custom
+{
+  flex: 0 0 60px;
+}
+
+.vaarn-clock-custom-row > span
+{
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+/* The Encumbered nudge. It states the option the book leaves open and
+   stops there — the dice dropdown above is never changed for the
+   Referee, so this is styled as a note, not as a warning. */
+.vaarn-clock-hint
+{
+  font-size: 0.8em;
+  font-style: italic;
+  opacity: 0.85;
+  margin: 2px 0 8px;
+  padding: 4px 6px;
+  border-left: 2px solid var(--vt-line, rgba(0, 0, 0, 0.2));
+}
+
+.vaarn-clock-app h3
+{
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+  margin: 12px 0 4px;
+  border-bottom: 1px solid var(--vt-line, rgba(0, 0, 0, 0.1));
+}
+
+.vaarn-clock-note
+{
+  font-size: 0.75em;
+  opacity: 0.6;
+  margin: 0 0 6px;
+}
+
+/* Exhaustion — who is carrying how much. Reuses knave-encumbered for the
+   "nothing left to discard" flag rather than a colour of its own, because
+   that is the same warning the sheet already paints when slots run out. */
+.vaarn-clock-exhaustion
+{
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  font-size: 0.8em;
+}
+
+.vaarn-clock-exhaustion li
+{
+  padding: 1px 0;
+}
+
+.vaarn-clock-actions
+{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.vaarn-clock-actions button
+{
+  flex: 1 1 auto;
+  white-space: nowrap;
+  font-size: 0.85em;
+  line-height: 1.6;
+}
+
+.vaarn-clock-cost
+{
+  opacity: 0.6;
+  font-size: 0.9em;
+}
+
+/* ---------------------------------------------------------------------
+   ACTIVE EFFECT BOARD — foundry-system-index.csv "Active Effect Board".
+
+   A sibling of the Exploration Clock above, not a panel inside it: the
+   clock is the Referee's and carries the controls that move time, while
+   this window is opened by players too. Same visual language, denser,
+   because it is a list that grows during a delve rather than a fixed
+   readout.
+   --------------------------------------------------------------------- */
+
+.vaarn-effect-board-app
+{
+  padding: 8px 10px 12px;
+}
+
+.vaarn-effect-header
+{
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--vt-line, rgba(0, 0, 0, 0.15));
+  margin-bottom: 8px;
+}
+
+.vaarn-effect-time
+{
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+.vaarn-effect-round
+{
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+.vaarn-effect-steps
+{
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.vaarn-effect-steps button
+{
+  flex: 1;
+  font-size: 0.85em;
+  line-height: 1.6;
+  padding: 0 2px;
+}
+
+.vaarn-effect-empty
+{
+  text-align: center;
+  opacity: 0.6;
+  font-style: italic;
+  padding: 10px 0;
+}
+
+.vaarn-effect-list
+{
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vaarn-effect-row
+{
+  position: relative;
+  padding: 6px 46px 6px 0;
+  border-bottom: 1px solid var(--vt-line, rgba(0, 0, 0, 0.08));
+}
+
+.vaarn-effect-row:last-child
+{
+  border-bottom: none;
+}
+
+/* A revealed entry is deliberately quieter than a full one — it carries
+   less information by design, and looking like a full row would imply a
+   countdown that is not there. */
+.vaarn-effect-revealed
+{
+  opacity: 0.85;
+}
+
+.vaarn-effect-name
+{
+  font-weight: bold;
+  line-height: 1.3;
+}
+
+.vaarn-effect-meta
+{
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+
+/* A Combat Condition the book gives no end for - Entangled from a Web Shot,
+   Blind from a Smoke Grenade. Nothing was invented to end it (Matt,
+   2026-09-16), so the row has to be the thing that reminds the Referee. */
+.vaarn-effect-open-ended .vaarn-effect-meta
+{
+  opacity: 1;
+  color: var(--vt-bad, #8b1a1a);
+}
+.vaarn-effect-no-end
+{
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Activity Time Cost — effort toward a finish line. The bar fills rather than
+   drains, because an activity accrues: a draining bar would read as a duration
+   running out, which is the mechanism this one is deliberately not. */
+.vaarn-effect-bar
+{
+  height: 4px;
+  margin-top: 3px;
+  background: var(--vt-line, rgba(0, 0, 0, 0.15));
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.vaarn-effect-bar span
+{
+  display: block;
+  height: 100%;
+  background: #5a7a5a;
+}
+
+/* Paused is stated in the meta line as well as shown here — a stalled bar and
+   a slowly-filling one are indistinguishable in a still window. */
+.vaarn-effect-bar.is-paused span
+{
+  background: #8a8a8a;
+}
+
+.vaarn-effect-bar.is-complete span
+{
+  background: #7a6a2a;
+}
+
+.vaarn-effect-text
+{
+  font-size: 0.85em;
+  margin-top: 2px;
+}
+
+.vaarn-effect-text p
+{
+  margin: 0 0 2px;
+}
+
+.vaarn-effect-controls
+{
+  position: absolute;
+  top: 6px;
+  right: 0;
+  display: flex;
+  gap: 6px;
+}
+
+.vaarn-effect-controls a
+{
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+.vaarn-effect-controls a:hover
+{
+  opacity: 1;
+}
+
+.vaarn-effect-shown
+{
+  font-size: 0.8em;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+.vaarn-effect-shown a
+{
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+/* Long-Clock Recurrence — an affliction ticking on the exploration clock.
+   No bar and no countdown: a recurrence has no end date at all, only an
+   interval and an exit condition, so a progress bar would be a lie about the
+   shape of the thing. */
+.vaarn-effect-suppressed
+{
+  font-style: italic;
+  opacity: 0.8;
+}
+
+/* The book's own floor, reached. Stated rather than acted on, per the
+   2026-09-08 ruling, so it is styled as a notice and not as an error. */
+.vaarn-effect-threshold,
+.vaarn-recur-threshold
+{
+  font-size: 0.85em;
+  margin-top: 3px;
+  padding: 2px 5px;
+  border-left: 3px solid #7a6a2a;
+  background: rgba(122, 106, 42, 0.12);
+}
+
+.vaarn-recur-list
+{
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+.vaarn-recur-entry
+{
+  margin-bottom: 6px;
+}
+
+.vaarn-recur-text,
+.vaarn-recur-object,
+.vaarn-recur-sheet,
+.vaarn-recur-save
+{
+  font-size: 0.9em;
+  margin-top: 2px;
+}
+
+/* Shown so a Referee reading a save target can see where it came from and
+   overrule it — Diseases.md's Virulence + 10 is a general rule, and this is
+   the one place a table might read it more narrowly. */
+.vaarn-recur-working
+{
+  opacity: 0.7;
+  font-size: 0.9em;
+}
+
+.vaarn-recur-count
+{
+  font-weight: normal;
+  opacity: 0.8;
+}
+
+.vaarn-recur-controls
+{
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.vaarn-recur-controls button
+{
+  font-size: 0.85em;
+  line-height: 1.6;
+  width: auto;
+  padding: 0 6px;
+}
+
+/* Charge Declaration State — a player DECLARATION, not a detected condition,
+   so it reads as a button that is currently pressed rather than as a status
+   icon the system decided to show. The lit state has to be unmissable: it is
+   armed, it changes the next damage roll, and it clears itself. */
+.charge-toggle
+{
+  width: auto;
+  height: 24px;
+  margin-top: 4px;
+  font-size: 0.75em;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 22px;
+  padding: 0 8px;
+}
+.charge-toggle.charge-on
+{
+  background: #7a1f1f;
+  color: #fff;
+  border-color: #4d1313;
+}
+
+/* Fleeing Combat. Sits directly under DECLARE CHARGE in the movement block and
+   matches its run exactly, because the two are the same kind of thing: an
+   action the player takes on their own turn, not a state the system decided.
+   Deliberately NOT lit like .charge-on — a charge is armed and persists, a
+   flee resolves the moment it is clicked and leaves nothing behind. */
+.knave-flee-button
+{
+  width: auto;
+  height: 24px;
+  margin-top: 4px;
+  font-size: 0.75em;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 22px;
+  padding: 0 8px;
+}
+
+/* A damage add-on's badge, standing where its attack/damage icons used to.
+   Same 24px run as the icons it replaces so the item row does not reflow. */
+.damage-add-on
+{
+  width: auto;
+  min-width: 24px;
+  height: 24px;
+  line-height: 24px;
+  padding: 0 6px;
+  font-size: 0.75em;
+  font-weight: bold;
+  white-space: nowrap;
+  border: 1px dashed var(--vt-line, #999);
+  border-radius: 3px;
+  opacity: 0.85;
+}
+
+/* Apply Effect to Target. The card a player's actor posts and the Referee
+   clicks — see module/combat/apply-to-target.js for why the click is what
+   carries the permission. */
+.vaarn-apply-text,
+.vaarn-apply-target
+{
+  font-size: 0.9em;
+  margin-top: 2px;
+}
+
+/* The card posts with no target rather than refusing to, so this line is a
+   normal state and not an error — styled as the notice the threshold rows
+   use, not as a failure. */
+.vaarn-apply-untargeted
+{
+  padding: 2px 5px;
+  border-left: 3px solid #7a6a2a;
+  background: rgba(122, 106, 42, 0.12);
+}
+
+.vaarn-apply-card button[disabled]
+{
+  opacity: 0.6;
+}
+
+/* Ambush Resolution. The roster card whose rows are rolled by different
+   people — see module/combat/ambush.js for why the results live on the save
+   messages rather than on the card. */
+.vaarn-ambush ul
+{
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+
+.vaarn-ambush li
+{
+  padding: 2px 0;
+}
+
+.vaarn-ambush-pass
+{
+  color: #18520b;
+  font-weight: bold;
+}
+
+.vaarn-ambush-fail
+{
+  color: #aa0200;
+  font-weight: bold;
+}
+
+/* Whose row this is, not an instruction — a player can see the Referee's
+   rows and must not read them as theirs to click. */
+.vaarn-ambush-who
+{
+  opacity: 0.7;
+  font-size: 0.85em;
+}
+
+/* Sits in the tracker header beside Foundry's own encounter controls, so it
+   takes their metrics rather than inventing its own. */
+.vaarn-ambush-open
+{
+  flex: 0 0 24px;
+  text-align: center;
+}
+
+/* Ambush Override Flags. The book's own sentence, quoted in the dialog and on
+   the card — every "always" in Vaarn has an "unless", so the Referee reads the
+   rule and decides rather than being told the outcome. */
+.vaarn-ambush-override
+{
+  padding: 3px 6px;
+  border-left: 3px solid #7a6a2a;
+  background: rgba(122, 106, 42, 0.12);
+  font-size: 0.9em;
+}
+
+.vaarn-ambush-unless
+{
+  font-size: 0.85em;
+  opacity: 0.85;
+  margin: 3px 0;
+}
+
+.vaarn-ambush-rule label
+{
+  display: block;
+  margin-top: 4px;
+}
+
+/* ---------------------------------------------------------------------
+   REST AND RECOVERY — foundry-system-index.csv "Rest and Recovery".
+
+   Sits with the toxin and deprived rows in the sheet's first column, and
+   borrows their shape rather than inventing one: a resource-label, the
+   controls, and a short readout. The supplies count is the part that
+   earns its place — a Long Rest is refused for want of water or a meal,
+   and the refusal only makes sense next to what is in the pack.
+   --------------------------------------------------------------------- */
+.vaarn-rest
+{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.vaarn-rest-actions
+{
+  display: flex;
+  gap: 4px;
+}
+
+.vaarn-rest-actions button
+{
+  flex: 0 0 auto;
+  width: auto;
+  font-size: 0.85em;
+  line-height: 1.6;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.vaarn-rest-supplies
+{
+  font-size: 0.8em;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------
+   Weather Procedure — the desert hex-chart window. Styled as a sibling of
+   the Exploration Clock and reusing its .vaarn-clock-row for the one
+   checkbox, because they sit in the same tool group and a Referee moves
+   between them; two different looks would read as two different systems.
+   --------------------------------------------------------------------- */
+
+.vaarn-weather-app
+{
+  padding: 8px 10px 12px;
+}
+
+.vaarn-weather-readout
+{
+  text-align: center;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid var(--vt-line, rgba(0, 0, 0, 0.15));
+  margin-bottom: 10px;
+}
+
+.vaarn-weather-now
+{
+  font-size: 1.5em;
+  font-weight: bold;
+  line-height: 1.2;
+}
+
+.vaarn-weather-where
+{
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+.vaarn-weather-text
+{
+  font-size: 0.85em;
+  line-height: 1.45;
+  margin: 0 0 8px;
+}
+
+/* The one mechanical sentence. Set apart from the flavour above it because
+   it is the only line here a Referee has to act on. */
+.vaarn-weather-rule
+{
+  font-size: 0.85em;
+  font-weight: bold;
+  margin: 0 0 10px;
+  padding: 5px 7px;
+  border-left: 3px solid var(--vt-line, rgba(0, 0, 0, 0.35));
+  background: var(--vt-wash, rgba(0, 0, 0, 0.04));
+}
+
+.vaarn-weather-norule
+{
+  font-size: 0.8em;
+  font-style: italic;
+  opacity: 0.6;
+  margin: 0 0 10px;
+}
+
+.vaarn-weather-actions
+{
+  display: flex;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.vaarn-weather-actions button
+{
+  flex: 1;
+}
+
+.vaarn-weather-app h3
+{
+  font-size: 0.85em;
+  margin: 12px 0 4px;
+  border-bottom: 1px solid var(--vt-line, rgba(0, 0, 0, 0.15));
+}
+
+.vaarn-weather-outlook,
+.vaarn-weather-trail
+{
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.8em;
+}
+
+.vaarn-weather-outlook li,
+.vaarn-weather-trail li
+{
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 0;
+}
+
+.vaarn-weather-odds,
+.vaarn-weather-day
+{
+  flex: 0 0 34px;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+}
+
+.vaarn-weather-oname
+{
+  flex: 1;
+}
+
+.vaarn-weather-rolls
+{
+  opacity: 0.65;
+  font-size: 0.9em;
+  text-align: right;
+}
+
+/* The whole chart at a glance: eight names and their hex counts, which the
+   reversibility of the walk makes a frequency table as well. */
+.vaarn-weather-census
+{
+  font-size: 0.75em;
+  margin: 0;
+  opacity: 0.8;
+}
+
+.vaarn-weather-census span
+{
+  display: inline-block;
+  margin: 0 7px 2px 0;
+  white-space: nowrap;
+}
+
+.vaarn-weather-here
+{
+  font-weight: bold;
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.vaarn-weather-note
+{
+  font-size: 0.75em;
+  font-style: italic;
+  opacity: 0.6;
+  margin: 4px 0 10px;
+}
+
+/* -------------------------------------------- */
+/*  Vigilance — the Start-of-Day Roll Sequence's public card.             */
+/* -------------------------------------------- */
+
+.vaarn-vigil-head
+{
+  margin: 0 0 4px;
+}
+
+/* The weather's reason for the dice, stated on the card rather than left to
+   the Referee to recall from a message three above this one. */
+.vaarn-vigil-why
+{
+  font-size: 0.85em;
+  opacity: 0.75;
+  margin: 0 0 6px;
+}
+
+.vaarn-vigil-result
+{
+  margin: 0 0 4px;
+}
+
+/* The two outcomes the book names. Matched to the ambush card's pass/fail
+   greens and reds, because they are the same fact from the two sides. */
+.vaarn-vigil-spotted
+{
+  color: #18520b;
+}
+
+.vaarn-vigil-surprised
+{
+  color: #aa0200;
+}
+
+/* An expired die. Kept legible rather than hidden: the card is the only
+   record there is, so a day that went unrolled has to still read as one. */
+.vaarn-vigil-spent
+{
+  opacity: 0.6;
+  font-style: italic;
+}
+
+/* Advancement Automation — the LEVEL/XP header controls.
+   LEVEL is a readout rather than a field: the button raises it and a level
+   loss lowers it, so nothing can set it to a number the ledger cannot
+   explain. */
+.knave .vaarn-level-readout
+{
+  text-align: center;
+  background: var(--vt-wash, rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--vt-line, #999);
+  color: inherit;
+  opacity: 1;
+}
+
+.knave button.vaarn-level-up
+{
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 1;
+  padding: 3px 4px;
+  margin: 2px 0 0 0;
+  width: auto;
+  white-space: nowrap;
+}
+
+.knave button.vaarn-level-up:disabled
+{
+  opacity: 0.4;
+  cursor: default;
+}
+
+.knave .vaarn-xp-control
+{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.knave .vaarn-xp-control .vaarn-xp-value
+{
+  min-width: 2em;
+  text-align: center;
+  font-weight: bold;
+}
+
+.knave .vaarn-xp-control .vaarn-xp-step
+{
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.knave .vaarn-xp-control .vaarn-xp-step:hover
+{
+  opacity: 1;
+  text-shadow: 0 0 6px var(--color-shadow-primary, #ff0000);
+}
+
+/* ---------------------------------------------------------------------
+   Faction Entry Display — the reader for a faction's whole entry. A
+   two-column window: the faction list on the left, one entry on the
+   right. Styled as a sibling of the Weather window and the Exploration
+   Clock, because it sits in the same Scene Controls group and a Referee
+   moves between the three.
+
+   The right pane scrolls on its own rather than the window scrolling as
+   a whole, so the faction list stays reachable from the bottom of a long
+   entry — the Court's Triumphant section alone is a full screen.
+   --------------------------------------------------------------------- */
+
+.vaarn-factions
+{
+  display: flex;
+  height: 100%;
+  gap: 10px;
+  padding: 8px 10px 10px;
+}
+
+.vaarn-factions-empty
+{
+  font-size: 0.85em;
+  font-style: italic;
+  opacity: 0.7;
+  padding: 10px;
+}
+
+.vaarn-factions-list
+{
+  flex: 0 0 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  border-right: 1px solid var(--vt-line, rgba(0, 0, 0, 0.15));
+  padding-right: 8px;
+}
+
+.vaarn-factions-tab
+{
+  font-size: 0.82em;
+  line-height: 1.25;
+  padding: 5px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+
+.vaarn-factions-tab:hover
+{
+  background: var(--vt-wash, rgba(0, 0, 0, 0.05));
+}
+
+.vaarn-factions-tab.active
+{
+  font-weight: bold;
+  background: var(--vt-wash, rgba(0, 0, 0, 0.07));
+  border-left-color: var(--vt-line, rgba(0, 0, 0, 0.45));
+}
+
+/* A house faction is marked rather than sorted apart: it renders through
+   the same sections as a book one, so the list should not imply two
+   different kinds of thing. */
+.vaarn-factions-added
+{
+  font-size: 0.75em;
+  font-weight: normal;
+  font-variant: small-caps;
+  opacity: 0.6;
+  margin-left: 4px;
+}
+
+.vaarn-factions-entry
+{
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.vaarn-factions-entry h2
+{
+  font-size: 1.3em;
+  margin: 0 0 8px;
+  border-bottom: 1px solid var(--vt-line, rgba(0, 0, 0, 0.2));
+}
+
+.vaarn-factions-entry h3
+{
+  font-size: 0.85em;
+  margin: 14px 0 4px;
+  border-bottom: 1px solid var(--vt-line, rgba(0, 0, 0, 0.15));
+}
+
+.vaarn-factions-entry p
+{
+  font-size: 0.85em;
+  line-height: 1.45;
+  margin: 0 0 7px;
+}
+
+/* The unheaded paragraph the book opens with, set apart from the Summary
+   below it because the book gives it no heading and it reads as voice
+   rather than as reference. */
+.vaarn-factions-intro
+{
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.vaarn-factions-bullets
+{
+  margin: 0 0 7px;
+  padding-left: 18px;
+  font-size: 0.85em;
+  line-height: 1.45;
+}
+
+.vaarn-factions-bullets li
+{
+  margin-bottom: 4px;
+}
+
+/* Every absence says so in words. Italic and dimmed so it cannot be
+   misread as book text. */
+.vaarn-factions-none
+{
+  font-style: italic;
+  opacity: 0.6;
+}
+
+/* The Children Triumphant is a poem and the roster flags it. Preserve the
+   line breaks the book sets rather than reflowing it as prose. */
+.vaarn-factions-verse p
+{
+  white-space: pre-line;
+  padding-left: 10px;
+  border-left: 2px solid var(--vt-line, rgba(0, 0, 0, 0.2));
+}
+
+.vaarn-factions-npcs
+{
+  list-style: none;
+  margin: 0 0 7px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.vaarn-factions-npcs button
+{
+  font-size: 0.8em;
+  width: auto;
+  line-height: 1.6;
+  padding: 0 8px;
+}
+
+/* A name the Bestiary cannot produce is plain text, never a dead button.
+   The normal case for a Referee's own faction, whose NPCs are free text. */
+.vaarn-factions-unspawnable
+{
+  font-size: 0.8em;
+  font-style: italic;
+  opacity: 0.6;
+  padding: 2px 4px;
+}
+
+.vaarn-factions-rep
+{
+  width: 100%;
+  font-size: 0.8em;
+  border-collapse: collapse;
+  margin: 0 0 8px;
+}
+
+.vaarn-factions-rep th,
+.vaarn-factions-rep td
+{
+  text-align: left;
+  vertical-align: top;
+  padding: 3px 5px;
+  border-bottom: 1px solid var(--vt-line, rgba(0, 0, 0, 0.1));
+}
+
+.vaarn-factions-repval
+{
+  white-space: nowrap;
+  font-weight: bold;
+  width: 3em;
+}
+
+/* ---------------------------------------------------------------------
+   Referee-Invoked Level Loss — the small arrow beside LEVEL UP. Quiet by
+   default and only obvious on hover: it sits next to a button a player
+   clicks often, and the two must not read as a pair of equal choices.
+   GM-only, so a player never sees it at all.
+   --------------------------------------------------------------------- */
+
+.knave .vaarn-level-loss
+{
+  cursor: pointer;
+  opacity: 0.45;
+  font-size: 0.8em;
+  margin-left: 4px;
+}
+
+.knave .vaarn-level-loss:hover
+{
+  opacity: 1;
+  text-shadow: 0 0 6px var(--color-shadow-primary, #ff0000);
+}
+
+/* Wound-Table Resolution: the Referee-chosen wound picker on the Wounds tab
+   (2026-09-17). Same footprint as the level-up button so the tab keeps its
+   list as the main thing on it. */
+.knave .wounds-inflict
+{
+  margin: 6px 0 0 0;
+}
+
+.knave button.wound-inflict
+{
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 1;
+  padding: 3px 4px;
+  width: auto;
+  white-space: nowrap;
+}
+
+/* Quantum Daemon Debt: the JINX banner at the top of a jinxed roll's card.
+   The whole hint the player gets, so it is loud and says nothing else. */
+.vaarn-jinx
+{
+  display: block;
+  font-weight: bold;
+  letter-spacing: 0.2em;
+  text-align: center;
+  color: #7a1010;
+  border: 1px solid #7a1010;
+  margin: 0 0 4px 0;
+  padding: 1px 0;
+}

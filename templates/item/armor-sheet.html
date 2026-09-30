@@ -1,0 +1,63 @@
+<form class="{{cssClass}}" autocomplete="off">
+    <header class="sheet-header">
+        <img class="profile-img" src="{{item.img}}" data-edit="img" title="{{item.name}}"/>
+        <div class="header-fields">
+            <h1 class="charname"><input name="name" type="text" value="{{item.name}}" placeholder="Name"/></h1>
+            {{#if kindLabel}}<div class="item-kind">{{kindLabel}}</div>{{/if}}
+            <div class="grid grid-2col">
+              <div class="resource">
+                <label class="resource-label">Defense</label>
+                  <input type="text" name="system.defense" value="{{data.system.defense}}" data-dtype="Number"/>
+              </div>
+              <div class="resource">
+                <div class="grid grid-3col">
+                  <label class="resource-label">Current</label><span></span><label class="resource-label">Max</label>
+                  <input type="text" name="system.quality.value" value="{{data.system.quality.value}}" data-dtype="Number"/>
+                  <label class="resource-label">Quality</label>
+                  <input type="text" name="system.quality.max" value="{{data.system.quality.max}}" data-dtype="Number"/>
+                </div>
+              </div>
+              <div class="resource">
+                <label class="resource-label">Slots</label>
+                  <input type="text" name="system.slots" value="{{data.system.slots}}" data-dtype="Number"/>
+              </div>
+              <div class="resource">
+                <label title="Made of metal: rust, corrosion, magnets and metal-eaters can reach it. Set from the book when the item is made; tick or untick it for anything made by hand. Body armour that is metal and worn makes its wearer count as wearing metal armour."><input type="checkbox" name="system.metal" {{checked data.system.metal}}/> Metal</label>
+              </div>
+              <div class="resource">
+                <label class="resource-label">{{valueLabel}}</label>
+                  <input type="text" name="system.tradeValue" value="{{data.system.tradeValue}}" data-dtype="Number"/>
+                  {{#if conditionalValue}}
+                    <div class="conditional-trade-value">{{conditionalValue.value}} to {{conditionalValue.buyer}}</div>
+                  {{/if}}
+              </div>
+              <div class="resource">
+                <label class="resource-label" title="AV this item contributes when equipped — work-queue item 11">AV Bonus</label>
+                  <input type="text" name="system.avBonus" value="{{data.system.avBonus}}" data-dtype="Number"/>
+              </div>
+              <div class="resource">
+                <label class="resource-label" title="Which equip slot this occupies — work-queue item 11">Slot</label>
+                  <select name="system.armorSlot">
+                    <option value="body" {{#if (eq data.system.armorSlot "body")}}selected{{/if}}>Body</option>
+                    <option value="helm" {{#if (eq data.system.armorSlot "helm")}}selected{{/if}}>Helm</option>
+                    <option value="face" {{#if (eq data.system.armorSlot "face")}}selected{{/if}}>Face</option>
+                    <option value="shield" {{#if (eq data.system.armorSlot "shield")}}selected{{/if}}>Shield</option>
+                  </select>
+              </div>
+            </div>
+        </div>
+    </header>
+
+    {{!-- Sheet Tab Navigation --}}
+    <nav class="sheet-tabs tabs" data-group="primary">
+        <a class="item" data-tab="description">Description</a>        
+    </nav>
+
+    {{!-- Sheet Body --}}
+    <section class="sheet-body">
+        {{!-- Description Tab --}}
+        <div class="tab" data-group="primary" data-tab="description">
+            {{editor content=data.system.description target="system.description" button=true owner=owner editable=editable}}
+        </div>        
+    </section>
+</form>

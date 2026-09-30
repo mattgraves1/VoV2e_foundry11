@@ -1,0 +1,293 @@
+@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Federo&family=Poiret+One&display=swap");
+
+/* =====================================================================
+   VAARN UI RESKIN - foundry-system-index.csv "Vaarn UI Reskin".
+
+   A per-user theme, chosen in Configure Settings (module/ui/theme.js puts
+   `vaarn-theme-<id>` and `vaarn-heading-<id>` on <body>). With no theme
+   class on the body nothing here matches and the sheets look exactly as
+   they did: every colour knave.css used to hard-code is now a --vt-*
+   variable whose fallback is the old value.
+
+   SCOPE IS `.knave`. Every actor sheet, item sheet and system app window
+   carries that class and no chat card does, so chat stays as it was.
+
+   The palettes are taken from the 2e cover (Matt, 2026-09-27): a violet-
+   to-magenta sky, a coral-red sun, pale blue dunes falling to deep navy,
+   dark ink linework and pink crystals.
+
+   Tokens:
+     --vt-bg          window body background (may be a gradient)
+     --vt-surface     a panel sitting on the body
+     --vt-field       input and select background
+     --vt-text        body text
+     --vt-muted       secondary text
+     --vt-line        rules and borders
+     --vt-wash        a faint panel tint
+     --vt-accent      the sun - active tab, primary highlight
+     --vt-accent-deep a darker accent for "done" states
+     --vt-accent-2    the second accent
+     --vt-good/bad    pass and fail colours
+     --vt-header-bg   window title bar
+     --vt-header-text title bar text
+     --vt-glow        replaces Foundry's red hover glow
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   Palettes
+   --------------------------------------------------------------------- */
+
+/* DUSK DUNES - light. Pale dune blue under navy ink; the title bar is the
+   sky. */
+body.vaarn-theme-dusk .knave {
+  --vt-bg: linear-gradient(180deg, #e6ebf3 0%, #d3ddeb 100%);
+  --vt-bg-solid: #dde4ef;
+  --vt-surface: rgba(255, 255, 255, 0.45);
+  --vt-field: rgba(255, 255, 255, 0.6);
+  --vt-text: #1c2550;
+  --vt-muted: #4f5f86;
+  --vt-line: #93a5c4;
+  --vt-wash: rgba(31, 58, 120, 0.06);
+  --vt-accent: #d3304b;
+  --vt-accent-deep: #8e2a4a;
+  --vt-accent-2: #6f4f86;
+  --vt-good: #1f6b4a;
+  --vt-bad: #b3243c;
+  --vt-header-bg: linear-gradient(90deg, #6b5282 0%, #b4476f 100%);
+  --vt-header-text: #f7eef3;
+  --vt-glow: rgba(211, 48, 75, 0.55);
+  --vt-heading: "Cinzel", serif;
+}
+
+/* BLUE HOUR - dark. The bottom of the cover: navy ground, bone text, the
+   sun as the accent and the crystals as the second. */
+body.vaarn-theme-bluehour .knave {
+  --vt-bg: linear-gradient(180deg, #1b2856 0%, #111a3c 100%);
+  --vt-bg-solid: #16214a;
+  --vt-surface: rgba(255, 255, 255, 0.05);
+  --vt-field: rgba(255, 255, 255, 0.08);
+  --vt-text: #ece6ee;
+  --vt-muted: #a8b5d6;
+  --vt-line: #45598d;
+  --vt-wash: rgba(143, 168, 200, 0.08);
+  --vt-accent: #ff5a70;
+  --vt-accent-deep: #d9738c;
+  --vt-accent-2: #f29ab0;
+  --vt-good: #7fd3a8;
+  --vt-bad: #ff6b7d;
+  --vt-header-bg: linear-gradient(90deg, #3a2f5c 0%, #86386a 100%);
+  --vt-header-text: #f7eef3;
+  --vt-glow: rgba(255, 90, 112, 0.6);
+  --vt-heading: "Federo", sans-serif;
+}
+
+/* CRIMSON SUN - dark. The sky half of the cover: plum ground, the sun as the
+   accent and the dunes as the second; the title bar is the desert. */
+body.vaarn-theme-crimson .knave {
+  --vt-bg: linear-gradient(180deg, #3a2a55 0%, #261c3a 100%);
+  --vt-bg-solid: #2f2347;
+  --vt-surface: rgba(255, 255, 255, 0.05);
+  --vt-field: rgba(255, 255, 255, 0.08);
+  --vt-text: #f3ecf2;
+  --vt-muted: #c6b2cf;
+  --vt-line: #6e5487;
+  --vt-wash: rgba(242, 154, 176, 0.08);
+  --vt-accent: #f03c58;
+  --vt-accent-deep: #c9587a;
+  --vt-accent-2: #8fb0d8;
+  --vt-good: #8fd6b0;
+  --vt-bad: #ff6b7d;
+  --vt-header-bg: linear-gradient(90deg, #1f3a78 0%, #5d7fb0 100%);
+  --vt-header-text: #f3f1f7;
+  --vt-glow: rgba(240, 60, 88, 0.6);
+  --vt-heading: "Poiret One", sans-serif;
+}
+
+/* Heading font override, independent of the palette. `theme` (no class)
+   keeps whatever the palette names. */
+body.vaarn-heading-cinzel .knave { --vt-heading: "Cinzel", serif; }
+body.vaarn-heading-federo .knave { --vt-heading: "Federo", sans-serif; }
+body.vaarn-heading-poiret .knave { --vt-heading: "Poiret One", sans-serif; }
+body.vaarn-heading-signika .knave { --vt-heading: "Signika", sans-serif; }
+
+/* ---------------------------------------------------------------------
+   Everything below applies only while a theme is chosen.
+   --------------------------------------------------------------------- */
+
+/* Foundry's own variables, re-pointed inside a themed window so core form
+   controls, headings and hover glows follow the palette without a rule
+   each. */
+body.vaarn-themed .knave {
+  --color-text-dark-primary: var(--vt-text);
+  --color-text-dark-secondary: var(--vt-muted);
+  --color-text-dark-header: var(--vt-text);
+  --color-border-light-tertiary: var(--vt-line);
+  --color-border-light-primary: var(--vt-line);
+  --color-border-dark: var(--vt-line);
+  --color-underline-header: var(--vt-accent);
+  --color-shadow-primary: var(--vt-glow);
+  background: var(--vt-bg-solid);
+}
+
+body.vaarn-themed .knave .window-content {
+  background: var(--vt-bg);
+  color: var(--vt-text);
+}
+
+/* The title bar. A small sun sits before the title - the one piece of
+   decoration, and the same disc on every themed window. */
+body.vaarn-themed .knave .window-header {
+  background: var(--vt-header-bg);
+  color: var(--vt-header-text);
+  border-bottom: 1px solid var(--vt-accent);
+}
+body.vaarn-themed .knave .window-header .window-title {
+  font-family: var(--vt-heading);
+  letter-spacing: 0.04em;
+}
+body.vaarn-themed .knave .window-header .window-title::before {
+  content: "";
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-right: 0.45em;
+  border-radius: 50%;
+  background: var(--vt-accent);
+  box-shadow: 0 0 6px var(--vt-glow);
+  vertical-align: -0.02em;
+}
+body.vaarn-themed .knave .window-header a { color: var(--vt-header-text); }
+
+/* Headings and the labels that act as headings. */
+body.vaarn-themed .knave h1,
+body.vaarn-themed .knave h2,
+body.vaarn-themed .knave h3,
+body.vaarn-themed .knave h4,
+body.vaarn-themed .knave .tabs .item,
+body.vaarn-themed .knave .resource-label,
+body.vaarn-themed .knave .chargen-progress li,
+body.vaarn-themed .knave .vaarn-clock-time,
+body.vaarn-themed .knave .vaarn-weather-now,
+body.vaarn-themed .knave .vaarn-effect-time {
+  font-family: var(--vt-heading);
+}
+body.vaarn-themed .knave h1.charname input {
+  font-family: var(--vt-heading);
+}
+body.vaarn-themed .knave h2,
+body.vaarn-themed .knave h3 {
+  color: var(--vt-text);
+}
+
+/* The sheet header gets a sun-coloured rule under it, so the name and
+   portrait read as a band separate from the body. */
+body.vaarn-themed .knave .sheet-header {
+  border-bottom: 2px solid var(--vt-accent);
+  padding-bottom: 6px;
+}
+body.vaarn-themed .knave .sheet-header .profile-img {
+  border: 1px solid var(--vt-line);
+  border-radius: 4px;
+}
+
+/* Tabs: the active one is lit with the accent rather than underlined. */
+body.vaarn-themed .knave .tabs {
+  border-top-color: var(--vt-line);
+  border-bottom-color: var(--vt-line);
+}
+body.vaarn-themed .knave .tabs .item { color: var(--vt-muted); }
+body.vaarn-themed .knave .tabs .item.active {
+  color: var(--vt-accent);
+  text-decoration: none;
+  box-shadow: inset 0 -3px 0 var(--vt-accent);
+}
+
+/* Form controls. */
+body.vaarn-themed .knave input[type="text"],
+body.vaarn-themed .knave input[type="number"],
+body.vaarn-themed .knave input[type="search"],
+body.vaarn-themed .knave input:not([type]),
+body.vaarn-themed .knave select,
+body.vaarn-themed .knave textarea {
+  background: var(--vt-field);
+  color: var(--vt-text);
+  border-color: var(--vt-line);
+}
+body.vaarn-themed .knave input:disabled,
+body.vaarn-themed .knave input[readonly] {
+  color: var(--vt-muted);
+}
+body.vaarn-themed .knave input::placeholder { color: var(--vt-muted); opacity: 0.7; }
+body.vaarn-themed .knave option,
+body.vaarn-themed .knave optgroup {
+  background: var(--vt-bg-solid);
+  color: var(--vt-text);
+}
+body.vaarn-themed .knave button {
+  background: var(--vt-surface);
+  color: var(--vt-text);
+  border: 1px solid var(--vt-line);
+}
+body.vaarn-themed .knave button:hover,
+body.vaarn-themed .knave button:focus {
+  border-color: var(--vt-accent);
+  box-shadow: 0 0 5px var(--vt-glow);
+}
+/* A character-creator toggle's chosen option keeps its hover look. */
+body.vaarn-themed .knave .chargen-hp-mode.active,
+body.vaarn-themed .knave .chargen-weapon-type.active,
+body.vaarn-themed .knave .chargen-boon-mode.active,
+body.vaarn-themed .knave .chargen-boon-weapon-type.active,
+body.vaarn-themed .knave .chargen-gift-mode.active,
+body.vaarn-themed .knave .chargen-armour-mode.active {
+  border-color: var(--vt-accent);
+  box-shadow: inset 0 0 6px var(--vt-glow);
+}
+body.vaarn-themed .knave a { color: inherit; }
+body.vaarn-themed .knave .editor-content a,
+body.vaarn-themed .knave a.content-link {
+  color: var(--vt-text);
+}
+body.vaarn-themed .knave a.content-link,
+body.vaarn-themed .knave a.inline-roll {
+  background: var(--vt-surface);
+  border-color: var(--vt-line);
+}
+body.vaarn-themed .knave a.content-link i,
+body.vaarn-themed .knave a.inline-roll i { color: var(--vt-muted); }
+
+/* Panels and lists. */
+body.vaarn-themed .knave .flex-group-center,
+body.vaarn-themed .knave .flex-group-left,
+body.vaarn-themed .knave .flex-group-right {
+  background: var(--vt-surface);
+}
+body.vaarn-themed .knave .items-list .item-header {
+  color: var(--vt-accent-2);
+  font-family: var(--vt-heading);
+  font-size: 0.9em;
+}
+body.vaarn-themed .knave .chargen-card,
+body.vaarn-themed .knave .chargen-ability-card,
+body.vaarn-themed .knave .chargen-boon-option,
+body.vaarn-themed .knave .chargen-review-ability,
+body.vaarn-themed .knave .chargen-ancestry-check-item {
+  background: var(--vt-surface);
+}
+body.vaarn-themed .knave .chargen-section-label { font-family: var(--vt-heading); }
+
+/* The window's resize grip, which Foundry paints dark grey. */
+body.vaarn-themed .knave .window-resizable-handle {
+  background: var(--vt-line);
+  border-color: var(--vt-line);
+}
+
+/* Scrollbars follow the palette. */
+body.vaarn-themed .knave ::-webkit-scrollbar-thumb {
+  background: var(--vt-line);
+  border-color: var(--vt-line);
+}
+body.vaarn-themed .knave ::-webkit-scrollbar-track {
+  background: transparent;
+  box-shadow: none;
+}

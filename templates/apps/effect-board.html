@@ -1,0 +1,249 @@
+{{!-- Active Effect Board — foundry-system-index.csv "Active Effect Board".
+
+      This template renders what getData hands it and makes NO visibility
+      decision of its own. Rows a viewer may not see are already gone, and a
+      revealed row arrives with its actor name and remaining time already
+      stripped. A template that decided any of that would be a rule nothing
+      could test. --}}
+
+<div class="vaarn-effect-board-app">
+
+  <div class="vaarn-effect-header">
+    <span class="vaarn-effect-time">{{time.label}}</span>
+    {{#if inCombat}}<span class="vaarn-effect-round">Combat round {{round}}</span>{{/if}}
+  </div>
+
+  {{#if isGM}}
+  {{!-- These move the one worldTime clock through vaarn-time.js advance(),
+        the same call the Exploration Clock's own buttons make. Two windows,
+        one number line. --}}
+  <div class="vaarn-effect-steps">
+    {{#each steps}}
+    <button type="button" data-step="{{@index}}">{{this.label}}</button>
+    {{/each}}
+  </div>
+  {{!-- Activity Time Cost. Referee-driven because several of the book's own
+        time costs hang off no Item at all — forcing a door, brewing an
+        Elixir, the debridement that cures the Gitch — so there is nothing
+        for a player to click. --}}
+  {{!-- Long-Clock Recurrence. Referee-driven for the same reason, and one
+        further: how a character CATCHES an affliction is Affliction
+        Contraction and Cure, which is not built, so starting one is an act
+        rather than a consequence. --}}
+  {{!-- Vault Traversal Penalties. One switch for the whole party (Matt
+        2026-09-13) — darkness is a property of the location, not of a
+        character, so there is deliberately no per-PC control here. The label
+        is derived from whether any PC carries the condition, so it can never
+        offer to light a party that is already lit. --}}
+  <div class="vaarn-effect-steps">
+    <button type="button" class="vaarn-effect-begin">Begin an effort</button>
+    <button type="button" class="vaarn-effect-afflict">Start an affliction</button>
+    <button type="button" class="vaarn-effect-lapse">Track a lapse</button>
+    {{!-- Quantum Daemon Debt. A Daemon's curse on a debtor, Referee-inflicted
+          because the book hands the Referee the curse and the debtor no roll. --}}
+    <button type="button" class="vaarn-effect-curse">Inflict a curse</button>
+    {{!-- Standing GM Reminder. A free-text, GM-only row with no end, on any
+          character or creature (RULED 2026-09-23, Matt). --}}
+    <button type="button" class="vaarn-effect-reminder">Add a GM reminder</button>
+    <button type="button" class="vaarn-effect-darkness">
+      {{#if inDarkness}}End the darkness{{else}}Put the party in darkness{{/if}}
+    </button>
+  </div>
+  {{/if}}
+
+  {{#if empty}}
+  <p class="vaarn-effect-empty">Nothing running.</p>
+  {{else}}
+  <ul class="vaarn-effect-list">
+    {{#each rows}}
+    <li class="vaarn-effect-row{{#if this.revealed}} vaarn-effect-revealed{{/if}}{{#if this.openEnded}} vaarn-effect-open-ended{{/if}}">
+
+      {{#if (eq this.status "status")}}
+      {{!-- A revealed entry: the Referee's own wording, and nothing else.
+            Matt's ruling 2026-09-08 — not the time left, not the owning
+            actor, and not the entry's name either, since an entry is named
+            for its source. The label carries who it is on, so this row is
+            true for every reader; the "affecting you" line it replaced was
+            false for everyone but one. --}}
+      <div class="vaarn-effect-name">{{this.name}}</div>
+
+      {{else}}
+      <div class="vaarn-effect-name">{{this.actorName}} — {{this.name}}</div>
+      {{#if this.isActivity}}
+      {{!-- Activity Time Cost. An effort toward a finish line, not a span
+            counting down, so it reads "40 minutes of 1 hour" rather than a
+            remaining time. Paused is stated in words as well as shown by the
+            bar: a stalled bar and a slow one look identical. --}}
+      <div class="vaarn-effect-meta">
+        {{this.progress}}
+        {{#if this.complete}} &middot; <b>complete</b>
+        {{else if this.running}} &middot; running
+        {{else}} &middot; paused{{/if}}
+        {{#if this.note}} &middot; {{this.note}}{{/if}}
+      </div>
+      <div class="vaarn-effect-bar{{#if this.complete}} is-complete{{/if}}{{#unless this.running}} is-paused{{/unless}}">
+        <span style="width: {{this.percent}}%"></span>
+      </div>
+      {{else if this.isAffliction}}
+      {{!-- Affliction Contraction and Cure. ELAPSED TIME is the readout,
+            because several afflictions have an onset the book never times and
+            the Referee's ruling is made against how long it has been carried.
+            The stage line is the book's own day count - Hivey Hump at three
+            and seven, Labyrinth Pox's Stage 2 at three - announced and never
+            applied. --}}
+      <div class="vaarn-effect-meta">
+        carried {{this.elapsed}}
+        {{#if this.note}} &middot; {{this.note}}{{/if}}
+        {{#if this.stage}}
+        <span class="vaarn-effect-threshold">&middot; {{this.stage}}</span>
+        {{/if}}
+        {{#if this.onsetDone}} &middot; {{this.onsetDone}}{{/if}}
+      </div>
+      {{#if this.treatment}}
+      {{!-- Cost of Treatment. Arrives null for a player, so this line is
+            GM-only by what getData hands over, not by a check made here. --}}
+      <div class="vaarn-effect-meta vaarn-effect-treatment">
+        treatment: Trade Value {{this.treatment}}, doubled or tripled if visibly close to death
+      </div>
+      {{/if}}
+      {{else if this.isLapse}}
+      {{!-- Upkeep Lapse Tracking. The count goes UP and there is nothing to
+            count down to: the book's fuse is printed beside it as a sentence
+            and no code compares the two. Meeting the upkeep is the Referee
+            ending the row, which is why there is no reset control. --}}
+      <div class="vaarn-effect-meta">
+        going without for {{this.elapsed}}
+        {{#if this.fuse}}
+        <span class="vaarn-effect-threshold">&middot; {{this.fuse}}</span>
+        {{/if}}
+      </div>
+      {{else if this.isDeprived}}
+      {{!-- Deprived State, worded as a lapse is (Matt, 2026-09-23): what,
+            elapsed, the book's fuse - only the spans differ. An entry from
+            before startTime existed has no honest age, so it keeps the old
+            "until switched off" rather than claiming one. --}}
+      <div class="vaarn-effect-meta">
+        {{#if this.elapsed}}for {{this.elapsed}}{{else}}until switched off{{/if}}
+        {{#if this.fuse}}
+        <span class="vaarn-effect-threshold">&middot; {{this.fuse}}</span>
+        {{/if}}
+        {{#if this.note}} &middot; {{this.note}}{{/if}}
+      </div>
+      {{else if this.isRecurrence}}
+      {{!-- Long-Clock Recurrence. Not a countdown and not a progress bar: an
+            affliction has no end date at all, only an interval and an exit
+            condition, so the readout is "every day &middot; next in 4 hours".
+            The threshold line appears only once the book's own floor has
+            actually been reached, and states it rather than acting on it. --}}
+      <div class="vaarn-effect-meta">
+        {{#if this.suppressed}}
+        {{!-- Stated, never hidden. An affliction that has quietly stopped
+              ticking looks exactly like one that is working. --}}
+        <span class="vaarn-effect-suppressed">not ticking &middot; {{this.suppressed}}</span>
+        {{else}}
+        {{this.interval}} &middot; next in {{this.nextTick}}
+        {{/if}}
+        {{#if this.toxinDie}} &middot; TD <b>{{this.toxinDie}}</b>{{/if}}
+        {{#if this.note}} &middot; {{this.note}}{{/if}}
+      </div>
+      {{else}}
+      <div class="vaarn-effect-meta">
+        {{#if this.openEnded}}<b class="vaarn-effect-no-end">No printed end</b> &middot; {{/if}}{{this.remaining}}{{#if this.note}} &middot; {{this.note}}{{/if}}{{#if this.jinxNumber}} &middot; the number is <b>{{this.jinxNumber}}</b>{{/if}}
+      </div>
+      {{/if}}
+      {{#if this.text}}<div class="vaarn-effect-text">{{{this.text}}}</div>{{/if}}
+      {{!-- Long-Clock Recurrence. AFTER the shared text block and outside the
+            branch above, not inside it: a copy inside that branch renders the
+            tick wording twice, because this line already renders it for every
+            row. Found in live testing 2026-09-09, where the affliction's own
+            sentence appeared above and below the threshold. Only a recurrence
+            ever carries `threshold`, so the guard is enough on its own. --}}
+      {{#if this.threshold}}
+      <div class="vaarn-effect-threshold"><b>Threshold reached:</b> {{this.threshold}}</div>
+      {{/if}}
+      {{!-- What the players are currently being told, echoed back so the
+            Referee can read and amend it. Click to edit. Without this the
+            wording is write-only, which bites hardest on a multi-target
+            label — a list of names is exactly the thing you need to check. --}}
+      {{#if this.revealLabel}}
+      <div class="vaarn-effect-shown">
+        Players see:
+        <a class="vaarn-effect-relabel" data-actor-id="{{this.actorId}}" data-entry-id="{{this.id}}"
+           title="Change what the players are told">{{this.revealLabel}}</a>
+      </div>
+      {{/if}}
+      {{/if}}
+
+      {{#if @root.isGM}}
+      <div class="vaarn-effect-controls">
+        {{#if this.canReveal}}
+        <a class="vaarn-effect-reveal" data-actor-id="{{this.actorId}}" data-entry-id="{{this.id}}"
+           title="{{#if this.revealed}}Shown to players — click to hide again{{else}}Show this to the players it affects{{/if}}">
+          <i class="fas {{#if this.revealed}}fa-eye{{else}}fa-eye-slash{{/if}}"></i>
+        </a>
+        {{/if}}
+        {{#if this.isActivity}}
+        {{!-- Both interruption controls are offered on every activity, whatever
+              its own rule says. Matt's call 2026-09-08: the activity's default
+              honours the one case the book actually states — brewing "cannot be
+              truncated: interruptions will spoil the Elixir" — without deciding
+              the cases it leaves open. The title says which way the default
+              goes, since that is invisible once clicked. --}}
+        {{#unless this.complete}}
+        {{#if this.running}}
+        <a class="vaarn-effect-pause" data-actor-id="{{this.actorId}}" data-entry-id="{{this.id}}"
+           title="Pause — progress is kept{{#if (eq this.onInterrupt 'pause')}} (this effort's own rule){{/if}}">
+          <i class="fas fa-pause"></i>
+        </a>
+        {{else}}
+        <a class="vaarn-effect-resume" data-actor-id="{{this.actorId}}" data-entry-id="{{this.id}}"
+           title="Resume the effort">
+          <i class="fas fa-play"></i>
+        </a>
+        {{/if}}
+        <a class="vaarn-effect-reset" data-actor-id="{{this.actorId}}" data-entry-id="{{this.id}}"
+           title="Reset — progress is lost{{#if (eq this.onInterrupt 'reset')}} (this effort's own rule){{/if}}">
+          <i class="fas fa-rotate-left"></i>
+        </a>
+        {{/unless}}
+        {{/if}}
+        {{#if this.isAffliction}}
+        {{!-- The cure. GM-only in the handler as well as here, because a
+              control the template hides and the handler still answers is a
+              permission bug waiting for a console. It takes no save: the book
+              offers one and Matt ruled 2026-09-13 that the table decides. --}}
+        {{#if this.onsetLabel}}
+        {{!-- The book times neither of these onsets, so the Referee chooses
+              when. Offered once and then gone: double-applying is silent and
+              the row would look identical either way. --}}
+        <a class="vaarn-affliction-onset" data-actor-id="{{this.actorId}}" data-key="{{this.afflictionKey}}"
+           title="{{this.onsetLabel}}">
+          <i class="fas fa-dice-d20"></i>
+        </a>
+        {{/if}}
+        {{#if this.treatLabel}}
+        {{!-- A treatment that takes time: starts an effort whose finish line
+              cures it (the Gitch's debridement, 2026-09-24). GM-only. --}}
+        <a class="vaarn-affliction-treat" data-actor-id="{{this.actorId}}" data-key="{{this.afflictionKey}}"
+           title="{{this.treatLabel}}">
+          <i class="fas fa-user-doctor"></i>
+        </a>
+        {{/if}}
+        <a class="vaarn-affliction-cure" data-actor-id="{{this.actorId}}" data-key="{{this.afflictionKey}}"
+           title="Cured — ends it, restores any displaced implants and releases anything it suppressed">
+          <i class="fas fa-notes-medical"></i>
+        </a>
+        {{/if}}
+        <a class="vaarn-effect-end" data-actor-id="{{this.actorId}}" data-entry-id="{{this.id}}"
+           title="{{#if this.isActivity}}Abandon this effort{{else if this.isGiftSustain}}Let go — stop sustaining this Gift{{else if this.isLapse}}Upkeep met — stop counting{{else if this.isCurse}}Lifted — the Daemon is satisfied{{else if this.isReminder}}Dismiss this reminder{{else if this.isRecurrence}}Cured — stop this affliction{{else}}End this now{{/if}}">
+          <i class="fas fa-xmark"></i>
+        </a>
+      </div>
+      {{/if}}
+
+    </li>
+    {{/each}}
+  </ul>
+  {{/if}}
+
+</div>

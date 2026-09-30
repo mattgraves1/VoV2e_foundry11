@@ -1,0 +1,143 @@
+{{!--
+  Faction Relationship Graph.
+
+  A per-faction out-edge LIST rather than an ordered-pair grid: each
+  faction names its own allies and enemies, exactly as its file in the
+  book does, and the list stays readable when the Referee adds factions
+  of their own where a grid would grow as the square of the count.
+
+  The back-reference block under each faction is the one thing here that
+  is not out-edges, and it earns its place: 11 of the book's 33 edges are
+  one-way, and without it a one-way edge is indistinguishable from a
+  reciprocated one. One PAIR contradicts outright — the Hegemony calls
+  the Faa an ally, the Faa call the Hegemony an enemy — and that is the
+  book's own word on both sides, not an error to be tidied.
+
+  EVERY FIELD KEYS ON AN INDEX. expandObject splits field names on dots
+  and every faction name carries spaces; the name travels as a hidden
+  value instead. Same convention as faction-config.html.
+--}}
+<form autocomplete="off">
+
+  <p class="notes">
+    Who each faction counts as an ally or an enemy. The book's own links are
+    always here — what you change is stored as a difference from them, so
+    correcting the book later flows straight through.
+    {{#if overrides}}
+    <b>{{overrides}}</b> change{{#unless (eq overrides 1)}}s{{/unless}} of your own.
+    {{else}}
+    Nothing changed yet: this is the book's graph.
+    {{/if}}
+  </p>
+
+  <p class="vaarn-graph-totals">
+    {{totals.edges}} links &middot; {{totals.allies}} allied &middot; {{totals.enemies}} opposed.
+    Only the opposed half moves reputation.
+  </p>
+
+  {{#each factions as |f|}}
+  <div class="vaarn-graph-faction">
+    <h3>{{f.name}}</h3>
+
+    <table class="vaarn-graph-edges">
+      <tbody>
+        {{#each f.outs as |e|}}
+        <tr class="{{#if e.changed}}vaarn-graph-changed{{/if}}">
+          <td class="vaarn-graph-target">
+            <input type="hidden" name="faction.{{f.i}}.edge.{{e.j}}.to" value="{{e.to}}"/>
+            {{e.to}}
+            {{#if e.changed}}
+            <span class="vaarn-graph-note">
+              {{#if e.book}}the book says {{e.book}}{{else}}not in the book{{/if}}
+            </span>
+            {{/if}}
+          </td>
+          <td class="vaarn-graph-kind">
+            <select name="faction.{{f.i}}.edge.{{e.j}}.kind">
+              <option value="ally" {{#if (eq e.kind "ally")}}selected{{/if}}>Ally</option>
+              <option value="enemy" {{#if (eq e.kind "enemy")}}selected{{/if}}>Enemy</option>
+              <option value="none">Remove</option>
+            </select>
+          </td>
+          <td class="vaarn-graph-back">
+            {{#if e.reciprocal}}
+              {{#if (eq e.reciprocal e.kind)}}both ways{{else}}they say {{e.reciprocal}}{{/if}}
+            {{else}}
+              one way
+            {{/if}}
+          </td>
+        </tr>
+        {{/each}}
+
+        {{!-- Before the add row, not after it. A faction that names nobody
+              should say so where its list would have been; printing the
+              message under the "Add a link" control reads as a comment on
+              the control rather than on the empty list. Only Cacklemaw
+              Clans is in this state in the book. --}}
+        {{#unless f.outs.length}}
+        <tr><td colspan="3" class="vaarn-graph-none">This faction names nobody.</td></tr>
+        {{/unless}}
+
+        {{#if f.addable.length}}
+        <tr class="vaarn-graph-add">
+          <td class="vaarn-graph-target">
+            <select name="faction.{{f.i}}.edge.{{f.blank.j}}.to">
+              <option value="">Add a link&hellip;</option>
+              {{#each f.addable as |n|}}<option value="{{n}}">{{n}}</option>{{/each}}
+            </select>
+          </td>
+          <td class="vaarn-graph-kind">
+            <select name="faction.{{f.i}}.edge.{{f.blank.j}}.kind">
+              <option value="none">&mdash;</option>
+              <option value="ally">Ally</option>
+              <option value="enemy">Enemy</option>
+            </select>
+          </td>
+          <td class="vaarn-graph-back"></td>
+        </tr>
+        {{/if}}
+      </tbody>
+    </table>
+
+    {{#if f.inbound.length}}
+    <p class="vaarn-graph-inbound">
+      Named by:
+      {{#each f.inbound as |b|}}<span class="{{#if b.contradicts}}vaarn-graph-clash{{/if}}">{{b.from}}
+        ({{b.kind}}{{#if b.oneWay}}, not returned{{/if}}{{#if b.contradicts}}, you say {{b.back}}{{/if}}){{#unless @last}}, {{/unless}}</span>{{/each}}
+    </p>
+    {{else}}
+    <p class="vaarn-graph-inbound vaarn-graph-none">Nobody names this faction.</p>
+    {{/if}}
+
+    <input type="hidden" name="faction.{{f.i}}.name" value="{{f.name}}"/>
+  </div>
+  {{/each}}
+
+  <footer class="sheet-footer flexrow" style="margin-top: 0.5em;">
+    <button type="button" data-action="reset-graph"><i class="fas fa-undo"></i> Reset to the book</button>
+    <button type="submit"><i class="fas fa-save"></i> Save</button>
+  </footer>
+</form>
+
+<style>
+  .vaarn-faction-graph .vaarn-graph-totals { font-size: 0.85em; opacity: 0.75; margin: 0.2em 0 0.8em; }
+  .vaarn-faction-graph .vaarn-graph-faction {
+    border: 1px solid var(--color-border-light-tertiary, #bbb);
+    border-radius: 4px; padding: 0.4em 0.6em; margin-bottom: 0.6em;
+  }
+  .vaarn-faction-graph .vaarn-graph-faction h3 { margin: 0.1em 0 0.3em; border: none; }
+  .vaarn-faction-graph .vaarn-graph-edges { width: 100%; border-collapse: collapse; }
+  .vaarn-faction-graph .vaarn-graph-edges td {
+    padding: 0.2em 0.3em; border-top: 1px solid var(--color-border-light-tertiary, #ddd);
+    vertical-align: middle;
+  }
+  .vaarn-faction-graph .vaarn-graph-target { width: 52%; }
+  .vaarn-faction-graph .vaarn-graph-kind { width: 24%; }
+  .vaarn-faction-graph .vaarn-graph-back { width: 24%; font-size: 0.8em; opacity: 0.65; text-align: right; }
+  .vaarn-faction-graph .vaarn-graph-changed .vaarn-graph-target { font-weight: bold; }
+  .vaarn-faction-graph .vaarn-graph-note { font-size: 0.78em; font-weight: normal; opacity: 0.7; font-style: italic; }
+  .vaarn-faction-graph .vaarn-graph-none { font-size: 0.85em; opacity: 0.6; font-style: italic; }
+  .vaarn-faction-graph .vaarn-graph-inbound { font-size: 0.8em; opacity: 0.75; margin: 0.4em 0 0.1em; }
+  .vaarn-faction-graph .vaarn-graph-clash { font-weight: bold; opacity: 1; }
+  .vaarn-faction-graph select { width: 100%; }
+</style>

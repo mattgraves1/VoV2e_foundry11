@@ -1,0 +1,55 @@
+{{!-- Affliction Contraction and Cure. The Item a character carries while
+      infected. Read-only where it matters: virulence and the occupied slot
+      come from affliction-data.js at contraction and editing them here would
+      make the sheet disagree with the roster without saying so. The displaced
+      implants are shown because Matt's timeline puts them in front of the
+      player - an implant they paid for has left their sheet, and this is where
+      they check it is coming back. --}}
+<form class="{{cssClass}}" autocomplete="off">
+    <header class="sheet-header">
+        <img class="profile-img" src="{{item.img}}" data-edit="img" title="{{item.name}}"/>
+        <div class="header-fields">
+            <h1 class="charname"><input name="name" type="text" value="{{item.name}}" placeholder="Name"/></h1>
+            <div class="form-group">
+                <label>Virulence</label>
+                <span class="resource-value">{{data.system.virulence}} (the save target)</span>
+            </div>
+            {{#if data.system.abilitySlot}}
+            <div class="form-group">
+                <label>Ability slot</label>
+                <span class="resource-value">{{data.system.abilitySlot}}</span>
+            </div>
+            {{/if}}
+            {{#if data.system.location}}
+            <div class="form-group">
+                <label>Location</label>
+                <span class="resource-value">{{data.system.location}}</span>
+            </div>
+            {{/if}}
+            {{#if data.system.stomaObject}}
+            <div class="form-group">
+                <label>Extrudes</label>
+                <span class="resource-value">{{data.system.stomaObject}}</span>
+            </div>
+            {{/if}}
+        </div>
+    </header>
+
+    <nav class="sheet-tabs tabs" data-group="primary">
+        <a class="item" data-tab="description">Description</a>
+    </nav>
+
+    <section class="sheet-body">
+        <div class="tab" data-group="primary" data-tab="description">
+            {{#if data.system.displaced.length}}
+            <div class="form-group">
+                <label>Displaced while this runs</label>
+                <span class="resource-value">{{displacedNames item}}</span>
+            </div>
+            <p class="notes">These were removed to make room and are re-created
+            when the affliction is cured. They are suspended, not lost.</p>
+            {{/if}}
+            {{editor content=data.system.description target="system.description" button=true owner=owner editable=editable}}
+        </div>
+    </section>
+</form>

@@ -1,0 +1,33 @@
+{{!-- Rest and Recovery (Core Rules/Healing.md) — CHARACTER SHEETS ONLY, unlike
+      toxin-row.html and deprived-row.html beside it.
+
+      RULED 2026-09-11 (Matt): "Every player-controlled character should do this
+      separately, should only go on player character sheets." Rests are a
+      per-character transaction — this character's rations, this character's CON,
+      this character's Wounds — so there is nothing for one button on one sheet
+      to do on behalf of anyone else.
+
+      It is therefore NOT the Exploration Clock's Short Rest, which stays what it
+      already is: the Referee advancing ten minutes and rolling for encounters.
+      The clock spends time for the party; this spends rations for one person.
+      Both are called a Short Rest by the book and they are different halves of
+      it.
+
+      NO GM GATE, which is the opposite of the deprived row's split. Deprivation
+      is switched by the Referee because the book gives no rule for removing it;
+      resting is the player's own declaration and costs them their own supplies.
+
+      The row is absent on a sheet with no ancestry set, because every branch
+      below it — rations, Inevitable, Repairs, Detritivore — reads the ancestry,
+      and a rest taken before character creation finishes would spend rations
+      the character has not chosen yet. --}}
+{{#if rest.show}}
+<div class="flex-group-center vaarn-rest">
+  <span class="resource-label">REST</span>
+  <div class="vaarn-rest-actions">
+    <button type="button" class="vaarn-short-rest" title="{{rest.shortTitle}}">Short</button>
+    <button type="button" class="vaarn-long-rest" title="{{rest.longTitle}}">Long</button>
+  </div>
+  <span class="vaarn-rest-supplies" title="Rations carried">{{rest.supplies}}</span>
+</div>
+{{/if}}

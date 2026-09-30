@@ -1,0 +1,612 @@
+<div class="knave-chargen-app">
+
+  <ol class="chargen-progress">
+    {{#each progress}}
+    <li class="{{this.stateClass}}">{{this.label}}</li>
+    {{/each}}
+  </ol>
+
+  {{!-- ============================================================ --}}
+  {{!-- STEP 0 — ATTRIBUTES --}}
+  {{!-- ============================================================ --}}
+  {{#if isStep0}}
+  <section class="chargen-step">
+    <div class="chargen-step-head">
+    <h2>Step 1 — Roll Attributes</h2>
+    <div class="chargen-nav">
+      <span></span>
+      {{#if canNext0}}<button type="button" class="chargen-btn-primary" data-nav="1">Next: Ancestry →</button>{{/if}}
+    </div>
+    </div>
+    <div class="chargen-step-body">
+    <p class="chargen-info">Each ability rolls 3d6. The lowest die becomes the bonus. You may swap any two abilities once before proceeding. (Defense shown below is Foundry's actual bonus+10 formula — not the standalone tool's summed-dice defense, which was a known bug and is not carried over.)</p>
+
+    {{#if hasAbilities}}
+    <div class="chargen-ability-grid">
+      {{#each abilities}}
+      <div class="chargen-ability-card{{#if this.selected}} selected{{/if}}{{#if this.candidate}} candidate{{/if}}" data-index="{{this.index}}">
+        <div class="chargen-ability-name">{{this.name}}</div>
+        <div class="chargen-ability-bonus">+{{this.bonus}}</div>
+        <div class="chargen-ability-dice">[{{#each this.dice}}{{this}} {{/each}}]</div>
+        <div class="chargen-ability-defense">Defense {{this.previewDefense}}</div>
+      </div>
+      {{/each}}
+    </div>
+    {{#if swapMsg}}<p class="chargen-note">{{swapMsg}}</p>{{/if}}
+    {{#if showClearSwap}}<button type="button" class="chargen-clear-swap">Clear Swap Selection</button>{{/if}}
+    <p class="chargen-note">Item Slots preview: <b>{{itemSlotsPreview}}</b> &nbsp; Healing Rate preview: <b>{{healPreview}}</b></p>
+    <div class="chargen-btn-row">
+      <button type="button" class="chargen-roll-attributes">Re-roll All</button>
+    </div>
+    {{else}}
+    <div class="chargen-btn-row">
+      <button type="button" class="chargen-roll-attributes">Roll Attributes</button>
+    </div>
+    {{/if}}
+
+    </div>
+  </section>
+  {{/if}}
+
+  {{!-- ============================================================ --}}
+  {{!-- STEP 1 — ANCESTRY --}}
+  {{!-- ============================================================ --}}
+  {{#if isStep1}}
+  <section class="chargen-step">
+    <div class="chargen-step-head">
+    <h2>Step 2 — Choose Ancestry</h2>
+    <div class="chargen-nav">
+      <button type="button" data-nav="0">← Back</button>
+      {{#if canNext1}}<button type="button" class="chargen-btn-primary" data-nav="2">Next: Spark Tables →</button>{{/if}}
+    </div>
+    </div>
+    <div class="chargen-step-body">
+    <p class="chargen-info">Check the ancestries available in this session. If only one is checked, it is assigned directly. Multiple checks are rolled randomly with equal probability.</p>
+
+    <div class="chargen-ancestry-grid">
+      {{#each ancestryList}}
+      <label class="chargen-ancestry-check-item{{#if this.checked}} checked{{/if}}">
+        <input type="checkbox" class="chargen-ancestry-checkbox" data-ancestry="{{this.name}}" {{#if this.checked}}checked{{/if}}/> {{this.name}}
+      </label>
+      {{/each}}
+    </div>
+
+    <div class="chargen-btn-row">
+      <button type="button" class="chargen-roll-ancestry">Roll / Assign Ancestry</button>
+      <button type="button" class="chargen-ancestry-check-all">Check All</button>
+      <button type="button" class="chargen-ancestry-uncheck-all">Uncheck All</button>
+    </div>
+
+    {{#if ancestrySelected}}
+    <div class="chargen-result-box">
+      <div class="chargen-result-row"><span class="chargen-result-label">Ancestry</span><span class="chargen-result-value">{{ancestrySelected}}</span></div>
+      {{#if ancestryNote}}<p class="chargen-note">{{ancestryNote}}</p>{{/if}}
+      {{#if ancestryOpenRulings}}
+      <p class="chargen-note"><b>Open rulings:</b></p>
+      <ul class="chargen-list">{{#each ancestryOpenRulings}}<li>{{this}}</li>{{/each}}</ul>
+      {{/if}}
+    </div>
+    {{/if}}
+
+    </div>
+  </section>
+  {{/if}}
+
+  {{!-- ============================================================ --}}
+  {{!-- STEP 2 — SPARK TABLES --}}
+  {{!-- ============================================================ --}}
+  {{#if isStep2}}
+  <section class="chargen-step">
+    <div class="chargen-step-head">
+    <h2>Step 2b — Spark Tables ({{ancestrySelected}})</h2>
+    <div class="chargen-nav">
+      <button type="button" data-nav="1">← Back</button>
+      <button type="button" class="chargen-btn-primary" data-nav="3">Next: Hit Points →</button>
+    </div>
+    </div>
+    <div class="chargen-step-body">
+
+    {{#if isLithlingWarning}}
+    <div class="chargen-warning">Lithling HP: roll 10d8 instead of 1d8 in the next step. Expected range 10–80. Cannot heal. Confirm the player understands this before proceeding.</div>
+    {{/if}}
+
+    {{#if isFlatAppearance}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Appearance</p>
+      <p class="chargen-info">{{flatNote}}</p>
+      <button type="button" class="chargen-roll-flat-appearance">Roll Animal Form</button>
+      {{#if flatAnimalForm}}<div class="chargen-result-box"><div class="chargen-result-row"><span class="chargen-result-label">Animal Form</span><span class="chargen-result-value">{{flatAnimalForm}}</span></div></div>{{/if}}
+    </div>
+    {{else if appearanceColumns}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Appearance</p>
+      <div class="chargen-spark-columns">
+        {{#each appearanceColumns}}
+        <div class="chargen-spark-column">
+          <label>{{this.name}}</label>
+          <select class="chargen-spark-select" data-section="appearance" data-column="{{this.name}}">
+            <option value="">— Roll —</option>
+            {{#each this.options}}
+            <option value="{{this.index}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>
+            {{/each}}
+          </select>
+          <button type="button" class="chargen-spark-roll-one" data-section="appearance" data-column="{{this.name}}">d20</button>
+        </div>
+        {{/each}}
+      </div>
+      <button type="button" class="chargen-spark-roll-all" data-section="appearance">Roll All Appearance</button>
+    </div>
+    {{/if}}
+
+    {{#if personalityColumns}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Personality</p>
+      {{#if mutationNote}}<p class="chargen-info">{{mutationNote}}</p>{{/if}}
+      <div class="chargen-spark-columns">
+        {{#each personalityColumns}}
+        <div class="chargen-spark-column">
+          <label>{{this.name}}</label>
+          <select class="chargen-spark-select" data-section="personality" data-column="{{this.name}}">
+            <option value="">— Roll —</option>
+            {{#each this.options}}
+            <option value="{{this.index}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>
+            {{/each}}
+          </select>
+          <button type="button" class="chargen-spark-roll-one" data-section="personality" data-column="{{this.name}}">d20</button>
+        </div>
+        {{/each}}
+      </div>
+      <button type="button" class="chargen-spark-roll-all" data-section="personality">Roll All Personality</button>
+    </div>
+    {{/if}}
+
+    {{#if hasSporeTable}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Spores</p>
+      <p class="chargen-info">Roll d20 — multiple results map to each spore type (banded table).</p>
+      <button type="button" class="chargen-roll-spore">Roll Spores (d20)</button>
+      {{#if sporeResult}}
+      <div class="chargen-result-box">
+        <div class="chargen-result-row"><span class="chargen-result-label">Roll</span><span class="chargen-result-value">{{sporeResult.roll}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Spore Type</span><span class="chargen-result-value">{{sporeResult.name}}</span></div>
+        <p class="chargen-note">{{sporeResult.effect}}</p>
+      </div>
+      {{/if}}
+    </div>
+    {{/if}}
+
+    {{#if hasBloomboonTable}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Bloomboon</p>
+      <p class="chargen-info">Roll d20 to determine your innate Neobloom ability.</p>
+      <button type="button" class="chargen-roll-bloomboon">Roll Bloomboon (d20)</button>
+      {{#if bloomboonResult}}
+      <div class="chargen-result-box">
+        <div class="chargen-result-row"><span class="chargen-result-label">Roll</span><span class="chargen-result-value">{{bloomboonResult.roll}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Bloomboon</span><span class="chargen-result-value">{{bloomboonResult.name}}</span></div>
+        <p class="chargen-note">{{bloomboonResult.effect}}</p>
+      </div>
+      {{/if}}
+    </div>
+    {{/if}}
+
+    {{#if hasMutationTable}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Mutations</p>
+      <p class="chargen-info">Roll d100 {{mutationRollCount}} times on the mutation table. Rerolling replaces all {{mutationRollCount}} results.</p>
+      <button type="button" class="chargen-roll-mutations">Roll Mutations (d100 x{{mutationRollCount}})</button>
+      {{#if mutationResults}}
+      {{#each mutationResults}}
+      <div class="chargen-result-box">
+        <div class="chargen-result-row"><span class="chargen-result-label">Roll</span><span class="chargen-result-value">{{this.roll}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Mutation</span><span class="chargen-result-value">{{this.name}}</span></div>
+        <p class="chargen-note">{{this.effect}}</p>
+      </div>
+      {{/each}}
+      {{/if}}
+      {{#if mutationsSuperseded}}
+      {{#each mutationsSuperseded}}
+      <p class="chargen-note"><b>Superseded:</b> {{this.name}} (roll {{this.roll}}) redefines your unarmed attack, and a later mutation does too — the more recent one takes precedence, so this mutation and all of its effects are dropped.</p>
+      {{/each}}
+      {{/if}}
+    </div>
+    {{/if}}
+
+    {{#if specialRules}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Special Rules</p>
+      {{#each specialRules}}<p class="chargen-note">{{this}}</p>{{/each}}
+    </div>
+    {{/if}}
+
+    </div>
+  </section>
+  {{/if}}
+
+  {{!-- ============================================================ --}}
+  {{!-- STEP 3 — HIT POINTS --}}
+  {{!-- ============================================================ --}}
+  {{#if isStep3}}
+  <section class="chargen-step">
+    <div class="chargen-step-head">
+    <h2>Step 3 — Hit Points</h2>
+    <div class="chargen-nav">
+      <button type="button" data-nav="2">← Back</button>
+      {{#if canNext3}}<button type="button" class="chargen-btn-primary" data-nav="4">Next: Equipment →</button>{{/if}}
+    </div>
+    </div>
+    <div class="chargen-step-body">
+    <p class="chargen-info">{{hpInfoText}}</p>
+
+    {{#if showGmFlatOption}}
+    <label class="chargen-checkbox-row"><input type="checkbox" class="chargen-gm-flat-hp" {{#if gmFlatHPEnabled}}checked{{/if}}/> GM option: offer 5 HP flat</label>
+    {{/if}}
+
+    {{#if showFlatToggle}}
+    <div class="chargen-toggle-row">
+      <button type="button" class="chargen-hp-mode{{#if hpModeIsRoll}} active{{/if}}" data-mode="roll">Roll 1d8</button>
+      <button type="button" class="chargen-hp-mode{{#if hpModeIsFlat}} active{{/if}}" data-mode="flat">Take 5</button>
+    </div>
+    {{/if}}
+
+    {{#if showRollButton}}
+    <div class="chargen-btn-row">
+      <button type="button" class="chargen-roll-hp">{{hpRollButtonLabel}}</button>
+    </div>
+    {{/if}}
+
+    {{#if hpResult}}
+    <div class="chargen-result-box">
+      <div class="chargen-result-row"><span class="chargen-result-label">Current / Max HP</span><span class="chargen-result-value">{{hpResult.maximum}}</span></div>
+      <div class="chargen-result-row"><span class="chargen-result-label">Healing Rate</span><span class="chargen-result-value">{{hpResult.healingRate}}</span></div>
+    </div>
+    {{/if}}
+
+    </div>
+  </section>
+  {{/if}}
+
+  {{!-- ============================================================ --}}
+  {{!-- STEP 4 — EQUIPMENT --}}
+  {{!-- ============================================================ --}}
+  {{#if isStep4}}
+  <section class="chargen-step">
+    <div class="chargen-step-head">
+    <h2>Step 4 — Starting Equipment</h2>
+    <div class="chargen-nav">
+      <button type="button" data-nav="3">← Back</button>
+      {{#if canNext4}}<button type="button" class="chargen-btn-primary" data-nav="5">Next: Boon →</button>{{/if}}
+    </div>
+    </div>
+    <div class="chargen-step-body">
+
+    <div class="chargen-card">
+      <p class="chargen-section-label">Rations & Supplies</p>
+      {{#if isSynth}}
+      <div class="chargen-result-row"><span class="chargen-result-label">Synth Parts</span><span class="chargen-result-value">3</span></div>
+      {{else if isLithling}}
+      <p class="chargen-info">Lithling: no food or water required.</p>
+      {{else}}
+      <div class="chargen-result-row"><span class="chargen-result-label">Water Rations</span><span class="chargen-result-value">3</span></div>
+      <div class="chargen-result-row"><span class="chargen-result-label">Food Rations</span><span class="chargen-result-value">3</span></div>
+      {{/if}}
+      {{#each rationNotes}}<p class="chargen-note">{{this}}</p>{{/each}}
+    </div>
+
+    <div class="chargen-card">
+      <p class="chargen-section-label">Weapon</p>
+      <div class="chargen-toggle-row">
+        <button type="button" class="chargen-weapon-type{{#if weaponTypeIsMelee}} active{{/if}}" data-type="melee">Melee</button>
+        <button type="button" class="chargen-weapon-type{{#if weaponTypeIsRanged}} active{{/if}}" data-type="ranged">Ranged</button>
+      </div>
+      <div class="chargen-btn-row"><button type="button" class="chargen-roll-weapon">Roll Weapon</button></div>
+      {{#if weaponResult}}
+      <div class="chargen-result-box">
+        <div class="chargen-result-row"><span class="chargen-result-label">Name</span><span class="chargen-result-value">{{weaponResult.full_name}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Damage</span><span class="chargen-result-value">{{weaponResult.damage}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Slots</span><span class="chargen-result-value">{{weaponResult.slots}}</span></div>
+        {{#if weaponResult.ammo_die}}<div class="chargen-result-row"><span class="chargen-result-label">Ammo Die</span><span class="chargen-result-value">{{weaponResult.ammo_die}}</span></div>{{/if}}
+        {{#if weaponResult.base_tags.length}}<div class="chargen-result-row"><span class="chargen-result-label">Built-in Tags</span><span class="chargen-result-value">{{#each weaponResult.base_tags}}{{this}} {{/each}}</span></div>{{/if}}
+        <div class="chargen-result-row"><span class="chargen-result-label">Tag</span><span class="chargen-result-value">{{weaponResult.tag}}</span></div>
+        <p class="chargen-note">{{weaponResult.tag_effect}}</p>
+      </div>
+      {{/if}}
+    </div>
+
+    <div class="chargen-card">
+      <p class="chargen-section-label">Armour</p>
+      <p class="chargen-info">Roll Quality & Type for a full suit of armour. A Helmet or Shield comes from the Gear roll (+1 AV each).</p>
+      <div class="chargen-btn-row"><button type="button" class="chargen-roll-armour">Roll Armour</button></div>
+      {{#if armourResult}}
+      <div class="chargen-result-box">
+        <div class="chargen-result-row"><span class="chargen-result-label">Name</span><span class="chargen-result-value">{{armourResult.quality}} {{armourResult.name}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Armour Value</span><span class="chargen-result-value">{{armourResult.av}} (bonus +{{armourResult.armour_bonus}})</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Slots</span><span class="chargen-result-value">{{armourResult.slots}}</span></div>
+        {{#if armourResult.special}}<div class="chargen-result-row"><span class="chargen-result-label">Special</span><span class="chargen-result-value">{{armourResult.special}}</span></div>{{/if}}
+      </div>
+      {{/if}}
+    </div>
+
+    <div class="chargen-card">
+      <p class="chargen-section-label">Explorer's Gear</p>
+      <p class="chargen-info">Two independent rolls: one on Gear A, one on Gear B. If Gear B rolls "Drug", the drug is randomly generated.</p>
+      <div class="chargen-btn-row"><button type="button" class="chargen-roll-gear">Roll Gear</button></div>
+      {{#if gearResult}}
+      <div class="chargen-result-box">
+        <div class="chargen-result-row"><span class="chargen-result-label">Gear A</span><span class="chargen-result-value">{{gearResult.a}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Gear B</span><span class="chargen-result-value">{{gearResult.b}}</span></div>
+        {{#if gearResult.helm}}<div class="chargen-result-row"><span class="chargen-result-label">Helmet</span><span class="chargen-result-value">{{gearResult.helm}} (+1 AV)</span></div>{{/if}}
+        {{#if gearResult.shield}}<div class="chargen-result-row"><span class="chargen-result-label">Shield</span><span class="chargen-result-value">{{gearResult.shield}} (+1 AV)</span></div>{{/if}}
+        {{#if gearResult.drug}}
+        <p class="chargen-section-label">Drug Details</p>
+        <div class="chargen-result-row"><span class="chargen-result-label">Appearance</span><span class="chargen-result-value">{{gearResult.drug.hue}} {{gearResult.drug.form}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Ingested by</span><span class="chargen-result-value">{{gearResult.drug.ingested_by}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Effects</span><span class="chargen-result-value">{{#each gearResult.drug.effects}}{{this}} {{/each}}</span></div>
+        {{/if}}
+      </div>
+      {{/if}}
+    </div>
+
+    </div>
+  </section>
+  {{/if}}
+
+  {{!-- ============================================================ --}}
+  {{!-- STEP 5 — BOON --}}
+  {{!-- ============================================================ --}}
+  {{#if isStep5}}
+  <section class="chargen-step">
+    <div class="chargen-step-head">
+    <h2>Step 5 — Starting Boon</h2>
+    <div class="chargen-nav">
+      <button type="button" data-nav="4">← Back</button>
+      {{#if canNext5}}<button type="button" class="chargen-btn-primary" data-nav="6">Review Character →</button>{{/if}}
+    </div>
+    </div>
+    <div class="chargen-step-body">
+    <p class="chargen-info">Player chooses OR rolls d6 on the boon table.</p>
+
+    <div class="chargen-toggle-row">
+      <button type="button" class="chargen-boon-mode{{#if boonModeIsRoll}} active{{/if}}" data-mode="roll">Roll d6</button>
+      <button type="button" class="chargen-boon-mode{{#if boonModeIsChoose}} active{{/if}}" data-mode="choose">Player Chooses</button>
+    </div>
+
+    {{#unless boonName}}
+      {{#if boonModeIsRoll}}
+      <div class="chargen-btn-row"><button type="button" class="chargen-roll-boon">Roll Boon</button></div>
+      {{else}}
+      <div class="chargen-boon-grid">
+        {{#each boonList}}
+        <div class="chargen-boon-option chargen-select-boon" data-boon="{{this.name}}">
+          <div class="chargen-boon-title">{{this.name}}</div>
+          <div class="chargen-boon-sub">{{this.index}}</div>
+        </div>
+        {{/each}}
+      </div>
+      {{/if}}
+    {{/unless}}
+
+    {{#if boonName}}
+    <div class="chargen-result-box">
+      <div class="chargen-result-row"><span class="chargen-result-label">Boon</span><span class="chargen-result-value">{{boonName}}</span></div>
+    </div>
+    <div class="chargen-btn-row"><button type="button" class="chargen-reset-boon">Re-roll / Change Boon</button></div>
+
+    {{#if isBoonAdvancedWeapon}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Advanced Weapon</p>
+      <p class="chargen-info">Fragile: breaks on natural 1 attack roll. Repair: d10 − INT days. Ammo only in Vaarnish cities.</p>
+      <div class="chargen-toggle-row">
+        <button type="button" class="chargen-boon-weapon-type{{#if boonWeaponTypeIsMelee}} active{{/if}}" data-type="melee">Melee</button>
+        <button type="button" class="chargen-boon-weapon-type{{#if boonWeaponTypeIsRanged}} active{{/if}}" data-type="ranged">Ranged</button>
+      </div>
+      <div class="chargen-btn-row"><button type="button" class="chargen-roll-advanced-weapon">Roll Advanced Weapon</button></div>
+      {{#if boonDetail.weapon}}
+      <div class="chargen-result-box">
+        <div class="chargen-result-row"><span class="chargen-result-label">Name</span><span class="chargen-result-value">{{boonDetail.weapon.full_name}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Damage</span><span class="chargen-result-value">{{boonDetail.weapon.damage}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Slots</span><span class="chargen-result-value">{{boonDetail.weapon.slots}}</span></div>
+        {{#if boonDetail.weapon.ammo_die}}<div class="chargen-result-row"><span class="chargen-result-label">Ammo Die</span><span class="chargen-result-value">{{boonDetail.weapon.ammo_die}}</span></div>{{/if}}
+        <div class="chargen-result-row"><span class="chargen-result-label">Basic Tag</span><span class="chargen-result-value">{{boonDetail.weapon.basic_tag}}</span></div>
+        <p class="chargen-note">{{boonDetail.weapon.basic_tag_effect}}</p>
+        <div class="chargen-result-row"><span class="chargen-result-label">Advanced Tag</span><span class="chargen-result-value">{{boonDetail.weapon.advanced_tag}}</span></div>
+        <p class="chargen-note">{{boonDetail.weapon.advanced_tag_effect}}</p>
+        <p class="chargen-warning-inline">Fragile — breaks on natural 1</p>
+      </div>
+      {{/if}}
+    </div>
+    {{/if}}
+
+    {{#if isBoonCrucible}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Alchemist's Crucible & Elixir</p>
+      <div class="chargen-btn-row"><button type="button" class="chargen-roll-crucible">Roll Crucible & Elixir</button></div>
+      {{#if boonDetail.crucible}}
+      <div class="chargen-result-box">
+        <div class="chargen-result-row"><span class="chargen-result-label">Crucible</span><span class="chargen-result-value">{{boonDetail.crucible.full_name}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Elixir</span><span class="chargen-result-value">{{boonDetail.elixir.name}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Potency</span><span class="chargen-result-value">{{boonDetail.elixir.potency}}</span></div>
+        <p class="chargen-note">{{boonDetail.elixir.effect}}</p>
+      </div>
+      {{/if}}
+    </div>
+    {{/if}}
+
+    {{#if isBoonImplant}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Cybernetic Implant</p>
+      <div class="chargen-btn-row"><button type="button" class="chargen-roll-implant">Roll Implant</button></div>
+      {{#if boonDetail.implant}}
+      <div class="chargen-result-box">
+        <div class="chargen-result-row"><span class="chargen-result-label">Implant</span><span class="chargen-result-value">{{boonDetail.implant.name}}</span></div>
+        <div class="chargen-result-row"><span class="chargen-result-label">Ability Slot</span><span class="chargen-result-value">{{boonDetail.implant.ability_slot}}</span></div>
+        <p class="chargen-note">{{boonDetail.implant.effect}}</p>
+        {{#if boonDetail.implant.stat_mod}}<p class="chargen-note-accent">This implant modifies ability scores — applied automatically when the character is created.</p>{{/if}}
+      </div>
+      {{/if}}
+    </div>
+    {{/if}}
+
+    {{#if isBoonExotica}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Exotica</p>
+      <p class="chargen-info">Duplicate rule: if this matches another player's exotica, take the next option down the table.</p>
+      <div class="chargen-btn-row"><button type="button" class="chargen-roll-exotica">Roll Exotica</button></div>
+      {{#if boonDetail.item}}
+      <div class="chargen-result-box">
+        <div class="chargen-result-row"><span class="chargen-result-label">Item</span><span class="chargen-result-value">{{boonDetail.item.name}}</span></div>
+        <p class="chargen-note">{{boonDetail.item.description}}</p>
+      </div>
+      {{/if}}
+    </div>
+    {{/if}}
+
+    {{#if isBoonCodex}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Hypergeometric Codex</p>
+      <p class="chargen-info">Reading: INT save. On failure, locked out until a Long Rest. Power = INT bonus.</p>
+      <div class="chargen-btn-row"><button type="button" class="chargen-roll-codex">Roll Codex</button></div>
+      {{#if boonDetail.codex}}
+      <div class="chargen-result-box">
+        <p class="chargen-note"><strong>Appearance:</strong> {{boonDetail.codex.appearance}}</p>
+        <div class="chargen-result-row"><span class="chargen-result-label">Equation</span><span class="chargen-result-value">{{boonDetail.codex.equation.name}}</span></div>
+        <p class="chargen-note"><strong>Effect:</strong> {{boonDetail.codex.equation.effect}}</p>
+      </div>
+      {{/if}}
+    </div>
+    {{/if}}
+
+    {{#if isBoonGift}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Mystic Gift</p>
+      <p class="chargen-info">HP cost: baseline d6. Gifts always hit. Damage/healing die = HP paid size + PSY bonus.</p>
+      <div class="chargen-toggle-row">
+        <button type="button" class="chargen-gift-mode{{#if giftModeIsSample}} active{{/if}}" data-mode="sample">Option A: Sample</button>
+        <button type="button" class="chargen-gift-mode{{#if giftModeIsRandom}} active{{/if}}" data-mode="random">Option B: Random</button>
+      </div>
+      <div class="chargen-btn-row"><button type="button" class="chargen-roll-gift">Roll Gift</button></div>
+      {{#if boonDetail.gift}}
+      <div class="chargen-result-box">
+        {{#if boonDetail.gift.source}}<div class="chargen-result-row"><span class="chargen-result-label">Source</span><span class="chargen-result-value">{{boonDetail.gift.source}}</span></div>{{/if}}
+        {{#if boonDetail.gift.name}}<div class="chargen-result-row"><span class="chargen-result-label">Gift</span><span class="chargen-result-value">{{boonDetail.gift.name}}</span></div>{{/if}}
+        {{#if boonDetail.gift.quality}}<div class="chargen-result-row"><span class="chargen-result-label">Quality</span><span class="chargen-result-value">{{boonDetail.gift.quality}}</span></div>{{/if}}
+        {{#if boonDetail.gift.form}}<div class="chargen-result-row"><span class="chargen-result-label">Form</span><span class="chargen-result-value">{{boonDetail.gift.form}}</span></div>{{/if}}
+        {{#if boonDetail.gift.full_name}}<div class="chargen-result-row"><span class="chargen-result-label">Full Name</span><span class="chargen-result-value">{{boonDetail.gift.full_name}}</span></div>{{/if}}
+      </div>
+      {{/if}}
+    </div>
+    {{/if}}
+    {{/if}}
+
+    </div>
+  </section>
+  {{/if}}
+
+  {{!-- ============================================================ --}}
+  {{!-- STEP 6 — REVIEW & CREATE --}}
+  {{!-- ============================================================ --}}
+  {{#if isStep6}}
+  <section class="chargen-step">
+    <div class="chargen-step-head">
+    <h2>Step 6 — Review & Create Character</h2>
+    {{!-- Create sits rightmost in the SAME top row as Back/Start Over, so the
+          nav bar is the one place on every step where the forward control
+          lives — including the last one, where forward means finish. The
+          trailing span keeps Start Over centred when Create is absent. --}}
+    <div class="chargen-nav">
+      <button type="button" data-nav="5">← Back to Boon</button>
+      <button type="button" class="chargen-start-over">Start Over</button>
+      {{#if readyToCreate}}
+      <button type="button" class="chargen-btn-primary chargen-create">Create Character</button>
+      {{else}}
+      <span></span>
+      {{/if}}
+    </div>
+    </div>
+    <div class="chargen-step-body">
+
+    {{#if readyToCreate}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Identity</p>
+      <label>Character Name</label>
+      <input type="text" class="chargen-character-name" value="{{characterName}}"/>
+      <div class="chargen-result-row"><span class="chargen-result-label">Ancestry</span><span class="chargen-result-value">{{ancestrySelected}}</span></div>
+      {{#each spark.personality}}
+      <div class="chargen-result-row"><span class="chargen-result-label">{{@key}}</span><span class="chargen-result-value">{{this}}</span></div>
+      {{/each}}
+      {{#each spark.appearance}}
+      <div class="chargen-result-row"><span class="chargen-result-label">{{@key}}</span><span class="chargen-result-value">{{this}}</span></div>
+      {{/each}}
+      {{#if users.length}}
+      <label>Assign to Player (optional)</label>
+      <select class="chargen-target-user">
+        <option value="">— GM only —</option>
+        {{#each users}}
+        <option value="{{this.id}}"{{#if this.selected}} selected{{/if}}>{{this.name}}</option>
+        {{/each}}
+      </select>
+      {{/if}}
+    </div>
+
+    <div class="chargen-card">
+      <p class="chargen-section-label">Vitals</p>
+      <div class="chargen-result-row"><span class="chargen-result-label">Max HP</span><span class="chargen-result-value">{{maxHP}}{{hpBonusNote}}</span></div>
+      <div class="chargen-result-row"><span class="chargen-result-label">Healing Rate</span><span class="chargen-result-value">{{healingRate}}</span></div>
+      <div class="chargen-result-row"><span class="chargen-result-label">Item Slots</span><span class="chargen-result-value">{{itemSlots}}</span></div>
+      <div class="chargen-result-row"><span class="chargen-result-label">Armour Value (once equipped)</span><span class="chargen-result-value">{{armourAV}}{{armourAVNote}}</span></div>
+    </div>
+
+    {{#if spark.mutations}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Mutations</p>
+      {{#each spark.mutations}}
+      <div class="chargen-result-row"><span class="chargen-result-label">d100: {{this.roll}}</span><span class="chargen-result-value">{{this.name}}</span></div>
+      {{/each}}
+    </div>
+    {{/if}}
+
+    <div class="chargen-card">
+      <p class="chargen-section-label">Abilities</p>
+      <div class="chargen-review-abilities">
+        {{#each reviewAbilities}}
+        <div class="chargen-review-ability">
+          <div class="chargen-ability-name">{{this.name}}</div>
+          <div class="chargen-ability-bonus">+{{this.bonus}}</div>
+          <div class="chargen-ability-defense">Def {{this.defense}}</div>
+        </div>
+        {{/each}}
+      </div>
+      {{#if hasImplantStatMod}}<p class="chargen-note-accent">* Ability scores modified by the rolled Cybernetic Implant.</p>{{/if}}
+    </div>
+
+    <div class="chargen-card">
+      <p class="chargen-section-label">Equipment</p>
+      {{#if isSynth}}<div class="chargen-result-row"><span class="chargen-result-label">Synth Parts</span><span class="chargen-result-value">3</span></div>
+      {{else if isLithling}}<div class="chargen-result-row"><span class="chargen-result-label">Rations</span><span class="chargen-result-value">None needed</span></div>
+      {{else}}<div class="chargen-result-row"><span class="chargen-result-label">Water / Food</span><span class="chargen-result-value">3 / 3</span></div>{{/if}}
+      <div class="chargen-result-row"><span class="chargen-result-label">Weapon</span><span class="chargen-result-value">{{reviewEquipment.weapon.full_name}}</span></div>
+      <div class="chargen-result-row"><span class="chargen-result-label">Armour</span><span class="chargen-result-value">{{#if reviewEquipment.armour.quality}}{{reviewEquipment.armour.quality}} {{/if}}{{reviewEquipment.armour.name}} (AV {{reviewEquipment.armour.av}})</span></div>
+      {{#each reviewEquipment.gear}}<div class="chargen-result-row"><span class="chargen-result-label">Gear</span><span class="chargen-result-value">{{this}}</span></div>{{/each}}
+      {{#if reviewEquipment.drug}}<div class="chargen-result-row"><span class="chargen-result-label">Drug</span><span class="chargen-result-value">{{reviewEquipment.drug.hue}} {{reviewEquipment.drug.form}}</span></div>{{/if}}
+    </div>
+
+    <div class="chargen-card">
+      <p class="chargen-section-label">Boon</p>
+      {{#each boonSummary}}<p class="chargen-note">{{this}}</p>{{/each}}
+    </div>
+
+    {{#if specialRules}}
+    <div class="chargen-card">
+      <p class="chargen-section-label">Special Rules</p>
+      {{#each specialRules}}<p class="chargen-note">{{this}}</p>{{/each}}
+    </div>
+    {{/if}}
+
+    {{else}}
+    <p class="chargen-warning">Every step (Attributes, Ancestry, Hit Points, Weapon, Armour, Gear, Boon) must be completed before the character can be created. Use Back to finish any missing step.</p>
+    {{/if}}
+    </div>
+  </section>
+  {{/if}}
+
+</div>

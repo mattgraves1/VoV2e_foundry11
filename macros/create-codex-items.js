@@ -1,0 +1,112 @@
+/**
+ * Vaarn: Create Codex Item
+ *
+ * GM-only tool for introducing Hypergeometric Codex items into the world.
+ * The `codex` item sheet deliberately has no editable equation dropdown
+ * (that would let players browse all 20 possibilities or reassign an
+ * already-found codex), so this macro is the one place equations get set.
+ *
+ * Ships in the Vaarn Macros compendium: import it (Import Entry) or drag it
+ * to the hotbar. Run it to open a picker: create one specific known equation,
+ * batch-create all 20 known equations at once, or create a custom/homebrew
+ * equation (INT-save resolution still works automatically either way — it's
+ * keyed off the reader at read time, not baked into the item).
+ */
+
+const EQUATION_NAMES =
+[
+  "Antithetical Copy", "Diminish", "Erase Paradox", "Exchange Coordinates",
+  "Expand", "Flatten", "Golem", "Imperfect Copy", "Increase Gravity",
+  "Invert Gravity", "Kinetic Ward", "Perfect Copy", "Phase", "Portal",
+  "Return Fixed Coordinates", "Return Random Coordinates", "Singularity",
+  "Stasis", "Summon", "Vanish",
+];
+
+async function createCodex(equationName, description = "")
+{
+  const cls = getDocumentClass("Item");
+  return cls.create(
+  {
+    name: `Hypergeometric Codex (${equationName})`,
+    type: "codex",
+    system: { slots: 1, equation: equationName, description }
+  });
+}
+
+async function createAllKnown()
+{
+  const cls = getDocumentClass("Item");
+  const items = EQUATION_NAMES.map(name => (
+  {
+    name: `Hypergeometric Codex (${name})`,
+    type: "codex",
+    system: { slots: 1, equation: name, description: "" }
+  }));
+  await cls.create(items);
+  ui.notifications.info(`Created all ${items.length} known-equation Codex items in the Items directory.`);
+}
+
+function openDialog()
+{
+  const options = EQUATION_NAMES.map(n => `<option value="${n}">${n}</option>`).join("");
+  const content = `
+    <p>Pick a known equation to create a single Codex item, create all 20 at once, or enter a custom/homebrew equation.</p>
+    <div class="form-group">
+      <label>Known equation</label>
+      <select id="vaarn-codex-select">${options}</select>
+    </div>
+    <hr/>
+    <p><i>— or, for a custom/homebrew equation (INT-save resolution still works automatically) —</i></p>
+    <div class="form-group">
+      <label>Custom equation name</label>
+      <input type="text" id="vaarn-codex-custom-name" placeholder="e.g. Fold the Third Wall"/>
+    </div>
+    <div class="form-group">
+      <label>Effect description (use [INT] as a placeholder for the reader's INT bonus)</label>
+      <textarea id="vaarn-codex-custom-desc" style="width:100%;height:80px;"></textarea>
+    </div>`;
+
+  new Dialog(
+  {
+    title: "Create Codex Item(s)",
+    content,
+    buttons:
+    {
+      one:
+      {
+        label: "Create Selected Known Equation",
+        callback: async (html) =>
+        {
+          const name = html.find("#vaarn-codex-select").val();
+          const item = await createCodex(name);
+          ui.notifications.info(`Created "${item.name}".`);
+        }
+      },
+      all:
+      {
+        label: "Create All 20 Known Equations",
+        callback: () => createAllKnown()
+      },
+      custom:
+      {
+        label: "Create Custom Equation",
+        callback: async (html) =>
+        {
+          const name = html.find("#vaarn-codex-custom-name").val()?.trim();
+          const desc = html.find("#vaarn-codex-custom-desc").val()?.trim();
+          if(!name)
+          {
+            ui.notifications.warn("Enter a custom equation name first.");
+            return;
+          }
+          const item = await createCodex(name, desc ? `<p>${desc}</p>` : "");
+          ui.notifications.info(`Created "${item.name}".`);
+        }
+      }
+    },
+    default: "one"
+  },
+  { width: 480 }).render(true);
+}
+
+openDialog();

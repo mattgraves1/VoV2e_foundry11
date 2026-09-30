@@ -1,0 +1,153 @@
+<form class="{{cssClass}} flexcol" autocomplete="off">
+  {{!-- Vehicle Stat Block Import, 2026-09-18. Hull is system.health: Matt
+        ruled it is to a vehicle what HP is to anything else, so it lives in
+        the same field and every damage path reaches it. Only the label and
+        the damage ratio (1 Hull per 10 damage, in _resolveHPChange) differ. --}}
+  <div class="grid grid-3col">
+    <!-- First Col: the stat line -->
+    <div class="flex-group-center">
+      <div class="abilities grid grid-3col">
+        <span class="resource-label">CURRENT</span><span class="resource-label"></span><span class="resource-label">MAX</span>
+        <input type="text" name="system.health.value" value="{{data.system.health.value}}" data-dtype="Number"/>
+        <span class="resource-label center" title="Loses 1 per 10 damage from a single attack. Damage under 10 does nothing, and separate attacks do not add up.">HULL</span>
+        <input type="text" name="system.health.max" value="{{data.system.health.max}}" data-dtype="Number"/>
+      </div>
+      {{#if isGM}}{{#if canRepair}}
+      <a class="vehicle-repair" title="One day of work with the appropriate spare parts. Advance the clock first."><i class="fas fa-wrench"></i> Repair 1 Hull</a>
+      {{/if}}{{/if}}
+
+      {{!-- Armour Damage (2026-09-22, Matt). DEFENSE stays the typed statblock
+           number - that is what the Referee edits - and DAMAGE is what has been
+           done to it, with BONUS following the damaged total. Acid reaches a
+           creature or a vehicle as readily as a character, so they need the
+           field as much. Nothing in the book repairs armour, so it is cleared
+           here by hand.
+      
+           "DAMAGE" rather than the abilities block's "WOUND" (Matt): armour is
+           not flesh, and the word matches both the field name and the chat
+           lines, so one thing has one name. --}}
+      <div class="abilities grid grid-4col">
+        <span class="resource-label">DEFENSE</span><span class="resource-label"></span><span class="resource-label">BONUS</span><span class="resource-label">DAMAGE</span>
+        <input type="text" name="system.armor.value" value="{{data.system.armor.value}}" data-dtype="Number"/>
+        <span class="resource-label armor">ARMOR</span>
+        <span>{{data.system.armor.bonus}}</span>
+        <input type="text" name="system.armor.damage" value="{{data.system.armor.damage}}" data-dtype="Number" maxlength="2" min="0" title="Cumulative armour damage - subtracted from DEFENSE. Nothing in the book repairs armour, so clear this by hand."/>
+      </div>
+
+      <div class="flex-group-center">
+        <span class="resource-label">SPEED</span>
+        <input type="text" name="system.speed" value="{{data.system.speed}}" data-dtype="String"
+               title="Used for an opposed Speed Save in a pursuit or race."/>
+        {{!-- Vehicle Combat Rules (2026-09-18). --}}
+        <div class="flexrow">
+          <a class="vehicle-speed-save" title="d20 + Speed. Opposed: beat 10 + the other vehicle's Speed."><i class="fas fa-dice-d20"></i> Speed Save</a>
+          {{#if speedDie}}{{#if isGM}}<a class="vehicle-speed-die" title="Roll this vehicle's variable Speed ({{speedDie}})"><i class="fas fa-dice"></i> Roll {{speedDie}}</a>{{/if}}{{/if}}
+        </div>
+        {{!-- The hold — Container Slot Capacity, 2026-09-20. This was an
+              editable Number that nothing honoured; it is now a capacity with
+              a live used figure against it, derived in actor.js exactly as a
+              companion's is. The capacity itself stays editable, because a
+              vehicle is one particular machine a Referee may have modified and
+              the roster figure is only its starting point. --}}
+        <span class="resource-label">ITEM SLOTS</span>
+        <input type="text" name="system.itemSlots" value="{{data.system.itemSlots}}" data-dtype="Number"
+               title="The hold's capacity, as the stat block prints it."/>
+        {{!-- STACKED, NOT SIDE BY SIDE, so a four-digit capacity and its readout
+              cannot compete for one row's width - the Wind Barge prints 2000
+              and the column is narrow.
+
+              NO MEASUREMENT SUPPORTS THIS, and the one that appeared to was
+              wrong: during Group 246 an offscreen sheet reported clientWidth 18
+              for the input and it was read as the flexrow crushing it, until
+              every other input on the same sheet - the actor's own name field
+              included - measured 18 as well. An unlaid-out sheet reports 18 for
+              everything. The stacking was kept because it cannot squeeze, not
+              because anything proved the flexrow did. --}}
+        {{#if data.system.inventorySlots}}
+        <span class="resource-label" title="Slots used by what this vehicle is carrying, against the capacity above.">USED {{inventorySlots data.system.inventorySlots data.system.encumbered}}</span>
+        {{/if}}
+        <span class="resource-label">TYPE</span>
+        <input type="text" name="system.vehicleKind" value="{{data.system.vehicleKind}}" data-dtype="String"/>
+      </div>
+
+      {{!-- Level-Derived Trade Value (2026-09-18). Derived from the live stat on
+              every draw, never stored - see level-trade-value.js. --}}
+        {{#if tradeValue}}
+        <div class="flex-group-center">
+          <span class="resource-label">APPROXIMATE TRADE VALUE</span>
+          <span>{{#if tradeValue.materials}}Materials: {{/if}}{{tradeValue.value}}</span>
+        </div>
+        {{/if}}
+    </div>
+
+    <!-- Second Col: name, image, crew, description -->
+    <div class="flex-group-center">
+      <img class="profile-img" src="{{actor.img}}" data-edit="img" title="{{actor.name}}" height="160" width="160"/>
+      <h1 class="charname"><input name="name" type="text" value="{{actor.name}}" placeholder="Name"/></h1>
+
+      {{!-- Crew. The GM drags an Actor from the sidebar onto a slot. The
+            book's own crew line stays above the slots, word for word. --}}
+      <div class="vehicle-crew">
+        <span class="resource-label">CREW</span>
+        <p><i>{{data.system.crew.text}}</i></p>
+        {{#if crew.moves}}<p>Moves on its own.</p>{{/if}}
+        {{#each crew.pilots as |slot|}}
+        <div class="vehicle-crew-slot flexrow" data-crew-role="pilots" data-crew-index="{{slot.index}}"
+             title="Drag an actor from the Actors list here">
+          <span class="resource-label">{{@root.crew.pilotLabel}}</span>
+          {{#if slot.name}}<span>{{slot.name}}</span>{{else}}{{#if slot.missing}}<span><i>— actor deleted —</i></span>{{else}}<span><i>drop an actor here</i></span>{{/if}}{{/if}}
+          {{#if slot.uuid}}{{#if @root.isGM}}<a class="vehicle-crew-clear" title="Clear this slot"><i class="fas fa-times"></i></a>{{/if}}{{/if}}
+        </div>
+        {{/each}}
+        {{#each crew.gunners as |slot|}}
+        <div class="vehicle-crew-slot flexrow" data-crew-role="gunners" data-crew-index="{{slot.index}}"
+             title="Drag an actor from the Actors list here">
+          <span class="resource-label">Gunner</span>
+          {{#if slot.name}}<span>{{slot.name}}</span>{{else}}{{#if slot.missing}}<span><i>— actor deleted —</i></span>{{else}}<span><i>drop an actor here</i></span>{{/if}}{{/if}}
+          {{#if slot.uuid}}{{#if @root.isGM}}<a class="vehicle-crew-clear" title="Clear this slot"><i class="fas fa-times"></i></a>{{/if}}{{/if}}
+        </div>
+        {{/each}}
+        <div class="flexrow">
+          <span class="resource-label">PASSENGERS</span>
+          <input type="text" name="system.crew.passengers" value="{{data.system.crew.passengers}}" data-dtype="Number"/>
+        </div>
+        {{#if crew.firedBy}}<p>Weapons are fired by {{crew.firedBy}}.</p>{{else}}<p>No attack.</p>{{/if}}
+      </div>
+
+      <div class="description-editor knave-character-description">
+        {{editor content=data.system.biography target="system.biography" button=true owner=owner editable=editable}}
+      </div>
+    </div>
+
+    <!-- Third Col: weapons and anything carried -->
+    <div class="flex-group-center">
+      <div class="items">
+        <ol class="items-list">
+          <li class="item flexrow item-header">
+            <div class="item-name">Name</div>
+            <div class="item-controls">
+              <a class="item-control item-create" title="Create item" data-type="item"><i class="fas fa-plus"></i> Add item</a>
+            </div>
+          </li>
+        {{#each actor.items as |item id|}}
+          <li class="item flexrow" data-item-id="{{item.id}}">
+            <div class="item-image"><img src="{{itemImg item}}" title="{{#if (isHiddenExotica item)}}{{displayName item}}{{else}}{{item.name}}{{/if}}" width="24" height="24"/></div>
+            {{!-- Exotica Identification: only the GM can fire an unidentified item. --}}
+            {{#if (isHiddenExotica item)}}
+            {{else if (isWeapon item)}}
+            <div class="item-image item-roll" title="attack"><img src="systems/vaarn/module/icons/d20.svg" title="attack" width="24" height="24"/></div>
+            <div class="item-image item-roll" title="damage"><img src="systems/vaarn/module/icons/crossed-sabres.svg" title="damage" width="24" height="24"/></div>
+            {{/if}}
+            <h4 class="item-control item-view {{#if (isItemBroken item)}}knave-encumbered{{/if}}">{{#if (isHiddenExotica item)}}{{displayName item}}{{else}}{{item.name}}{{#if (isUnidentified item)}} (unidentified){{/if}}{{/if}}</h4>
+            <div class="item-controls">
+              {{#if @root.isGM}}
+              <a class="item-control item-delete" title="Delete Item"><i class="fas fa-trash"></i></a>
+              {{/if}}
+            </div>
+          </li>
+        {{/each}}
+        </ol>
+      </div>
+    </div>
+  </div>
+</form>

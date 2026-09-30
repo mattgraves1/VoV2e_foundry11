@@ -1,0 +1,67 @@
+<!-- Vaarn: Running a Vault -->
+<p><strong>Generate Vault</strong> builds a whole vault for you: a journal with a page for every room, an encounter table for every level, and if you like a hex Scene for every level. Its rooms are not filled until you choose, so you can roll a room when the party walks into it. Only you can see the journal, its buttons and the map pins.</p>
+
+<h2>Generating a vault</h2>
+<p>Run <strong>Generate Vault</strong> from the Vaarn Macros compendium (chapter 7). Every field and button has a hover tip. The fields are:</p>
+<ul>
+  <li><strong>Setting</strong>: <em>Module Default</em> grows vaults like the book's. <em>Randomize</em> rolls the shape rules too. Any setting saved in this world is listed after these. Each run uses a new seed, so the same setting grows a different vault each time.</li>
+  <li><strong>Vault code</strong>: paste a code to grow that exact vault again. A code beats the Setting.</li>
+  <li><strong>Journal name</strong>: leave it blank to name the journal after the vault's Original Function.</li>
+  <li><strong>Shafts can be obstructed</strong>: lets the shafts between levels roll an obstruction, the way corridors do. The book only obstructs corridors, so leave this off unless you want it.</li>
+  <li><strong>Save code as</strong>: type a name and click <strong>Save Setting</strong> to keep the Vault code's rules, without its seed, in the Setting list for every GM of the world.</li>
+</ul>
+<p>Click <strong>Generate</strong> for the journal alone, or <strong>Generate with Scenes</strong> to make a Scene for each level as well. A card whispered to you links the journal, gives the room and level count, and gives the vault's code.</p>
+
+<h2>Advanced options: the Vault Settings Tuner</h2>
+<p><strong>Advanced options...</strong> opens the Tuner. It has every rule the vault grows by, with a preview of the result that redraws as you change them. You don't need it to run a vault; use it when you want a different kind of vault.</p>
+<ul>
+  <li><strong>Size</strong>: grow by the roll table until the vault stops or reaches the <strong>Room cap</strong>, or grow an exact number of <strong>Rooms per level</strong> and <strong>Levels</strong>.</li>
+  <li><strong>Connection roll</strong>: how many exits each room rolls for, and how often an exit is a shaft down.</li>
+  <li><strong>Shape rules</strong>: long straight corridors, loops against dead ends, rubble, and symmetry.</li>
+</ul>
+<p>A line under the preview counts the rooms, levels, loops and dead ends. A vault with more than one level gets a button for each level, to preview it. <strong>New seed</strong> keeps the rules and grows a new vault. <strong>Randomize</strong> rolls new shape rules. <strong>Module Default</strong> puts everything back. To start from a vault you already have, paste its code into <strong>Load a code</strong> and click <strong>Load</strong>. The Tuner has its own <strong>Save setting</strong>, <strong>Generate</strong> and <strong>Generate with Scenes</strong> buttons, and its own Journal name box.</p>
+
+<h2>The journal</h2>
+<p>The <strong>Overview</strong> page has the Vault Entrance, the Tunnels and the Original Function, rolled from the book's tables. Next come the levels: rooms per level, the entrance, the shafts, any obstructed passages, and a link to each level's encounter table. The vault's code is at the bottom.</p>
+<p>Each room has its own page, named by level and number (<em>L1 Room 4</em>). It shows the room's shape, floor and walls, its depth, its d12 type (uninhabited, lair, treasure, lair and treasure, or special), and its contents. Every exit is a link to the room it leads to. The entrance room says so.</p>
+<p>About 1 corridor in 12 is obstructed. An obstruction has its own page, linked from the rooms at both ends, with the book's Obstacle and Effect. If an obstacle is a hazard, its page has the hazard buttons from chapter 3.</p>
+
+<h2>Filling rooms as the party arrives</h2>
+<p>Nothing is made until you ask for it. A lair names its creature from the start, since the level's encounter table is built from it, and is marked <em>not yet spawned</em>. Treasure and special rooms are marked <em>not yet rolled</em> or <em>not yet created</em>. A room's page has a button for each part left to do:</p>
+<ul>
+  <li><strong>Spawn the lair (Depth N)</strong> makes the lair's creatures in <em>Generated Creatures</em>.</li>
+  <li><strong>Create the treasure room (Depth N)</strong> makes a container of loot in the Actors directory. Players can't see it until you give them access.</li>
+  <li>A special room offers the follow-up it needs, such as <strong>Create the book</strong>. A weapon, drug, mutation or other item goes in a GM-only container. A daemon goes in <em>Generated Creatures</em>. An oracle, shrine or anomaly is written straight onto the page.</li>
+</ul>
+<p>The result is written onto the page, linked to what it made, and the button goes away. Clicking twice does nothing extra. To fill everything ahead of time, use <strong>Roll every room</strong> or <strong>Roll level N</strong> on the Overview.</p>
+
+<h2>Encounters</h2>
+<p>Each level has an encounter table, <em>L1 Encounters</em> and so on. It is made from the creatures in that level's lairs, and Sentry Turrets if a room has them. A level with fewer than six is topped up to six from the book's Lair Rooms table for its depth. Its <strong>Roll an encounter</strong> button rolls the table and offers <strong>Spawn one</strong> of the creature it names.</p>
+<p>To have the Exploration Clock use the table, tell the system which level the party is on:</p>
+<ul>
+  <li>click <strong>The party is on this level: record it</strong> on the level's encounter page, or</li>
+  <li>pick the level from <strong>Party location</strong> in the clock window, shown while Where is Vault. It lists the current vault's levels. <strong>Other vault...</strong> widens the list to every vault, and <strong>Clear</strong> unsets it, or</li>
+  <li>activate the level's Scene.</li>
+</ul>
+<p>After that, any Encounter the clock rolls in a Vault, whether from a turn or a night without a secure campsite, names a creature from that level's table and adds a Spawn one button to the card. An Omen names the creature whose signs the party finds. When the party is done with a vault, file its journal in a folder called <em>Explored Vaults</em> and it drops off the Party location list.</p>
+
+<h2>Scenes</h2>
+<p><strong>Generate with Scenes</strong> makes one hex Scene per level, in a <em>Vault Scenes</em> folder. To add Scenes to a vault made without them, click <strong>Make a Scene per level</strong> on its Overview. (A vault made before Scenes existed has to be generated again.)</p>
+<ul>
+  <li>The map is a plain outline of the rooms and corridors. Its walls and doors are real, so tokens can't walk or see through them.</li>
+  <li>The Scene starts dark with fog on, so players only see what their tokens can see. Give their tokens a light source or vision.</li>
+  <li>Each room has a map pin linked to its page, and so does each obstructed corridor: a hazard pin named for the obstacle, halfway along it. Only you see the pins, and they show even where a selected token cannot see.</li>
+  <li><strong>Seeing the pins:</strong> Foundry shows pins only while the <strong>Journal Notes</strong> tool (the bookmark icon, last in the left toolbar) is active. To keep them on with any tool, click <strong>Toggle Notes Display</strong> in that tool's options.</li>
+  <li><strong>Pin to page:</strong> double-click a pin to open its room. <strong>Page to pin:</strong> in the vault journal, right-click a room in the page list and choose <strong>Jump To Pin</strong>; the map pans there. It works on the Scene you are viewing.</li>
+  <li>New Scenes are not active and not in the navigation bar. Activate one when the party goes in. Level 1 starts at the entrance, and each lower level starts where the shaft lands.</li>
+</ul>
+<p>Activating a level's Scene also records that level as the party's location, so its encounter table is used.</p>
+
+<h2>Try it</h2>
+<ol>
+  <li>Run <strong>Generate Vault</strong>, leave Setting on Module Default, and click <strong>Generate with Scenes</strong>. Open the journal from the whispered card.</li>
+  <li>Open a lair or treasure room's page and click its button. Find what it made.</li>
+  <li>Open <em>L1 Encounters</em>, click <strong>Roll an encounter</strong>, then <strong>Spawn one</strong>.</li>
+  <li>Activate the level 1 Scene from the <em>Vault Scenes</em> folder. Open the Exploration Clock, set Where to Vault, and check that Party location names that level.</li>
+  <li>Click <strong>Travel to another location</strong> until a turn rolls an Omen or an Encounter, and read the creature it names on the whispered card.</li>
+</ol>

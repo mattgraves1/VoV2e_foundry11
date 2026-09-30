@@ -1,0 +1,64 @@
+<!-- Vaarn: Setting Up a Game -->
+<p>This guide is for the Referee. It covers the tools players don't see: the compendiums, the settings, the clock, combat and the generators. Players have their own <em>Player's Guide</em>.</p>
+
+<h2>The first launch</h2>
+<p>Launch the world and log in as a Gamemaster. On the first launch the system fills its compendiums from the book and posts a notice saying what it built. Wait for it before opening them.</p>
+<p><strong>Make a Scene and activate it before anything else.</strong> A new world has none, and without one the system's tools below don't appear, players can't drop items, and there is nowhere to put tokens. Any Scene will do.</p>
+<p><strong>Lighting and vision are on by default in Foundry.</strong> A new Scene has <em>Token Vision</em> ticked, so a player sees only what their own tokens see, and <em>Global Illumination</em> unticked, so nothing is lit. Characters' tokens see what is lit and nothing else. Pick one, in the Scene's settings, Lighting tab:</p>
+<ul>
+  <li><strong>No lighting at all:</strong> untick Token Vision. Everyone sees the whole map, and tokens' vision does nothing.</li>
+  <li><strong>Daylight with line of sight:</strong> tick Global Illumination. Tokens see everything in line of sight, stopped by walls.</li>
+  <li><strong>Darkness:</strong> leave both as they are and give the party lights. The vault Scenes that Generate Vault makes are set up this way.</li>
+</ul>
+<p>As the Referee you see the whole map, at the Scene's darkness. Selecting a token switches your view to what that token sees, which in the dark can be almost nothing. Press <strong>Esc</strong>, or click empty map, to see the whole map again.</p>
+<ul>
+  <li><strong>Bestiary</strong>, <strong>Pets</strong>, <strong>Steeds</strong> and <strong>Vehicles</strong>: creatures ready to drag onto the map.</li>
+  <li><strong>Vaarn RollTables</strong>: the book's tables.</li>
+  <li><strong>Vaarn Items</strong>: armour, weapons, codices, exotica, implants and gear.</li>
+  <li><strong>Vaarn Macros</strong>: the generators (chapter 7).</li>
+  <li><strong>Vaarn Player's Guide</strong> and <strong>Vaarn Referee's Guide</strong>.</li>
+</ul>
+<p>Players see only the Player's Guide. Every other compendium is yours alone. To let players browse one, right-click it and choose <strong>Configure Ownership</strong>.</p>
+<p>If the notice says token art is not installed, creatures use Foundry's default token image. The system works the same either way.</p>
+<p><strong>After updating the system</strong>, if something new doesn't appear for a player, have them press <strong>Ctrl+Shift+R</strong> once. A plain refresh can keep the browser's old copy of the system.</p>
+<p>The macros and both guides update themselves every time you load the world, so a new version of the system brings them up to date. The creature, table and item compendiums are built only when they are empty. To rebuild one, right-click it, choose <strong>Toggle Edit Lock</strong>, delete everything in it, and reload the world. Do the same if the first-launch notice says the build had errors.</p>
+
+<h2>Players and their characters</h2>
+<ul>
+  <li><strong>Character creation.</strong> Anyone can click <strong>Create Character (Vaarn)</strong> in the Actors sidebar. A player's character is made by your client, so you must be logged in when they click Create Character. They own it once it's made, and Foundry's <em>Create New Actors</em> permission isn't needed. You can also run the creator yourself and pick the player in <strong>Assign to Player</strong> at the last step.</li>
+  <li><strong>Assigning a character.</strong> Assign to Player makes the player the character's owner. To make it their default character as well, set it in their User Configuration. Until a player has a default character, Foundry opens their User Configuration every time they load the world.</li>
+  <li><strong>Placing tokens.</strong> Players drag their own characters, and companions they own, from the Actors tab onto the scene they are viewing. Your client places the token, so you must be logged in; Foundry's <em>Create New Tokens</em> permission isn't needed. They can't place anything they don't own, or anything from a compendium. They remove their own tokens the same way, with the Delete key, and you must be logged in for that too.</li>
+  <li><strong>Tokens.</strong> New characters' tokens are Friendly, show their HP bar to their owner, and have vision: a player sees only what their token sees, and in the dark only what a light reveals, so a dark Scene needs torches or light sources. They are also linked to the character, so damage and conditions on the map land on the sheet. A character made before this version may not be. Open its Prototype Token settings and tick <em>Link Actor Data</em> once.</li>
+  <li><strong>Portraits and token art.</strong> Foundry keeps its file picker from ordinary Players, so a player can't change their character's portrait or open their token's settings. To let them, make them <em>Trusted Players</em> in User Management. To let them upload their own images as well, also tick <em>Upload New Files</em> for Trusted Player in Configure Permissions.</li>
+</ul>
+
+<h2>Stay connected during play</h2>
+<p>Players can't change creatures or cards they don't own. The system passes those changes, such as a player's damage to a monster, to your client, which applies them. So <strong>a GM must be logged in</strong> while players attack or press card buttons. If no GM is connected, the player sees a warning that the change could not be applied, and nothing happens.</p>
+
+<h2>Settings</h2>
+<p>Under <strong>Game Settings → Configure Settings</strong>:</p>
+<ul>
+  <li><strong>Sheet Theme</strong> and <strong>Sheet Heading Font</strong>: the colours and heading font of the sheets. Each person picks their own; it only changes their screen.</li>
+  <li><strong>Initiative system</strong>: one of the book's four options. Side-based is the default. A change takes effect from the next round.</li>
+  <li><strong>Edit Factions</strong> and <strong>Edit Relationships</strong>: add your own factions, hide the book's, and set who counts as an ally or enemy. The book's own entries are never changed.</li>
+  <li><strong>Edit Gambits</strong>: add, hide or reword gambits.</li>
+</ul>
+
+<h2>Your tools</h2>
+<p>Four buttons are added to the Token controls on the left. Like all scene controls, they only appear while a Scene is shown:</p>
+<ul>
+  <li><strong>Exploration Clock</strong> (hourglass): time outside combat. Chapter 3.</li>
+  <li><strong>Desert Weather</strong> (cloud and sun): the day's weather. Chapter 4.</li>
+  <li><strong>Factions of Vaarn</strong> (flag): the factions and their relationships. Chapter 6.</li>
+  <li><strong>Active Effects</strong> (checklist): every timed effect, affliction and reminder in play. Chapter 5. Players can open it too.</li>
+</ul>
+
+<h2>Dropped Items</h2>
+<p>The system makes a <strong>Dropped Items</strong> actor the first time you log in. When a character drops something, it goes there, and anyone can take it back out. You can rename it. There must be an active scene for players to drop things.</p>
+
+<h2>Try it</h2>
+<ol>
+  <li>Create and activate a Scene, then open the Bestiary compendium and drag a creature onto it.</li>
+  <li>In Configure Settings, try a different Sheet Theme, then set it back.</li>
+  <li>Make a character with <strong>Create Character (Vaarn)</strong> and assign it to a player.</li>
+</ol>
