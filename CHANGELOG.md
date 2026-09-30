@@ -3,6 +3,17 @@
 Each release adds its own section at the top, written by hand and grouped
 by feature.
 
+## 0.1.1
+
+### Fixes
+- A mutation or implant with uses per day now starts with them full. A new
+  Cacogen's Ink Ducts showed "(0 left)" until the first rest; it now shows
+  one use per Level from character creation, and the same holds for items
+  added any other way.
+- The book's page placeholder "p.xx" no longer appears in descriptions,
+  table results, creature notes or chat. Text already in a world, or in a
+  compendium built by 0.1.0, keeps it until it leaves the compendium.
+
 ## 0.1.0 (first public release)
 
 The first release of the Vaults of Vaarn system. It is a fork of the

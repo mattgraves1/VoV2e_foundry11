@@ -1,4 +1,5 @@
 import { depletionChance, expectedUsesRemaining } from "./usage-die.js";
+import { dailyPoolSize } from "../actor/daily-pool.js";
 
 /**
  * Extend the basic Item with some very simple modifications.
@@ -42,5 +43,22 @@ export class KnaveItem extends Item {
         data.usageDie.statusLine2 = `~${data.usageDie.expectedUses} uses left on average`;
       }
     }
+  }
+
+  /**
+   * An Item with a daily use pool (daily-pool.js) arrives on an actor FULL.
+   * The template default is 0, and until 2026-09-30 only a Long Rest or the
+   * refresh icon ever filled it, so a new Cacogen's Ink Ducts read "0 left"
+   * from character creation. Here rather than in chargen-app.js so every way
+   * an Item reaches an actor - creation, a generator, a grant, a drag from a
+   * compendium - gets the same answer. A source that already carries uses is
+   * left alone (chargen's Trauma-Response Rig passes its own 1).
+   */
+  async _preCreate(data, options, user) {
+    if(await super._preCreate(data, options, user) === false) return false;
+    if(!(this.parent instanceof Actor)) return;
+    const size = dailyPoolSize(this.parent, this);
+    if(size !== null && (this.system.usesRemaining ?? 0) <= 0)
+      this.updateSource({ "system.usesRemaining": size });
   }
 }

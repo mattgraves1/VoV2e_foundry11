@@ -3,7 +3,7 @@
 A game system for playing **Vaults of Vaarn** (second edition) in Foundry VTT.
 
 - **Foundry VTT compatibility:** v11 (verified on 11.302)
-- **Version:** 0.1.0
+- **Version:** 0.1.1
 - **Translation support:** none
 
 It started as a fork of the unofficial Knave system for Foundry, and still
@@ -23,7 +23,7 @@ toxins, the Vaarn combat round, travel, weather and the rest.
    ```
 
 **Or from the zip:** close Foundry, or return to its setup screen, and unzip
-`vaarn-0.1.0.zip` into Foundry's `Data/systems/` folder, so that you end up
+the release zip (`vaarn-<version>.zip`) into Foundry's `Data/systems/` folder, so that you end up
 with `Data/systems/vaarn/system.json`. To find the `Data` folder, open
 Foundry's setup screen, go to **Configuration**, and look at **User Data
 Path**. A system installed from the zip can still be updated from inside

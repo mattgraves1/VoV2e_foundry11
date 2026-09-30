@@ -65,6 +65,7 @@ import { registerAfflictionCardButtons, onTreatmentComplete } from "./actor/affl
 import { registerCompelledSaveCardButtons, postSaveCardsToTargets, opposedTarget } from "./combat/compelled-save.js";
 import { registerTrapCardButtons } from "./combat/trap-card.js";
 import { registerRollCardVisibility } from "./actor/roll-card-visibility.js";
+import { registerPageRefStripping } from "./text/page-refs.js";
 import { registerGambitCardButtons } from "./combat/gambit-card.js";
 import { registerThemeSettings, applyTheme } from "./ui/theme.js";
 import { registerCorrosionCardButtons, isCorroded } from "./combat/corrosion-card.js";
@@ -1518,6 +1519,7 @@ registerCompelledSaveCardButtons();
 registerTrapCardButtons();
 // Roll Card Visibility - a private Vaarn table's card goes to the GM alone.
 registerRollCardVisibility();
+registerPageRefStripping();
 registerGambitCardButtons();
 registerCorrosionCardButtons();
 registerGiftApplyButtons();
