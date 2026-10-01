@@ -20,6 +20,7 @@
  */
 
 import { withUnlocked } from "./pack-build.js";
+import { stableId } from "./stable-id.js";
 
 const GUIDES = [
   { pack: "vaarn.guide-players", dir: "systems/vaarn/guide/players", name: "Player's Guide" },
@@ -55,9 +56,9 @@ export async function readGuidePages(dir)
   return out.map((p, i) => ({ ...p, sort: (i + 1) * 100000 }));
 }
 
-function pageData(p)
+function pageData(p, pack)
 {
-  return { name: p.name, type: "text", sort: p.sort, title: { show: true, level: 1 },
+  return { _id: stableId(pack, p.file), name: p.name, type: "text", sort: p.sort, title: { show: true, level: 1 },
            text: { format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML, content: p.content },
            flags: { vaarn: { sourceFile: p.file } } };
 }
@@ -80,8 +81,9 @@ async function syncGuide(guide)
     if(!entry)
     {
       if(!pages.length) return counts;
-      await JournalEntry.create({ name: guide.name, pages: pages.map(pageData),
-                                  flags: { vaarn: { sourceDir: guide.dir } } }, { pack: pack.collection });
+      await JournalEntry.create({ _id: stableId(pack.collection, guide.dir), name: guide.name,
+                                  pages: pages.map(p => pageData(p, pack.collection)),
+                                  flags: { vaarn: { sourceDir: guide.dir } } }, { pack: pack.collection, keepId: true });
       counts.created = pages.length;
       return counts;
     }
@@ -98,7 +100,7 @@ async function syncGuide(guide)
     for(const p of pages)
     {
       const have = byFile.get(p.file);
-      if(!have) { toCreate.push(pageData(p)); continue; }
+      if(!have) { toCreate.push(pageData(p, pack.collection)); continue; }
       byFile.delete(p.file);
       const same = have.name === p.name && have.sort === p.sort
         && String(have.text?.content ?? "").replace(/\r\n?/g, "\n").trim() === p.content;
@@ -106,7 +108,7 @@ async function syncGuide(guide)
     }
     for(const orphan of byFile.values()) toDelete.push(orphan.id);
 
-    if(toCreate.length) await entry.createEmbeddedDocuments("JournalEntryPage", toCreate);
+    if(toCreate.length) await entry.createEmbeddedDocuments("JournalEntryPage", toCreate, { keepId: true });
     if(toUpdate.length) await entry.updateEmbeddedDocuments("JournalEntryPage", toUpdate);
     if(toDelete.length) await entry.deleteEmbeddedDocuments("JournalEntryPage", toDelete);
     Object.assign(counts, { created: toCreate.length, updated: toUpdate.length, deleted: toDelete.length });

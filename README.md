@@ -3,7 +3,7 @@
 A game system for playing **Vaults of Vaarn** (second edition) in Foundry VTT.
 
 - **Foundry VTT compatibility:** v11 (verified on 11.302)
-- **Version:** 0.1.1
+- **Version:** 0.1.2
 - **Translation support:** none
 
 It started as a fork of the unofficial Knave system for Foundry, and still
@@ -26,8 +26,9 @@ toxins, the Vaarn combat round, travel, weather and the rest.
 the release zip (`vaarn-<version>.zip`) into Foundry's `Data/systems/` folder, so that you end up
 with `Data/systems/vaarn/system.json`. To find the `Data` folder, open
 Foundry's setup screen, go to **Configuration**, and look at **User Data
-Path**. A system installed from the zip can still be updated from inside
-Foundry later.
+Path**. When replacing an older version this way, delete the old `vaarn`
+folder first, or its compendiums keep the old content. A system installed
+from the zip can still be updated from inside Foundry later.
 
 **Then:**
 
@@ -50,6 +51,12 @@ Foundry later.
   The macros are for the Referee; players do not see them.
 - **Settings:** under **Configure Settings**, pick a colour palette and
   heading font for the sheets, and set up factions and gambits.
+
+## Editing the compendiums
+
+Foundry replaces the system's compendiums on every update, so an edit made
+inside one is lost. To change a creature, table or item, drag it into your
+world first and edit the copy.
 
 ## No token art
 

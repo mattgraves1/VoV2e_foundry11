@@ -55,6 +55,7 @@ import { tokenPath, artAvailable } from "./actor/bestiary-art.js";
 import { makeFolderResolver, buildDescription, desiredResults } from "./actor/rolltable-build.js";
 import { buildPackItems } from "./item/pack-items.js";
 import { MUSIC_PLAYLIST } from "./music-data.js";
+import { stableId, withStableIds } from "./stable-id.js";
 
 const BESTIARY_PACK = "vaarn.bestiary";
 const PETS_PACK = "vaarn.pets";
@@ -116,7 +117,7 @@ export async function buildBestiary(pack, useArt)
 
   // One createDocuments call rather than 157 — this runs during world load,
   // where the difference is felt.
-  await Actor.createDocuments(docs, { pack: pack.collection });
+  await Actor.createDocuments(withStableIds(pack.collection, docs), { pack: pack.collection, keepId: true });
   return docs.length;
 }
 
@@ -174,7 +175,7 @@ export function buildSteedDoc(entry)
 export async function buildPets(pack)
 {
   const docs = PETS.map(buildPetDoc);
-  await Actor.createDocuments(docs, { pack: pack.collection });
+  await Actor.createDocuments(withStableIds(pack.collection, docs), { pack: pack.collection, keepId: true });
   return docs.length;
 }
 
@@ -195,7 +196,7 @@ export async function buildPets(pack)
 export async function buildSteeds(pack)
 {
   const docs = STEEDS.map(buildSteedDoc);
-  await Actor.createDocuments(docs, { pack: pack.collection });
+  await Actor.createDocuments(withStableIds(pack.collection, docs), { pack: pack.collection, keepId: true });
   return docs.length;
 }
 
@@ -209,7 +210,7 @@ export async function buildSteeds(pack)
 export async function buildVehicles(pack)
 {
   const docs = VEHICLES.map(buildVehicleDoc);
-  await Actor.createDocuments(docs, { pack: pack.collection });
+  await Actor.createDocuments(withStableIds(pack.collection, docs), { pack: pack.collection, keepId: true });
   return docs.length;
 }
 
@@ -230,7 +231,7 @@ export async function buildRollTables(pack)
     results: desiredResults(entry)
   }));
 
-  await RollTable.createDocuments(docs, { pack: pack.collection });
+  await RollTable.createDocuments(withStableIds(pack.collection, docs), { pack: pack.collection, keepId: true });
   return docs.length;
 }
 
@@ -257,7 +258,7 @@ export async function buildItems(pack)
 
   const docs = groups.flatMap(g => g.docs.map(doc => ({ ...doc, folder: folderIds.get(g.folder) })));
 
-  await Item.createDocuments(docs, { pack: pack.collection });
+  await Item.createDocuments(withStableIds(pack.collection, docs), { pack: pack.collection, keepId: true });
   return docs.length;
 }
 
@@ -444,7 +445,7 @@ export async function syncMacroPack()
     const have = byFile.get(s.file);
     if(!have)
     {
-      toCreate.push({ name: s.name, type: "script", scope: "global", img: MACRO_ICON,
+      toCreate.push({ _id: stableId(pack.collection, s.file), name: s.name, type: "script", scope: "global", img: MACRO_ICON,
                       command: s.command, flags: { vaarn: { sourceFile: s.file } } });
       continue;
     }
@@ -458,7 +459,7 @@ export async function syncMacroPack()
   if(toCreate.length || toUpdate.length || toDelete.length)
     await withUnlocked(pack, async () =>
     {
-      if(toCreate.length) await Macro.createDocuments(toCreate, { pack: pack.collection });
+      if(toCreate.length) await Macro.createDocuments(toCreate, { pack: pack.collection, keepId: true });
       if(toUpdate.length) await Macro.updateDocuments(toUpdate, { pack: pack.collection });
       if(toDelete.length) await Macro.deleteDocuments(toDelete, { pack: pack.collection });
     });
@@ -524,7 +525,7 @@ export async function syncMusicPack()
   await withUnlocked(pack, async () =>
   {
     if(ours.length) await Playlist.deleteDocuments(ours.map(d => d.id), { pack: pack.collection });
-    await Playlist.create(want, { pack: pack.collection });
+    await Playlist.create({ ...want, _id: stableId(pack.collection, "playlist") }, { pack: pack.collection, keepId: true });
   });
   return { tracks: want.sounds.length, rebuilt: ours.length > 0 };
 }

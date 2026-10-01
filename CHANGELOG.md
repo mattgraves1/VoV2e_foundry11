@@ -1,7 +1,18 @@
 # Changelog
 
 Each release adds its own section at the top, written by hand and grouped
-by feature.
+by feature. Changes not yet released are listed under Unreleased.
+
+## Unreleased
+
+## 0.1.2
+
+### Fixes
+- Links to compendium entries now survive updates. A link to a creature,
+  table, item or guide page in your journals, and a world creature's link
+  to the compendium entry it came from, kept breaking after each update,
+  because the compendiums were rebuilt with new ids. Links made on 0.1.1 or
+  earlier break one last time on this update.
 
 ## 0.1.1
 
