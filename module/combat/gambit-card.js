@@ -158,7 +158,7 @@ export async function pickGambit(message, rowIndex, forgo, targetIndex = 0)
     if (g.applies)
     {
       const a = await declaredApplySpec(g.applies, source);
-      if (a) { await applyEffectToActor(target, a); lines.push(`<b>${target.name}</b> is <b>${a.name}</b> — on their Active Effects board for ${a.rounds} combat round${a.rounds === 1 ? "" : "s"}.`); }
+      if (a) { await applyEffectToActor(target, a); lines.push(`<b>${tokenDoc?.name ?? target.name}</b> is <b>${a.name}</b> — on their Active Effects board for ${a.rounds} combat round${a.rounds === 1 ? "" : "s"}.`); }
     }
     if (g.targetSave.onFail?.armourLoss)
     {

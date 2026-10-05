@@ -591,7 +591,7 @@ export const BESTIARY = [
     ],
     routines: [[0],[1]],
     rules: [
-      {"name":"Doom Song","text":"Within earshot, all creatures are Deprived. Saves and to-hit rolls made with DIS.","encounterEffect":{"conditions":["Deprived","disSavesAndAttacks"],"text":"Within earshot of the Doom Song: Deprived, and every Save and to-hit roll is made with DIS."}},
+      {"name":"Doom Song","text":"Within earshot, all creatures are Deprived. Saves and to-hit rolls made with DIS.","encounterEffect":{"conditions":["Deprived","disSavesAndAttacks"],"text":"Within earshot of the Doom Song: Deprived, and every Save and to-hit roll is made with DIS.","verb":"sings","ends":"when the song stops"}},
     ],
     bio: "<p>Heralds of the End. Nihilist mystics seeking to hasten the black terminus of all living things. Their ghastly dirges are amplified by vocoders installed in their deaths-head masks.</p><p><b>Doom Song:</b> Within earshot, all creatures are Deprived. Saves and to-hit rolls made with DIS.</p>" },
 
@@ -1996,6 +1996,17 @@ export const BESTIARY = [
     ],
     bio: "<p>Shambling blind mound of pregnant flesh. On death, births d6 Foetal Predators (LVL 1, AV 13, d6 bite). Fire prevents this.</p>" },
 
+  // Added 2026-10-04 (Matt, Generated Gear and Attacks as Items): the Lizard
+  // Rancher NPC career's "Tame War Lizard (Level 1, AV 14, d6 bite)", given an
+  // entry so the career's Item can place it. HP by Level (x4); Morale +5 is
+  // Matt's, not the book's - "a GM can set this to whatever they want".
+  { name: "War Lizard", types: ["biological"], level: 1, hp: 4, av: 14, moraleBonus: 5, enc: "-",
+    atk: "Bite (d6)",
+    abilities: [
+      {"name":"Bite","carried":false,"text":"Bite (d6)","effects":[{"kind":"damage","dice":"1d6"}]},
+    ],
+    bio: "<p>A big lizard broken to the saddle and the fight, raised by the Lizard Ranchers of the wastes.</p>" },
+
   { name: "Weekling", types: ["biological"], level: 1, hp: 4, av: 10, moraleBonus: 0, enc: "d10",
     atk: "Unarmed (d4)",
     abilities: [
@@ -2026,7 +2037,7 @@ export const BESTIARY = [
     atk: "Slam (d8) + Spore Spray (d10, fungal, blast)",
     abilities: [
       {"name":"Slam","carried":false,"text":"Slam (d8)","effects":[{"kind":"damage","dice":"1d8"}]},
-      {"name":"Spore Spray","ranged":true,"carried":false,"text":"Spore Spray (d10, fungal, blast)","effects":[{"kind":"damage","dice":"1d10","damageType":"blast"}],"damageTypes":["blast"]},
+      {"name":"Spore Spray","ranged":true,"carried":false,"text":"Spore Spray (d10, fungal, blast)","effects":[{"kind":"damage","dice":"1d10","damageType":"blast"}],"damageTypes":["fungal","blast"]},
     ],
     routines: [[0,1]],
     rules: [

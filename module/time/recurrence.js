@@ -312,6 +312,9 @@ export async function applyTickLosses(actor, def, ticks = 1)
   // Container Slot Capacity (2026-09-20): slots granted by the same roll that
   // took the HP off, for Labyrinth Pox's "an equal number".
   let cargoGain = 0;
+  // HP damage (a generated monster's Parasite, 2026-10-04): dealt after the
+  // write, through the sheet's HP funnel, so wounds and death apply as for any hit.
+  let hpDamage = 0;
   const lines = [];
 
   for (const a of spec)
@@ -333,6 +336,11 @@ export async function applyTickLosses(actor, def, ticks = 1)
     {
       abilities[a.key].woundDamage = (Number(abilities[a.key].woundDamage) || 0) + total;
       lines.push(`${a.label} damage +${total} (total ${abilities[a.key].woundDamage})`);
+    }
+    else if (a.target === "hp")
+    {
+      hpDamage += total;
+      lines.push(`${a.label} -${total}`);
     }
     else if (a.target === "maxHp")
     {
@@ -375,6 +383,11 @@ export async function applyTickLosses(actor, def, ticks = 1)
       update["system.health.value"] = maxHp;
   }
   await actor.update(update, death ? { [MAX_HP_DEFERRED]: true } : {});
+  if (hpDamage > 0)
+  {
+    const hp = Number(actor.system.health?.value) || 0;
+    await actor.sheet?._resolveHPChange(actor, hp, hp - hpDamage);
+  }
   return { lines, death };
 }
 
@@ -950,10 +963,13 @@ function tickBlock({ actor, entry, ticks, index }, now)
     ? `<button type="button" class="vaarn-recur-becomes" data-actor-id="${actor.id}" data-creature="${def.threshold.becomes}">`
       + `${actor.name} becomes a ${def.threshold.becomes}</button>`
     : "";
+  // A threshold that STOPS the recurrence (a generated monster's Parasite, 2026-10-04):
+  // once crossed nothing is owed, so no Apply button, and announceTicks removes it.
+  const stops = !!(crossed && def?.threshold?.stops);
   const threshold = crossed
-    ? `<div class="vaarn-recur-threshold"><b>Threshold reached:</b> ${crossed}${becomes}</div>`
+    ? `<div class="vaarn-recur-threshold"><b>Threshold reached:</b> ${crossed}${becomes}${stops ? " <i>It has ended.</i>" : ""}</div>`
     : "";
-  const controls = [applyButton(actor, def, ticks, index), itemButton(actor, entry, def, ticks, index)]
+  const controls = stops ? "" : [applyButton(actor, def, ticks, index), itemButton(actor, entry, def, ticks, index)]
     .filter(Boolean).join(" ");
 
   return `<li class="vaarn-recur-entry">
@@ -1010,6 +1026,10 @@ export async function announceTicks(due, now)
       flags: { [SCOPE]: { recurrenceTick: true } }
     });
   }
+  // A threshold that stops its recurrence, once announced, removes it (2026-10-04).
+  for (const d of due)
+    if (recurrenceByKey(d.entry.recurrenceKey)?.threshold?.stops && thresholdReached(d.actor, d.entry))
+      await stopRecurrence(d.actor, d.entry.id);
 }
 
 /**

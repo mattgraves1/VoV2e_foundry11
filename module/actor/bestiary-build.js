@@ -245,6 +245,12 @@ export function saveSentence(e)
  * victim is held: {dice} HP or {loss} ability each round, and an escape save
  * the victim may try on their turn. apply-to-target.js's startHold reads it.
  */
+/** What a hold does each round, in words: its damage, its ability loss, or its effect (Mind Control). */
+export function holdWhat(h)
+{
+  return h?.dice ? `${h.dice} damage each round` : h?.loss ? `${h.loss.dice} ${String(h.loss.ability).toUpperCase()} each round` : (h?.effect ?? "held");
+}
+
 export function holdSpec(h, where)
 {
   if(!h) return null;
@@ -253,6 +259,10 @@ export function holdSpec(h, where)
     ...(h.dice ? { dice: String(h.dice) } : {}),
     ...(h.loss ? { loss: { ability: checkedAbility(h.loss.ability, h.loss), dice: String(h.loss.dice) } } : {}),
     ...(h.drain ? { drain: true } : {}),
+    // A hold that does no damage, only an EFFECT until the escape save - a
+    // Daemon's Mind Control, "no expiration, the target saves each round"
+    // (Generated Gear and Attacks as Items, RULED 2026-10-04 by Matt).
+    ...(h.effect ? { effect: String(h.effect) } : {}),
     // Breathing and Suffocation (2026-09-27): what the hold's per-round damage
     // is - the Snare's drowning, Stolen Breath's and the Swallow's suffocation.
     ...(h.damageTypes?.length ? { damageTypes: [...h.damageTypes] } : {}),
@@ -273,7 +283,11 @@ function saveFlag(saves)
                            // DEALS HP DAMAGE - "DEX Save vs 2d6". compelled-save.js rolls and deals it.
                            // Wound-Table Resolution wiring, RULED 2026-09-25 (Matt): a failed save
                            // GIVES A NAMED WOUND - the Grimpet's Latch. A key NAMED_WOUNDS lacks throws.
-                           ...((e.onFail?.eatsRation || e.onFail?.damage || e.onFail?.hold || e.onFail?.wound || e.onFail?.graft) ? { onFail: {
+                           // A RANDOM MUTATION a failed save gives - Generate Monster's Cause
+                           // Mutation (Generated Gear and Attacks as Items, RULED 2026-10-04 by
+                           // Matt: added at once, as Resurrection adds one). compelled-save.js rolls it.
+                           ...((e.onFail?.eatsRation || e.onFail?.damage || e.onFail?.hold || e.onFail?.wound || e.onFail?.graft || e.onFail?.mutation) ? { onFail: {
+                             ...(e.onFail.mutation ? { mutation: true } : {}),
                              ...(e.onFail.wound ? { wound: checkedNamedWound(e.onFail.wound, `save vs ${e.vs}`) } : {}),
                              // A LIMB GRAFTED ON - the Fleshwarp's Graft, RULED 2026-09-26 (Matt).
                              // The creature named must carry a graftedToHost rule, or the build throws.
@@ -420,7 +434,7 @@ export function conditionAppliesOf(a, rules = [])
 function itemFlags({ saves = [], applies = [], abilityDamage = [], abilityTick = [], escalating = [],
                      heals = [], drains = [], maxHPLoss = [], tempHp = [], takesRation = [], sporeDepletion = false,
                      armourLoss = 0, avAsIf = 0, toHit = {}, holdOnHit = null, woundOnHit = null, woundOnDamage = null,
-                     surgicalArray = false, typedDice = [], hitProgression = null, levelGain = null } = {})
+                     surgicalArray = false, typedDice = [], hitProgression = null, levelGain = null, woundRoll = null, destroyItemRoll = null } = {})
 {
   // To-Hit Resolution Override wiring, RULED 2026-09-25 (Matt): a declared
   // auto-hit rolls nothing; an advantage effect naming creature types is the
@@ -438,6 +452,13 @@ function itemFlags({ saves = [], applies = [], abilityDamage = [], abilityTick =
   // Flabmonger's Lipoinduction.
   if(woundOnHit) vaarn.woundOnHit = { atTotal: woundOnHit.atTotal == null ? null : Number(woundOnHit.atTotal),
     wound: checkedNamedWound(woundOnHit.wound, "woundOnHit") };
+  // A ROLL ON THE WOUNDS TABLE for each character hit - Generate Monster's Cause
+  // Wound, "roll 2d8 on Wounds table" (RULED 2026-10-04 by Matt: characters only,
+  // the 2d8 the negative-HP row that picks the wound, as the Surgical Array's 2d6).
+  if(woundRoll) vaarn.woundRoll = String(woundRoll);
+  // A d20 that NAMES the item in that slot for the Referee - Destroy Item
+  // (RULED 2026-10-04: adjudicated only, nothing is deleted).
+  if(destroyItemRoll) vaarn.destroyItemRoll = String(destroyItemRoll);
   // A named wound on each hit that DEALS DAMAGE - the Deathblight Husk's
   // Accursed Knife (RULED 2026-09-25, Matt: "tie this to the damage").
   if(woundOnDamage) vaarn.woundOnDamage = checkedNamedWound(woundOnDamage, "woundOnDamage");
@@ -514,6 +535,11 @@ function itemFlags({ saves = [], applies = [], abilityDamage = [], abilityTick =
  */
 function armourLossOf(a)
 {
+  // ROLLED armour loss (Generated Gear and Attacks as Items, RULED 2026-10-04 by
+  // Matt): Generate Monster's Acid Spray takes "d3 AV". An avChange declaring
+  // `lossDice` is carried as that dice string, and the sheet rolls it per hit.
+  const dice = (a.effects || []).find(e => e.kind === "avChange" && e.lossDice)?.lossDice;
+  if(dice) return String(dice);
   return (a.effects || []).filter(e => e.kind === "avChange" && Number(e.amount) < 0)
     .reduce((n, e) => n - Number(e.amount), 0);
 }
@@ -619,10 +645,11 @@ function attacksFromAbilities(abilities, rules = [])
       if(e.kind === "abilityDamage" && e.perRound)
         notes.push(`<b>${(e.dice || e.flat)} ${e.ability.toUpperCase()} damage each round</b> to a target it hits - the first with the damage roll, then from the round card until it is removed from the target's board.`);
       if(e.kind === "rider") notes.push(`<b>Also:</b> ${e.name}`);
-      if(e.kind === "condition") notes.push(`<b>Inflicts:</b> ${conditionByKey(e.condition).label}.`);
+      // A condition effect may name a defined condition or INFLICT a rule (a Daemon's Parasite Seed, 2026-10-04).
+      if(e.kind === "condition") notes.push(`<b>Inflicts:</b> ${conditionByKey(e.condition)?.label ?? e.inflicts}.`);
     }
     const armourLoss = armourLossOf(a), avAsIf = avAsIfOf(a);
-    const holdNote = h => h ? `<b>Holds the target:</b> ${h.dice ? h.dice + " damage" : h.loss.dice + " " + h.loss.ability.toUpperCase()} each round from the round card; ${h.escape.ability.toUpperCase()} save to ${h.escape.by} on their turn.` : null;
+    const holdNote = h => h ? `<b>Holds the target:</b> ${holdWhat(h)}, from the round card; ${h.escape.ability.toUpperCase()} save to ${h.escape.by} on their turn.` : null;
     if(a.hold) notes.push(holdNote(holdSpec(a.hold, a.name)));
     for(const e of (a.effects || []).filter(e => e.kind === "save" && e.onFail?.hold)) notes.push("On a failed save - " + holdNote(holdSpec(e.onFail.hold, a.name)));
     if(armourLoss) notes.push(`<b>-${armourLoss} AV</b> to the armour of a target it hits, applied with the damage roll.`);
@@ -706,6 +733,7 @@ function attacksFromAbilities(abilities, rules = [])
                      sporeDepletion: (a.effects || []).some(e => e.kind === "sporeDepletion"),
                      armourLoss, avAsIf, toHit: weaponToHitFlags(a), holdOnHit: holdSpec(a.hold, a.name),
                      woundOnHit: a.woundOnHit ?? null, woundOnDamage: a.woundOnDamage ?? null, surgicalArray: !!a.surgicalArray,
+                     woundRoll: a.woundRoll ?? null, destroyItemRoll: a.destroyItemRoll ?? null,
                      hitProgression: (a.effects || []).find(e => e.kind === "hitProgression") ?? null,
                      levelGain: levelGainOf(a),
                      typedDice })
@@ -911,7 +939,7 @@ function ruleItemsProper(entry)
   // Thermasaur's Cold Aura - "an item with a damage roll button. GM targets
   // appropriate tokens and rolls for damage, deals the dex dmg and informs if
   // frozen". `auraAbilityDamage` is {ability, dice, atZero}.
-  return (entry.rules || []).filter(r => r.perRound || r.activity || r.levelDrain || r.watchdog || r.protector || r.declaredSpan || r.avStates || r.hpTick || r.spawn || r.spawnNow || r.summonFromDepth || r.splitOnDamage || r.moraleFail || r.encounterEffect || r.auraAbilityDamage || r.avStep || saveEffectsOf(r).length).map(r => ({
+  return (entry.rules || []).filter(r => r.perRound || r.activity || r.levelDrain || r.watchdog || r.protector || r.declaredSpan || r.avStates || r.hpTick || r.spawn || r.spawnNow || r.summonFromDepth || r.summonFromLocation || r.cloneSelf || r.splitOnDamage || r.moraleFail || r.encounterEffect || r.auraAbilityDamage || r.avStep || saveEffectsOf(r).length).map(r => ({
     name: r.name,
     type: "item",
     img: "icons/svg/clockwork.svg",
@@ -936,10 +964,11 @@ function ruleItemsProper(entry)
     // mechanism and two spread expressions would have the later win.
     // `save` joins the same block, written by the same saveFlag the attack
     // paths use, so the control cannot tell which kind of Item it is on.
-    ...((r.activity || r.levelDrain || r.watchdog || r.protector || r.avStates || r.hpTick || r.spawn || r.spawnNow || r.summonFromDepth || r.splitOnDamage || r.moraleFail || r.encounterEffect || r.auraAbilityDamage || r.avStep || saveEffectsOf(r).length) ? { flags: { vaarn: {
+    ...((r.activity || r.levelDrain || r.watchdog || r.protector || r.avStates || r.hpTick || r.spawn || r.spawnNow || r.summonFromDepth || r.summonFromLocation || r.cloneSelf || r.splitOnDamage || r.moraleFail || r.encounterEffect || r.auraAbilityDamage || r.avStep || saveEffectsOf(r).length) ? { flags: { vaarn: {
       ...(r.auraAbilityDamage ? { auraAbilityDamage: { ability: checkedAbility(r.auraAbilityDamage.ability, r.auraAbilityDamage), dice: String(r.auraAbilityDamage.dice),
         ...(r.auraAbilityDamage.atZero ? { atZero: r.auraAbilityDamage.atZero } : {}) } } : {}),
-      ...(r.encounterEffect ? { encounterEffect: { conditions: [...r.encounterEffect.conditions], text: r.encounterEffect.text } } : {}),
+      ...(r.encounterEffect ? { encounterEffect: { conditions: [...r.encounterEffect.conditions], text: r.encounterEffect.text,
+        ...(r.encounterEffect.verb ? { verb: r.encounterEffect.verb } : {}), ...(r.encounterEffect.ends ? { ends: r.encounterEffect.ends } : {}) } } : {}),
       ...(r.hpTick    ? { hpTick:     hpTickFlag(r.hpTick, r.name) } : {}),
       ...(r.spawn     ? { spawn:      { creature: r.spawn.creature, dice: r.spawn.dice } } : {}),
       // Actor Spawning wiring, RULED 2026-09-25 (Matt). A ONE-OFF spawn the
@@ -949,6 +978,10 @@ function ruleItemsProper(entry)
       ...(r.spawnNow  ? { spawnNow:   { creature: r.spawnNow.creature, dice: String(r.spawnNow.dice) } } : {}),
       // The Banisher's Summon: one roll on a chosen depth's encounter list.
       ...(r.summonFromDepth ? { summonFromDepth: true } : {}),
+      // Summons from the PARTY'S LOCATION's encounter table (a Daemon's Summons Monsters, RULED 2026-10-04).
+      ...(r.summonFromLocation ? { summonFromLocation: true } : {}),
+      // Copies of the creature ITSELF beside it - a Daemon's Inferior Clones (RULED 2026-10-04): { dice, hp }.
+      ...(r.cloneSelf ? { cloneSelf: { dice: String(r.cloneSelf.dice), ...(r.cloneSelf.hp != null ? { hp: Number(r.cloneSelf.hp) } : {}) } } : {}),
       // A split offered to the Referee when the creature is damaged - the
       // Fractalisk, the Glittersludge. {unlessTypes, halfLevel, immuneToCause}.
       ...(r.splitOnDamage ? { splitOnDamage: { unlessTypes: [...(r.splitOnDamage.unlessTypes ?? [])],
@@ -1085,7 +1118,7 @@ export function abilityReminders(entry)
     for(const e of (a.effects || []).filter(e => e.kind === "save" && e.onFail?.hold))
     {
       const h = holdSpec(e.onFail.hold, a.name);
-      notes.push(`<b>On a failed save, holds the target:</b> ${h.dice ? h.dice + " damage" : h.loss.dice + " " + h.loss.ability.toUpperCase()} each round from the round card; ${h.escape.ability.toUpperCase()} save to ${h.escape.by} on their turn.`);
+      notes.push(`<b>On a failed save, holds the target:</b> ${holdWhat(h)}, from the round card; ${h.escape.ability.toUpperCase()} save to ${h.escape.by} on their turn.`);
     }
     for(const x of applies.filter(x => !x.viaSave)) notes.push(`<b>Inflicts:</b> ${x.effect ?? conditionByKey(x.condition).label}.`);
 

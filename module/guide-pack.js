@@ -27,7 +27,10 @@ const GUIDES = [
   { pack: "vaarn.guide-referee", dir: "systems/vaarn/guide/referee", name: "Referee's Guide" },
   // Ancestry Reference Pages (RULED 2026-09-28, Matt): its own player-visible
   // compendium, one journal of ten pages, synced the same way.
-  { pack: "vaarn.ancestries", dir: "systems/vaarn/guide/ancestries", name: "Ancestries" }
+  { pack: "vaarn.ancestries", dir: "systems/vaarn/guide/ancestries", name: "Ancestries" },
+  // Region Map Legend (Region Generator, RULED 2026-10-03, Matt): a player-visible key to region maps - the
+  // Landscapes, location icons, landmarks, vaults, routes and relief - its images drawn by region-paint.js.
+  { pack: "vaarn.region-legend", dir: "systems/vaarn/guide/region-legend", name: "Region Map Legend" }
 ];
 
 /** The guide's page files in one directory as { file, name, content }, read fresh. */

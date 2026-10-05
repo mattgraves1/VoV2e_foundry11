@@ -127,5 +127,12 @@ export async function buildAndSpawnNPC(ancestry, knownLevel, preferAncestry, fol
     folder: folder.id
   });
 
+  // The career's "Carries" as Items beside the stat block's own weapon
+  // (Generated Gear and Attacks as Items, RULED 2026-10-04): armour arrives
+  // unequipped as loot, so the stat block's AV stands.
+  const { gearItems } = await import("/systems/vaarn/module/actor/generated-gear.js");
+  const gear = await gearItems(npc.career.items);
+  if(actor && gear.length) await actor.createEmbeddedDocuments("Item", gear);
+
   return { npc, bioHtml, actor };
 }

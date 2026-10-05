@@ -111,6 +111,22 @@
   </div>
 
   {{#if isDesert}}
+  {{!-- Region Generator: the section of a generated region the party is in. An
+        Encounter then rolls that section's table and an Omen names what it
+        rolled. Also set from a section's page. --}}
+  {{#if regionLocation.options.length}}
+  <div class="vaarn-clock-row">
+    <label>Party section</label>
+    <select class="vaarn-clock-region-location">
+      <option value="">(not set - encounters use the book's table only)</option>
+      {{#each regionLocation.options}}
+      <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+      {{/each}}
+    </select>
+    {{#if regionLocation.label}}<button type="button" class="vaarn-clock-region-clear">Clear</button>{{/if}}
+  </div>
+  {{/if}}
+
   {{!-- The start-of-day sequence. It rolls and posts only: the clock does not
         move and no rations are drawn, so Push and Camp below still own the
         day's advance and the Rest still owns the ration draw. --}}

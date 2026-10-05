@@ -2,8 +2,8 @@
 
 A game system for playing **Vaults of Vaarn** (second edition) in Foundry VTT.
 
-- **Foundry VTT compatibility:** v11 (verified on 11.302)
-- **Version:** 0.1.2
+- **Foundry VTT compatibility:** v11 (verified on 11.315)
+- **Version:** 0.2.0
 - **Translation support:** none
 
 It started as a fork of the unofficial Knave system for Foundry, and still
@@ -37,6 +37,14 @@ from the zip can still be updated from inside Foundry later.
    system fills its compendiums (creatures, pets, steeds, vehicles, tables
    and items). A notice in the corner says what it built. Wait for it
    before opening the compendiums.
+
+## Updating
+
+Foundry offers each update on its setup screen, under **Game Systems**. The
+first time you open a world after updating, Foundry shows a **World Data
+Migration** window. That is normal and safe: it records the new version on
+the world (keep **Create a backup** ticked). Nothing in Vaults of Vaarn needs
+migrating.
 
 ## Getting started
 
@@ -90,8 +98,10 @@ need a copy of Vaults of Vaarn to play.
 - **Vaults of Vaarn illustrations** are copyright Leo Hunt and are not
   included in this system.
 - **Icons** in `module/icons/` are from [game-icons.net](https://game-icons.net)
-  under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Each
-  icon's author is listed in `module/icons/credits.txt`.
+  under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), and so
+  are the location images in the Vaarn Region Map Legend, drawn from them.
+  Each icon's author is listed in `module/icons/credits.txt`, which also
+  names the few images drawn for this system.
 
 - **This system's code** is under the MIT licence. It is adapted from the
   Knave (unofficial) Foundry system by Rabid Baboon, which is under

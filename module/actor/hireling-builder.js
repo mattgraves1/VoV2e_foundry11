@@ -122,7 +122,10 @@ export function hirelingEntry(r)
     moraleBonus: r.moraleRow.moraleBonus,
     noHealRule: r.description.noHealRule || "",
     atk: a.text,
-    abilities: [{ name: a.name, text: a.text, effects, ...(types.length ? { damageTypes: types } : {}) }],
+    // `ranged` is declared on the roster's ranged attacks (Matt, 2026-10-04:
+    // a Sling or Throws Darts was built as a melee weapon), the same field a
+    // Bestiary ability uses, so buildCreatureDoc makes it a weaponRanged.
+    abilities: [{ name: a.name, text: a.text, effects, ...(types.length ? { damageTypes: types } : {}), ...(a.ranged ? { ranged: true } : {}) }],
     bio: hirelingBio(r),
   };
 }

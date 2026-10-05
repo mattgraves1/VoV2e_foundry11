@@ -93,6 +93,9 @@ const NO_ART = new Set(["Planeyfolk", "Walking Womb",
   // Spirit Form, 2026-09-27: the Unquiet Spirit is a stat block for a book
   // rule, not a bestiary creature, and has no art yet.
   "Unquiet Spirit",
+  // 2026-10-04: the Lizard Rancher career's War Lizard (Generated Gear and
+  // Attacks as Items), given an entry so its Item can place it. Not drawn yet.
+  "War Lizard",
   // Added by CRIMSON HOUND 07-05-26. tokens/Bestiary/ has no art for
   // either, and that art is not redistributable anyway — see CLAUDE.md.
   "Kalopede", "Lithling Warrior",

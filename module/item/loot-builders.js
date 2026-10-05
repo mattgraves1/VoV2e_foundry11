@@ -605,7 +605,9 @@ export const STACKABLES =
   scrap:      { name: "Scrap Metal", system: { slots: THIRD_OF_A_SLOT, metal: true,
                 description: "<p>Scavenged or scrapped metal. Food for a character with Omniguts, and for one who has drunk a Metallovore Potion while it lasts.</p>" } },
   synth:      { name: "Synth Parts", system: { slots: THIRD_OF_A_SLOT, description: "Repairs take an hour and use one Synth Part, healing d8+CON HP (or one Wound if HP is full)." } },
-  medgel:     { name: "Medgel", system: { slots: THIRD_OF_A_SLOT, consumable: true, description: "<p>D10 Heal.</p>" } },
+  // The use control heals the user d10 (flags.vaarn.useHeal, 2026-10-04 - the
+  // heal die Matt approved for Medicinal Gourds, shared with the Medgel).
+  medgel:     { name: "Medgel", system: { slots: THIRD_OF_A_SLOT, consumable: true, description: "<p>D10 Heal.</p>" }, flags: { vaarn: { useHeal: "1d10" } } },
   antitoxin:  { name: "Vial of Antitoxin", system: { slots: THIRD_OF_A_SLOT, consumable: true, description: "" } },
   grenade:    { name: "Grenade", system: { slots: THIRD_OF_A_SLOT, consumable: true, description: "<p>d10, blast.</p>" } }
 };
@@ -614,7 +616,7 @@ export const STACKABLES =
 export function buildStack(key, quantity)
 {
   const s = STACKABLES[key];
-  return [{ name: s.name, type: "item", system: { ...s.system, quantity } }];
+  return [{ name: s.name, type: "item", system: { ...s.system, quantity }, ...(s.flags ? { flags: structuredClone(s.flags) } : {}) }];
 }
 
 /**

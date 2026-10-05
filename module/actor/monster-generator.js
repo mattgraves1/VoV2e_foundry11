@@ -29,6 +29,8 @@
  */
 import { CORE_STATS, ATTACKS, PHYSICAL_FORMS, APPEARANCE_BEHAVIOUR } from "./monster-generator-data.js";
 import { moraleModeFor } from "./morale.js";
+import { attackWeaponItem } from "./generated-gear.js";
+import { specialItems, defenseNoteItem } from "./generated-specials.js";
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function d(n) { return Math.floor(Math.random() * n) + 1; }
@@ -114,12 +116,27 @@ export async function generateMonster(knownType = null)
   const vaarnFlags = { ...(damageRules.length ? { damageRules } : {}),
     ...(toxin ? { toxinDefense: toxin.toxinDefense, toxinDefenseName: toxin.defense } : {}) };
 
+  // The attacks a natural weapon can carry, from both the Attack and Special
+  // Attack columns (Generated Gear and Attacks as Items, step 2, RULED
+  // 2026-10-04): "Melee (d6)", "Lightning (d8, electrical)". The rest stay in
+  // the biography until step 3. One weapon per distinct attack - a Level 8+
+  // creature can land on the same row twice.
+  const attackTexts = [...new Set(attacks.flatMap(a => [a.attack, a.special]))];
+  // Step 3: the specials a Bestiary creature already declares, built as that
+  // creature's are (generated-specials.js). A string neither step reads stays in the biography.
+  const items = [...attackTexts.map(attackWeaponItem).filter(Boolean),
+    ...specialItems(attackTexts, { name, level: chosen.level, types: types.map(t => t.toLowerCase()) }),
+    // A note Item per distinct Special Defense (RULED 2026-10-04): the defense
+    // itself already works from the flags below; the Item makes it visible.
+    ...[...new Set(attacks.map(a => a.defense))].map(d => defenseNoteItem(d))];
+
   const actorCls = getDocumentClass("Actor");
   const actor = await actorCls.create(
   {
     name,
     type: "npc",
     folder: folder.id,
+    items,
     ...(Object.keys(vaarnFlags).length ? { flags: { vaarn: vaarnFlags } } : {}),
     system:
     {

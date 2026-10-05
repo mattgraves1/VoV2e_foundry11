@@ -278,6 +278,23 @@ export const RECURRENCES = [
   },
 
   {
+    // Generated Gear and Attacks as Items, RULED 2026-10-04 (Matt): a generated
+    // monster's Parasite Implant deals d6 damage per day while the wound is held.
+    key: "parasite",
+    atoms: [],
+    name: "Parasite",
+    book: "Monster Generator (Special Attacks)",
+    period: { amount: 1, unit: "day" },
+    tick: "The parasite feeds: d6 damage. It goes on each day until the Parasite wound is removed.",
+    applies: [{ target: "hp", label: "HP", formula: "1d6" }],
+    threshold: {
+      watch: "woundGone", wound: "Parasite", stops: true,
+      text: "The Parasite has been removed - it does no more damage."
+    },
+    cure: "Removing the parasite, as the Referee decides. Removing it does not heal the damage it dealt."
+  },
+
+  {
     key: "flab",
     atoms: ["Flabmonger"],
     name: "Flab (Lipoinduction)",

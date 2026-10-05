@@ -538,7 +538,7 @@ export async function rollCompelledSave(message, index)
     const h = s.onFail.hold;
     await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }),
       content: `<b>${actor.name}</b> is held by <b>${spec.source}</b> - `
-        + `${h.dice ? h.dice + " damage" : h.loss.dice + " " + String(h.loss.ability).toUpperCase()} each round; `
+        + `${h.dice ? h.dice + " damage each round" : h.loss ? h.loss.dice + " " + String(h.loss.ability).toUpperCase() + " each round" : (h.effect ?? "held")}; `
         + (h.escape ? `${String(h.escape.ability).toUpperCase()} save to ${h.escape.by} on their turn.`
                     : `until ${h.endsBy ?? "freed"}, when the Referee removes it.`) });
   }
@@ -554,6 +554,21 @@ export async function rollCompelledSave(message, index)
   {
     const poster = spec.posterUuid ? await fromUuid(spec.posterUuid) : null;
     await graftLimb(actor, poster, s.onFail.graft, spec.source);
+  }
+  // A RANDOM MUTATION a failed save gives - Generate Monster's Cause Mutation
+  // (RULED 2026-10-04 by Matt, "like precedents": rolled on the d100 Mutations
+  // table and added at once, as Resurrection and a generated creature add one).
+  if (s.onFail?.mutation && !result.verdict.passed)
+  {
+    const { mutationByRoll, mutationItemData } = await import("../actor/granted-pick.js");
+    let roll, entry, guard = 0;
+    do { roll = Math.ceil(Math.random() * 100); entry = mutationByRoll(roll); } while (!entry && ++guard < 50);
+    if (entry)
+    {
+      await actor.createEmbeddedDocuments("Item", [mutationItemData(entry)]);
+      await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }),
+        content: `<b>${actor.name}</b> mutates from <b>${spec.source}</b>: <b>${entry.name}</b> (d100 ${roll}). ${entry.effect}` });
+    }
   }
   if (eatenKind && !result.verdict.passed) await spendRation(actor, eatenKind);
   if (loss && !result.verdict.passed)

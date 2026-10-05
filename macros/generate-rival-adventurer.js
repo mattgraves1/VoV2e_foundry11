@@ -24,15 +24,15 @@
  *   - Equipment Package text (e.g. "Sword (d8), Shield (+1 AV), Leather
  *     Armour (AV 13)") mixes weapons/armor/gifts/misc gear in one
  *     comma-separated string with real melee-vs-ranged ambiguity (a
- *     "Pistol (d6)" and a "Dagger (d6)" look identical to a parser) — kept
- *     as flavor text entirely, same conservative call this project has
- *     made every other time free text was this ambiguous (Cybernetic
- *     Implant/Exotica boons, the Bestiary importer's attack parser). The
- *     ONE exception: the armor's own "(AV N)" is a clean, unambiguous
- *     pattern present in every single row, so that number IS extracted
- *     and set as the Actor's real AV — safe because it's not guessing
- *     between categories, just reading a number that's always in the
- *     same format.
+ *     "Pistol (d6)" and a "Dagger (d6)" look identical to a parser). The
+ *     armor's own "(AV N)" is extracted and set as the Actor's real AV.
+ *     SUPERSEDED 2026-10-04 (Matt, Generated Gear and Attacks as Items):
+ *     the package is no longer flavor text only - module/actor/
+ *     generated-gear.js makes each piece an Item, by name from the
+ *     system's weapon, armour and gear lists where it can (the Pistol is
+ *     the ranged base, the Dagger the melee one), as plain Items
+ *     otherwise. Its armour is carried, unequipped, and the AV stays as
+ *     extracted, so nothing counts twice.
  *
  * Creates the Actor in its own "Rival Adventurers" folder (distinct from
  * generate-companion.js/generate-monster.js's "Generated Creatures" and
@@ -59,6 +59,7 @@ async function generateRivalAdventurer(ancestryFull, level, hpMethod)
   const { SPARK_TABLES, ANCESTRY_CREATURE_TYPES } = await import("/systems/vaarn/module/actor/chargen-data.js");
   const { pickRowData } = await import("/systems/vaarn/module/actor/npc-builder.js");
   const { computeHP } = await import("/systems/vaarn/module/actor/hp-by-level.js");
+  const { gearItems } = await import("/systems/vaarn/module/actor/generated-gear.js");
 
   let roleRow;
   if(ancestryFull)
@@ -106,7 +107,7 @@ async function generateRivalAdventurer(ancestryFull, level, hpMethod)
     `<p><b>Works For:</b> ${travel.workFor}</p>`,
     `<p><b>Currently:</b> ${travel.activity}</p>`,
     `<p><b>Equipment:</b> ${equipmentText}</p>`,
-    `<p><i>Equipment is flavor text only — no weapon/armor Items were auto-created (too ambiguous to parse safely; its "(AV N)" was still used for this Actor's real AV). Drag matching Items onto this Actor by hand if needed.</i></p>`
+    `<p><i>The equipment is on the sheet as Items. Its armour is carried, not worn: this Actor's AV was set from the armour's "(AV N)", so equipping it too would count it twice.</i></p>`
   ];
   if(personalityRow) for(const [k, v] of Object.entries(personalityRow)) if(k !== "Name" && k !== "Manner" && v) bioLines.push(`<p><b>${k}:</b> ${v}</p>`);
   if(appearanceRow) for(const [k, v] of Object.entries(appearanceRow)) if(k !== "Attire" && v) bioLines.push(`<p><b>${k}:</b> ${v}</p>`);
@@ -131,7 +132,8 @@ async function generateRivalAdventurer(ancestryFull, level, hpMethod)
       abilities,
       creatureTypes,
       biography: bioLines.join("")
-    }
+    },
+    items: await gearItems(equipmentText)
   });
 
   ui.notifications.info(`Created "${actor.name}" (${role}) in the "Rival Adventurers" folder.`);

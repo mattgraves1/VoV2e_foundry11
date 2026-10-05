@@ -494,7 +494,8 @@ export async function startHold(victim, spec, source, label)
   if (holdSpared(victim, spec)) return null;
   const already = entriesOf(victim).find(e => e.hold && e.name === label && e.sourceActorId === (source?.id ?? null));
   if (already) return already;
-  const what = spec.dice ? `${spec.dice} damage` : `${spec.loss.dice} ${String(spec.loss.ability).toUpperCase()}`;
+  // Damage, ability loss, or an effect with no damage (a Daemon's Mind Control, 2026-10-04).
+  const what = spec.dice ? `${spec.dice} damage each round` : spec.loss ? `${spec.loss.dice} ${String(spec.loss.ability).toUpperCase()} each round` : (spec.effect ?? "held");
   // NO ESCAPE is a hold too (Trap Resolution, RULED 2026-09-26 by Matt): the
   // Vampiric Vines drain "until cut loose", and cutting is someone else's act,
   // so there is no save - the Referee ends it by hand. `endsBy` names how.
@@ -505,7 +506,7 @@ export async function startHold(victim, spec, source, label)
                   : `Until ${spec.endsBy ?? "freed"} - remove it from the board then`;
   return addEntry(victim, {
     name: label,
-    text: `Held by <b>${source?.name ?? label}</b>: ${what} each round. ${end}`
+    text: `Held by <b>${source?.name ?? label}</b>: ${what}. ${end}`
         + (caveats.length ? ` (${caveats.join("; ")})` : "") + `.`,
     perRound: true,
     hpTick: spec.dice ? { dice: spec.dice, ...(spec.drain && source ? { drainTo: source.id } : {}),

@@ -117,12 +117,14 @@ function controlHtml(c, v)
 const Base = typeof Application === "undefined" ? class {} : Application;
 export class VaultTuner extends Base
 {
-  constructor(settings, { name = "", shafts = false } = {}, options = {})
+  constructor(settings, { name = "", shafts = false, onGenerated = null } = {}, options = {})
   {
     super(options);
     this.values = valuesOf(settings);
     this.name = name;
     this.shafts = shafts;
+    // a caller told of each vault made here: a region's Vault page links it (Region Generator)
+    this.onGenerated = onGenerated;
     this.level = 0;
     this.layout = null;
   }
@@ -284,7 +286,11 @@ export class VaultTuner extends Base
         const { generateVault } = await import("./vault-journal.js");
         game.user.setFlag("vaarn", "vaultShaftObstructions", this.shafts);
         f.querySelectorAll("button[data-act]").forEach(b => b.disabled = true);
-        try { await generateVault(this._settings(), { name: this.name.trim(), shafts: this.shafts, scenes: act === "scenes" }); }
+        try
+        {
+          const journal = await generateVault(this._settings(), { name: this.name.trim(), shafts: this.shafts, scenes: act === "scenes" });
+          if(journal && this.onGenerated) await this.onGenerated(journal);
+        }
         finally { f.querySelectorAll("button[data-act]").forEach(b => b.disabled = false); }
       }
     }

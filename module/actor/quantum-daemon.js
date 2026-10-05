@@ -15,6 +15,8 @@ export async function createQuantumDaemon(size)
   const { DAEMON_SIZES, DAEMON_IDENTITY, DAEMON_ATTACKS_ABILITIES } =
     await import("/systems/vaarn/module/actor/quantum-daemon-data.js");
   const { rolledStatItems, rolledFormula } = await import("/systems/vaarn/module/actor/rolled-stat.js");
+  const { attackWeaponItem } = await import("/systems/vaarn/module/actor/generated-gear.js");
+  const { specialItems, DAEMON_INCORPOREAL_ENTRY, DAEMON_DEFENSES, daemonDefenseFlags, defenseNoteItem } = await import("/systems/vaarn/module/actor/generated-specials.js");
 
   const conf = DAEMON_SIZES[size];
   const identity = pick(DAEMON_IDENTITY);
@@ -49,6 +51,8 @@ export async function createQuantumDaemon(size)
     name: identity.name,
     type: "npc",
     folder: folder.id,
+    // its immunities as Actor flags, the shape Generate Monster's Special Defenses have (chunk 2)
+    flags: { vaarn: daemonDefenseFlags(picks.map(p => p.ability)) },
     system:
     {
       level: { value: r.level.base, min: 0 },
@@ -60,8 +64,21 @@ export async function createQuantumDaemon(size)
       creatureTypes,
       biography: bioLines.join("")
     },
-    items: rolledStatItems(conf)
+    // its attacks with plain dice as natural weapons (Generated Gear and
+    // Attacks as Items, step 2); the others, and its abilities, stay in the
+    // biography until step 3. One weapon per distinct attack: a Greater rolls twice.
+    items: [...rolledStatItems(conf), ...[...new Set(picks.map(p => p.attack))].map(attackWeaponItem).filter(Boolean),
+      // step 3: its attacks and abilities that a Bestiary creature already declares (generated-specials.js)
+      ...specialItems(picks.flatMap(p => [p.attack, p.ability]), { name: identity.name, level: r.level.base, types: ["outsider"] }),
+      // a note Item per immunity, as Generate Monster's Special Defenses get (RULED 2026-10-04)
+      ...[...new Set(picks.map(p => p.ability))].filter(a => DAEMON_DEFENSES[a]).map(a => defenseNoteItem(a, "Ability"))]
   });
+
+  // INCORPOREAL, both sides (RULED 2026-10-04, Matt): on the Active Effects
+  // board from the start, so it takes and deals no damage until the Referee
+  // removes the entry when the Daemon is forced to manifest.
+  const { addEntry } = await import("/systems/vaarn/module/time/effect-board.js");
+  await addEntry(actor, DAEMON_INCORPOREAL_ENTRY);
 
   return actor;
 }

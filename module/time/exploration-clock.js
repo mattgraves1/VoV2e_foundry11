@@ -34,6 +34,7 @@ import { ELIXIRS } from "../actor/chargen-data.js";
 import { ADVANCED_EXOTICA } from "../actor/advanced-exotica-data.js";
 import { vaultCheckExtra, vaultExtra, partyLocation, vaultLevels, setPartyLocation, locationOptions, OTHER_VAULT,
          LOCATION_HOOK } from "../vault/vault-encounters.js";
+import { regionCheckExtra, partySection, regionSections, setPartySection, SECTION_HOOK } from "../region/region-encounters.js";
 
 const SCOPE = "vaarn";
 const SETTING_ENV   = "explorationEnvironment";
@@ -187,7 +188,9 @@ export async function rollEncounterCheck(envKey, formula)
   // level's table and an Omen names a creature from it (Vault Encounters from the
   // Exploration Clock) - every caller's card shows it, the day-start one included.
   const extra = text ? await vaultCheckExtra(ENVIRONMENTS[envKey] ? envKey : "vault", text) : "";
-  return { roll, total: roll.total, text: (text ?? "<i>No result for this roll.</i>") + extra };
+  // In the desert with the party's region section recorded, the same for that section's table (Region Generator).
+  const regionLine = text ? await regionCheckExtra(envKey, text) : "";
+  return { roll, total: roll.total, text: (text ?? "<i>No result for this roll.</i>") + extra + regionLine };
 }
 
 /**
@@ -252,6 +255,7 @@ export class VaarnExplorationClock extends Application
     // The Party location line follows the setting, however it was changed.
     // A new location, however it was set, brings back the short list.
     this._locationHookId = Hooks.on(LOCATION_HOOK, () => { this._showAllVaults = false; rerender(); });
+    this._sectionHookId = Hooks.on(SECTION_HOOK, rerender);
     // ADDED 2026-09-13 with Vault Traversal Penalties. Darkness is derived
     // from the party's board entries, so a clock that only woke for the time
     // hook would show an enabled Search button after the lights went out —
@@ -271,6 +275,7 @@ export class VaarnExplorationClock extends Application
   {
     Hooks.off(TIME_HOOK, this._timeHookId);
     Hooks.off(LOCATION_HOOK, this._locationHookId);
+    Hooks.off(SECTION_HOOK, this._sectionHookId);
     Hooks.off("updateActor", this._actorHookId);
     for (const [h, id] of this._itemHookIds ?? []) Hooks.off(h, id);
     return super.close(options);
@@ -371,6 +376,16 @@ export class VaarnExplorationClock extends Application
           label: here ? `${here.vault}, level ${here.level}` : null,
           options: locationOptions(vaultLevels(), here, !!this._showAllVaults)
         };
+      })(),
+      // Region Generator: the section of a generated region the party is in, read while the clock is in the Desert.
+      regionLocation: (() =>
+      {
+        const here = partySection();
+        return {
+          label: here ? `${here.region}, ${here.name}` : null,
+          options: regionSections().map(s => ({ value: `${s.journalId}|${s.section}`, label: `${s.region}, ${s.name}`,
+                                                 selected: !!here && here.journalId === s.journalId && here.section === s.section }))
+        };
       })()
     };
   }
@@ -402,6 +417,13 @@ export class VaarnExplorationClock extends Application
     });
 
     html.find(".vaarn-clock-vault-clear").click(async () => { this._showAllVaults = false; await setPartyLocation(null); });
+
+    html.find(".vaarn-clock-region-location").change(async ev =>
+    {
+      const [journalId, section] = String(ev.currentTarget.value).split("|");
+      await setPartySection(journalId || null, section);
+    });
+    html.find(".vaarn-clock-region-clear").click(async () => { await setPartySection(null); });
 
     html.find(".vaarn-clock-auto").change(async ev =>
     {

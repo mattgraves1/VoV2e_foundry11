@@ -63,7 +63,8 @@ export function rolledStatItems(entry)
     return {
       name: ROLLED_STATS[stat].itemName,
       type: "item",
-      img: "icons/svg/d20-grey.svg",
+      // not a die: the picture is not the roll button (Matt, 2026-10-04 - he clicked it expecting a roll)
+      img: "systems/vaarn/module/icons/rolled-stat-unknown.svg",
       system: {
         description: `<p>The book gives this creature's ${ROLLED_STATS[stat].label} as <b>${rolledFormula(spec)}</b>. Use this to roll it and set the ${ROLLED_STATS[stat].label}.${tail} This Item is removed once it has been used.</p>`,
         slots: 0,

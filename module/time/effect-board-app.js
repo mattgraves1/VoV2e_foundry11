@@ -22,7 +22,7 @@
  */
 
 import { TIME_HOOK, currentTime, advance } from "./vaarn-time.js";
-import { collectAll, visibilityFor, formatSpan, clockRemaining, roundsRemaining,
+import { actorRef, actorFromRef, collectAll, visibilityFor, formatSpan, clockRemaining, roundsRemaining,
          removeEntry, updateEntry, SCALES } from "./effect-board.js";
 import { isOpenEndedCondition } from "../actor/condition-data.js";
 import { isActivity, activityLine, activityPercent, activityRunning,
@@ -128,7 +128,7 @@ export class VaarnEffectBoard extends Application
         // lynx's ability — so showing it hands over the one thing the origin
         // ruling protects while never saying what is happening. Matt's test:
         // on a physical board you would write "Blinded: Reid".
-        rows.push({ id: entry.id, actorId: actor.id, status: "status",
+        rows.push({ id: entry.id, actorId: actorRef(actor), status: "status",
                     name: entry.revealLabel || "Something is affecting you",
                     actorName: null, text: null,
                     note: null, remaining: null, perRound: false,
@@ -138,10 +138,11 @@ export class VaarnEffectBoard extends Application
 
       rows.push({
         id: entry.id,
-        actorId: actor.id,
+        actorId: actorRef(actor),
         status: "full",
         name: entry.name,
-        actorName: actor.name,
+        // An unlinked token's row names the token, so two of one creature read apart.
+        actorName: actor.token?.name ?? actor.name,
         text: entry.text || null,
         note: entry.note || null,
         // Standing GM Reminder: no end stamp, so the generic readout would say
@@ -395,7 +396,7 @@ export class VaarnEffectBoard extends Application
     {
       if (!game.user.isGM) return;
       const { actorId, key } = ev.currentTarget.dataset;
-      const actor = game.actors.get(actorId);
+      const actor = actorFromRef(actorId);
       if (!actor) return;
       await applyOnsetAndReport(actor, key);
       this.render(false);
@@ -405,7 +406,7 @@ export class VaarnEffectBoard extends Application
     {
       if (!game.user.isGM) return;
       const { actorId, key } = ev.currentTarget.dataset;
-      const actor = game.actors.get(actorId);
+      const actor = actorFromRef(actorId);
       if (!actor) return;
       await startTreatment(actor, key);
       this.render(false);
@@ -415,7 +416,7 @@ export class VaarnEffectBoard extends Application
     {
       if (!game.user.isGM) return;
       const { actorId, key } = ev.currentTarget.dataset;
-      const actor = game.actors.get(actorId);
+      const actor = actorFromRef(actorId);
       if (!actor) return;
       await cureAndReport(actor, key);
       this.render(false);
@@ -485,7 +486,7 @@ export class VaarnEffectBoard extends Application
       {
         if (!game.user.isGM) return;
         const { actorId, entryId } = ev.currentTarget.dataset;
-        const actor = game.actors.get(actorId);
+        const actor = actorFromRef(actorId);
         if (actor) return fn(actor, entryId);
       });
 
@@ -493,7 +494,7 @@ export class VaarnEffectBoard extends Application
     {
       if (!game.user.isGM) return;
       const { actorId, entryId } = ev.currentTarget.dataset;
-      const actor = game.actors.get(actorId);
+      const actor = actorFromRef(actorId);
       if (!actor) return;
       const entry = (actor.getFlag("vaarn", "effects") ?? []).find(e => e.id === entryId);
       if (!entry) return;
@@ -512,7 +513,7 @@ export class VaarnEffectBoard extends Application
     {
       if (!game.user.isGM) return;
       const { actorId, entryId } = ev.currentTarget.dataset;
-      const actor = game.actors.get(actorId);
+      const actor = actorFromRef(actorId);
       const entry = (actor?.getFlag("vaarn", "effects") ?? []).find(e => e.id === entryId);
       if (entry) return this._promptReveal(actor, entry);
     });
@@ -521,7 +522,7 @@ export class VaarnEffectBoard extends Application
     {
       if (!game.user.isGM) return;
       const { actorId, entryId } = ev.currentTarget.dataset;
-      const actor = game.actors.get(actorId);
+      const actor = actorFromRef(actorId);
       if (actor) await removeEntry(actor, entryId);
     });
   }

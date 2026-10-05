@@ -305,6 +305,31 @@ export function parseDuration(text)
 /*  World state                                                               */
 /* -------------------------------------------- */
 
+/**
+ * How a board row or a round-card button names its actor, and back.
+ *
+ * An UNLINKED token's actor is the token's own synthetic copy: it shares the
+ * world actor's id but holds its own flags, so an id resolves to the wrong
+ * document. Its uuid (Scene.….Token.….Actor.…) resolves to the copy. A world
+ * actor keeps its plain id, so cards posted before 2026-10-01 still resolve.
+ */
+export function actorRef(actor)
+{
+  return actor?.isToken ? actor.uuid : actor?.id;
+}
+
+/** What a line calls the actor: an unlinked token by its own name, so two of one creature read apart. */
+export function nameOf(actor)
+{
+  return actor?.token?.name ?? actor?.name ?? "";
+}
+
+export function actorFromRef(ref)
+{
+  if (!ref) return null;
+  return String(ref).includes(".") ? fromUuidSync(ref) : game.actors.get(ref);
+}
+
 /** Every entry on one actor. Always an array, never null. */
 export function entriesOf(actor)
 {
@@ -504,6 +529,9 @@ export async function removeGrantedItem(actor, itemId)
  */
 export async function removeActorAndTokens(actor)
 {
+  // An unlinked token's copy is that one token, never the world actor and
+  // every other token of it (2026-10-01).
+  if (actor?.isToken) return actor.token?.delete();
   if (!game.actors.get(actor?.id)) return;
   for (const scene of game.scenes)
   {
@@ -560,12 +588,40 @@ async function clearNamedFlag(actor, entry)
  * who was never added to the tracker, so scoping to combatants would silently
  * skip effects that are genuinely running.
  */
+/**
+ * UNLINKED TOKENS (bug report 2026-10-01, Matt: a gambit's Blind on a creature
+ * never reached the board). A creature dragged from the Bestiary gets an
+ * unlinked token, and an effect put on it lands on the token's own synthetic
+ * actor, which game.actors never holds - so the board, the round card, expiry
+ * and the combat-end clear all missed it. Every walk over the board's state
+ * takes the token copies from here, so they cannot disagree about which exist.
+ *
+ * A token inherits its world actor's entries, and those are walked with the
+ * world actor already; `own` is what the token holds of its OWN, the only
+ * entries a walk over the copy may report or change.
+ */
+export function tokenCopies()
+{
+  const out = [];
+  for (const scene of game.scenes ?? [])
+    for (const token of scene.tokens)
+    {
+      if (token.actorLink || !token.actor) continue;
+      const inherited = new Set(entriesOf(game.actors.get(token.actorId)).map(e => e.id));
+      out.push({ actor: token.actor, own: e => !inherited.has(e.id) });
+    }
+  return out;
+}
+
 export function collectAll()
 {
   const out = [];
   for (const actor of game.actors)
     for (const entry of entriesOf(actor))
       out.push({ actor, entry });
+  for (const { actor, own } of tokenCopies())
+    for (const entry of entriesOf(actor))
+      if (own(entry)) out.push({ actor, entry });
   return out;
 }
 
@@ -597,6 +653,19 @@ export async function sweepExpired({ now = null, round = null } = {})
       await setEntries(actor, keep);
       for (const { entry } of expired.filter(e => e.actor === actor))
         await undoEntryEffects(actor, entry);
+    }
+  }
+  // The same on every unlinked token's own entries (see tokenCopies).
+  for (const { actor, own } of tokenCopies())
+  {
+    const entries = entriesOf(actor);
+    const gone = entries.filter(e => own(e) && hasExpired(e, { now: t, round }));
+    if (!gone.length) continue;
+    await setEntries(actor, entries.filter(e => !gone.includes(e)));
+    for (const entry of gone)
+    {
+      expired.push({ actor, entry });
+      await undoEntryEffects(actor, entry);
     }
   }
   return expired;
@@ -651,8 +720,8 @@ function expiryLine({ actor, entry }, now)
  */
 export function endedLabel({ actor, entry })
 {
-  if (entry.removesActor) return `${actor.name} — removed`;
-  return `${actor.name} — ${entry.name}`;
+  if (entry.removesActor) return `${nameOf(actor)} — removed`;
+  return `${nameOf(actor)} — ${entry.name}`;
 }
 
 /**

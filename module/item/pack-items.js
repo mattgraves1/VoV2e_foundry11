@@ -120,3 +120,97 @@ export async function buildPackItems()
 
   return groups;
 }
+
+/**
+ * ITEM PACK REPAIR (foundry-system-index.csv "Item Pack Repair", RULED
+ * 2026-10-04 by Matt): vaarn.items is brought level with the rosters on every
+ * load, the way vaarn.macros is, overwriting a GM's edits inside the pack.
+ * This is the comparing half, kept free of Foundry so
+ * tools/test-pack-items.mjs can run it; pack-build.js syncItemPack does the
+ * writing.
+ *
+ * `want` is every roster Item as { _id, folder (a path), name, type, system,
+ * flags }, its _id the stable one. `have` is every pack Item in the same
+ * shape, its folder turned into a path by the caller. Returns { create,
+ * update, recreate, remove }: Items to create, update payloads, Items whose
+ * type changed (Foundry cannot change a type in place, so these are deleted
+ * and created again under the id they had), and ids to delete.
+ *
+ * MATCHED BY STABLE ID, THEN BY NAME. A pack built before 0.1.2 has random
+ * ids; matching it by name updates it in place under its old id, so a link
+ * into it keeps working.
+ *
+ * ONLY WHAT THE ROSTER SETS IS COMPARED. Foundry fills every field the
+ * template declares, so comparing whole documents would call every Item
+ * changed on every load. A field the roster never sets - a flag a GM added -
+ * is left as it is.
+ */
+export function planItemSync(want, have)
+{
+  const byId = new Map(have.map(h => [h._id, h]));
+  const matched = new Set();
+  const plan = { create: [], update: [], recreate: [], remove: [] };
+
+  const pairs = [];
+  for(const w of want)
+  {
+    let h = byId.get(w._id);
+    if(h && matched.has(h._id)) h = null;
+    if(h) { matched.add(h._id); pairs.push([w, h]); }
+    else pairs.push([w, null]);
+  }
+  // Name matching only after every id match is taken, so an old copy with a
+  // random id cannot claim a name whose stable-id Item is also in the pack.
+  for(const pair of pairs)
+  {
+    if(pair[1]) continue;
+    const h = have.find(x => !matched.has(x._id) && x.name === pair[0].name);
+    if(h) { matched.add(h._id); pair[1] = h; }
+  }
+
+  for(const [w, h] of pairs)
+  {
+    if(!h) { plan.create.push(w); continue; }
+    if(h.type !== w.type) { plan.recreate.push({ ...w, _id: h._id }); continue; }
+    if(itemDiffers(w, h)) plan.update.push({ ...w, _id: h._id });
+  }
+  for(const h of have) if(!matched.has(h._id)) plan.remove.push(h._id);
+  return plan;
+}
+
+/** Whether pack Item `h` differs from roster Item `w` in anything the roster sets. */
+export function itemDiffers(w, h)
+{
+  if(w.name !== h.name || (w.folder ?? null) !== (h.folder ?? null)) return true;
+  for(const key of ["system", "flags"])
+  {
+    const leaves = flattenLeaves(w[key] ?? {});
+    for(const [path, value] of leaves)
+      if(!sameValue(value, readPath(h[key], path))) return true;
+  }
+  return false;
+}
+
+/** [path, value] for every non-object leaf; arrays are leaves, compared whole. */
+function flattenLeaves(obj, prefix = [], out = [])
+{
+  for(const [k, v] of Object.entries(obj))
+  {
+    if(v && typeof v === "object" && !Array.isArray(v)) flattenLeaves(v, [...prefix, k], out);
+    else out.push([[...prefix, k], v]);
+  }
+  return out;
+}
+
+function readPath(obj, path)
+{
+  let cur = obj;
+  for(const k of path) { if(cur == null) return undefined; cur = cur[k]; }
+  return cur;
+}
+
+/** undefined and null are the same absence; everything else compares as JSON. */
+function sameValue(a, b)
+{
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}

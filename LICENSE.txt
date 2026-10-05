@@ -40,4 +40,7 @@ included under its own licence and is not covered by it:
 
 - Icons in module/icons/ from game-icons.net. Licensed under Creative
   Commons Attribution 3.0: https://creativecommons.org/licenses/by/3.0/
-  Each icon's author is listed in module/icons/credits.txt.
+  This includes the location images in the Vaarn Region Map Legend, which
+  are drawn from them. Each icon's author is listed in
+  module/icons/credits.txt, which also names the images drawn for this
+  system; those are covered by the MIT licence above.

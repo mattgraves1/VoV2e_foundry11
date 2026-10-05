@@ -1,0 +1,83 @@
+<!-- Vaarn: Running a Region -->
+<p><strong>Generate Region</strong> builds a stretch of the desert the way the book's Region Creation does, with dice dropped on a map. Each location is a place with a type from the Regional Feature table. Routes join the locations, and a route's length in hexes is its travel time in days. The region is split into sections, and each section has a Landscape, a name, a landmark and an encounter table. You see the region and change it in a preview first. Only then does it make a journal and a Scene. The journal, its buttons and the map pins are yours alone.</p>
+
+<h2>Generating a region</h2>
+<p>Run <strong>Generate Region</strong> from the Vaarn Macros compendium (chapter 7). The window grows a region at once and shows it on the left. Most controls have a hover tip.</p>
+<ul>
+  <li><strong>Region name</strong>: names the journal and the Scene. Leave it blank and they are named <em>Region</em> and the seed.</li>
+  <li><strong>Seed</strong>: the same seed and settings always grow the same region. <strong>New</strong> grows a different one.</li>
+  <li><strong>Locations</strong>: from 5 to 100. The book says five or six dice make a decent region, and that is the default.</li>
+</ul>
+<p>Drag the map to move it and use the mouse wheel to zoom. <strong>Fit</strong> brings the whole region back into view. Hover over a location, a route or a section's ground to read about it. The line under the controls counts the locations, routes, hazardous routes and sections, and gives the Scene's size.</p>
+<p>A route between an even-numbered and an odd-numbered location has a hazard, rolled on the Route Hazard table. A route between two even or two odd locations is safe. The book leaves the mixed case unstated, so this is the system's reading.</p>
+
+<h2>Changing it before you create it</h2>
+<p>Click something on the map to change it in the box under the counts:</p>
+<ul>
+  <li><strong>A location</strong>: pick another <strong>Type</strong> or type a <strong>Name</strong>. Changing the type does not change its routes' hazards.</li>
+  <li><strong>A route</strong>: tick or untick <strong>Hazardous</strong>. A route made hazardous rolls its hazard. To pick one instead, choose it from the <strong>Hazard</strong> list.</li>
+  <li><strong>A section's ground</strong>: type a new <strong>Name</strong>.</li>
+</ul>
+<p>Your changes last until the region grows again. A new seed, a different number of locations or any setting under Advanced options grows it again from scratch, and your changes are lost. So settle the size and settings first, then make your changes.</p>
+
+<h2>Advanced options and the region code</h2>
+<p><strong>Advanced options...</strong> holds every rule the region grows by: how many paths each location sends out, how long paths tend to be, how many vaults there must be, how far apart locations stand, how sections are drawn, and more. You don't need them to run a region. <strong>Defaults</strong> puts every setting back and picks a new seed.</p>
+<p>The <strong>Region code</strong> holds the seed and every setting. Paste a code into <strong>Load a code</strong> and click <strong>Load</strong> to grow that region again. The code does not hold your changes.</p>
+
+<h2>Creating the region</h2>
+<p>Click <strong>Create region</strong>. It makes:</p>
+<ul>
+  <li>a journal in the <em>Regions</em> folder, which opens;</li>
+  <li>a Scene in the <em>Region Scenes</em> folder, which you are taken to;</li>
+  <li>a RollTable per section in <em>Region Tables</em>, in a folder named for the region;</li>
+  <li>an Actor called <em>Party</em>, the first time only. Every region's Scene uses it.</li>
+</ul>
+<p>Details are rolled once, when you create the region. Clicking Create region again makes a second copy.</p>
+
+<h2>The journal</h2>
+<ul>
+  <li><strong>Overview</strong>: the sections, a table of every route with its days and hazard, and the region code.</li>
+  <li><strong>Section pages</strong> (<em>Section A: ...</em>): the Landscape, what the section is named for, its landmark, its encounter table and its locations.</li>
+  <li><strong>Location pages</strong>, numbered: the type and its Regional Feature roll, or <em>chosen by the Referee</em> if you changed it. Then the section, the details rolled from the book's tables for that type, and every route out with its days and hazard. A Settlement has Generate Settlement's results. A Vault has its Entrance, Tunnels and Original Function.</li>
+  <li><strong>Route pages</strong> (<em>Route 3: ... to ...</em>): both ends, the days and the hazard.</li>
+</ul>
+<p>Locations, sections and routes link to each other, so you can follow the party's path page by page.</p>
+
+<h2>The Scene</h2>
+<p>The map is painted into the Scene. It shows the ground, each Landscape's pattern, lighter ground for higher land, the location icons and the landmark stars. The painted map has no names. One hex is one day's travel. The Scene is not active and not in the navigation bar, so activate it when the party sets out.</p>
+<ul>
+  <li><strong>The Party token</strong> starts at the first location. It sees one hex, which is the neighbouring hexes. Players own the Party actor as Observers, so they see what it sees, and you move it. Ground they have seen stays on the map. Ground they have not seen stays black. To let them see farther, change the token's Vision Range.</li>
+  <li><strong>Pins</strong>: each location, landmark and route has a map pin. A route's pin sits halfway along it: a signpost, or a red hazard sign for a hazardous route. Double-click a pin to open its page. As on vault Scenes, pins show only while the <strong>Journal Notes</strong> tool is active, unless you turn on Toggle Notes Display (chapter 9). Players never see them.</li>
+  <li><strong>Routes</strong> start hidden from players. Reveal a route when the party finds it or learns of it: click the eye beside any link to its page, or click <strong>Reveal on the map</strong> on the route's page. <strong>Hide from players</strong> hides it again. Players see a revealed route only where the party has looked. For a route they know in advance, hand them a map.</li>
+  <li><strong>Hazards stay secret</strong>: a revealed hazardous route looks like a safe one to players. When they know of the danger, click <strong>Show its hazard</strong> on the route's page to draw it red. While a hazardous route is hidden, it is drawn red as your reminder.</li>
+</ul>
+<p>Players can read <strong>Vaarn Region Map Legend</strong>, a compendium that explains a region map's patterns, icons and marks.</p>
+
+<h2>Encounters</h2>
+<p>Each section's encounter table starts as the book's encounter table for its Landscape. Local factions take the lowest numbers: a section with a Bandit Camp gets Bandits, one with a Faa Nomad Camp gets Faa Nomads, and so on. A section named for a famous monster has that monster at the top. The section's page shows the table in a box at the top of the page:</p>
+<ul>
+  <li><strong>Die</strong>: the die the table rolls. A smaller die reaches only the lower, easier entries. The famous monster always stays at the top.</li>
+  <li><strong>Open the RollTable</strong>: change the entries in Foundry's own table editor. The page and every roll use your changes.</li>
+  <li><strong>Roll an encounter (dN)</strong>: rolls the table and offers <strong>Spawn one</strong> if it names a Bestiary creature. You get the same button if you roll the RollTable from Foundry's table window.</li>
+  <li><strong>The party is in this section: record it</strong>: tells the Exploration Clock where the party is.</li>
+</ul>
+<p>With the clock's Where set to Desert and a section recorded, every desert Encounter rolls that section's table and an Omen names a creature from it (chapter 3). You can also set it from <strong>Party section</strong> in the clock window. <strong>Clear</strong> unsets it, and Encounters go back to the book's table.</p>
+
+<h2>Filling in places as the party arrives</h2>
+<p>Whatever needs a token or a sheet is made only when you ask, from buttons on the pages:</p>
+<ul>
+  <li><strong>Spawn one ...</strong>: a button for every Bestiary creature a page names. It makes the creature in <em>Generated Creatures</em>.</li>
+  <li><strong>Generate this vault...</strong> on a Vault's page opens the Vault Settings Tuner (chapter 9), set up for this location. The vault it makes is linked from the page.</li>
+  <li><strong>Roll the lair</strong> on a route whose hazard is a Lair rolls the Lair generator onto the page, with Spawn buttons for what lives there.</li>
+  <li><strong>Make an NPC here</strong> on a location's page runs Generate NPC. The <strong>Other...</strong> list beside it runs another maker instead: the character creator, a follower or mercenary, a companion, a rival adventurer, a monster or a Quantum Daemon. The next Actor you make is listed under <em>People here</em> on the page. <strong>Cancel</strong> stops waiting.</li>
+</ul>
+
+<h2>Try it</h2>
+<ol>
+  <li>Run <strong>Generate Region</strong>, name the region and leave Locations at 6. Hover over the map.</li>
+  <li>Click a location and change its type to Settlement. Click a safe route and tick Hazardous.</li>
+  <li>Click <strong>Create region</strong>. Open a location page and the route page linked from it.</li>
+  <li>On the Scene, click the eye beside that route on the Overview and watch the route appear. Move the Party token one hex along it.</li>
+  <li>Open a section page, set the die to d6, and click <strong>Roll an encounter</strong>. Click <strong>The party is in this section: record it</strong>.</li>
+  <li>Open the Exploration Clock, set Where to Desert, check that Party section names that section, and click <strong>Start the day</strong> until the day's encounter check turns up an Encounter. The whispered card names the entry from the section's table.</li>
+</ol>

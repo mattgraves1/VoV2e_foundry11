@@ -64,7 +64,7 @@
  */
 
 import { magneticFieldHtml } from "./metal-cards.js";
-import { entriesOf, setEntries, addEntry, removeEntry, collectAll, sweepExpired,
+import { actorRef, nameOf, tokenCopies, entriesOf, setEntries, addEntry, removeEntry, collectAll, sweepExpired,
          expiryFor, formatSpan, removeActorAndTokens, removeGrantedItem, grantedItemIdsOf, endedLabel } from "../time/effect-board.js";
 // isActivity and isRecurrence were imported here for clearAll's survival test
 // until 2026-09-20. The inverted predicate names no entry kind at all, so the
@@ -373,30 +373,30 @@ function lineFor({ actor, entry }, round)
   // GM-only button that rolls and applies, never an automatic write. First,
   // because it is the most specific thing an entry can declare.
   const button = entry.hpTick
-    ? `<button type="button" class="vaarn-round-hp" data-actor-id="${actor.id}" data-entry-id="${entry.id}" ` +
-      `data-label="${entry.name}">${hpTickLabel(hpTickNow(entry), actor.name)}</button>`
+    ? `<button type="button" class="vaarn-round-hp" data-actor-id="${actorRef(actor)}" data-entry-id="${entry.id}" ` +
+      `data-label="${entry.name}">${hpTickLabel(hpTickNow(entry), nameOf(actor))}</button>`
     // A per-round spawn (Actor Spawning from Bestiary, 2026-09-24): the
     // Brood Mother's Brood. GM-only, rolls the count and spawns beside her.
     : entry.spawn
-    ? `<button type="button" class="vaarn-round-spawn" data-actor-id="${actor.id}" data-entry-id="${entry.id}" ` +
-      `data-label="${entry.name}">Birth ${entry.spawn.dice} ${entry.spawn.creature}s beside ${actor.name}</button>`
+    ? `<button type="button" class="vaarn-round-spawn" data-actor-id="${actorRef(actor)}" data-entry-id="${entry.id}" ` +
+      `data-label="${entry.name}">Birth ${entry.spawn.dice} ${entry.spawn.creature}s beside ${nameOf(actor)}</button>`
     // A per-round SAVE (Failed-Save Consequence, RULED 2026-09-25, Matt): the
     // Space-Time Vortex. Posts one save card per targeted token; the card
     // deals the damage to each who fails.
     : entry.save
-    ? `<button type="button" class="vaarn-round-save" data-actor-id="${actor.id}" data-entry-id="${entry.id}" ` +
+    ? `<button type="button" class="vaarn-round-save" data-actor-id="${actorRef(actor)}" data-entry-id="${entry.id}" ` +
       `data-label="${entry.name}">${String(entry.save.ability).toUpperCase()} Save vs ${entry.save.vs} — targeted tokens</button>`
     : entry.escalating
-    ? `<button type="button" class="vaarn-round-escalate" data-actor-id="${actor.id}" data-entry-id="${entry.id}" ` +
+    ? `<button type="button" class="vaarn-round-escalate" data-actor-id="${actorRef(actor)}" data-entry-id="${entry.id}" ` +
       `data-amount="${entry.escalating.amount}" data-label="${entry.name}">` +
       `Apply ${entry.escalating.amount} damage (then x${entry.escalating.factor})</button>`
     : entry.abilityDamage && entry.formula
-    ? `<button type="button" class="vaarn-round-ability" data-actor-id="${actor.id}" data-entry-id="${entry.id}" ` +
+    ? `<button type="button" class="vaarn-round-ability" data-actor-id="${actorRef(actor)}" data-entry-id="${entry.id}" ` +
       `data-formula="${entry.formula}" data-ability="${entry.abilityDamage.ability}" data-label="${entry.name}">` +
       `Roll ${entry.formula} ${String(entry.abilityDamage.ability).toUpperCase()}` +
       `${entry.abilityDamage.avPerTick ? ` (+${entry.abilityDamage.avPerTick} AV)` : ""} and apply</button>`
     : entry.formula
-    ? `<button type="button" class="vaarn-round-roll" data-actor-id="${actor.id}" ` +
+    ? `<button type="button" class="vaarn-round-roll" data-actor-id="${actorRef(actor)}" ` +
       `data-formula="${entry.formula}" data-label="${entry.name}">Roll ${entry.formula}</button>`
     : "";
 
@@ -406,21 +406,21 @@ function lineFor({ actor, entry }, round)
   // the venom" (RULED 2026-09-27, Matt). The holder's player or the Referee
   // clicks it; it removes the entry.
   const endsBy = entry.endsBy
-    ? `<button type="button" class="vaarn-round-endsby" data-actor-id="${actor.id}" data-entry-id="${entry.id}" ` +
-      `data-label="${entry.name}">${actor.name} ${entry.endsBy} — ${entry.name} ends</button>`
+    ? `<button type="button" class="vaarn-round-endsby" data-actor-id="${actorRef(actor)}" data-entry-id="${entry.id}" ` +
+      `data-label="${entry.name}">${nameOf(actor)} ${entry.endsBy} — ${entry.name} ends</button>`
     : "";
   const esc = entry.hold?.escape;
   const escape = esc
-    ? `<button type="button" class="vaarn-round-escape" data-actor-id="${actor.id}" data-entry-id="${entry.id}" ` +
-      `data-label="${entry.name}">${actor.name}: ${String(esc.ability).toUpperCase()} save to ${esc.by}</button>`
+    ? `<button type="button" class="vaarn-round-escape" data-actor-id="${actorRef(actor)}" data-entry-id="${entry.id}" ` +
+      `data-label="${entry.name}">${nameOf(actor)}: ${String(esc.ability).toUpperCase()} save to ${esc.by}</button>`
     : "";
 
   // Whose turn each half resolves on (Turn-Timed Round Card). An escape-only
   // hold - Silk Production's web - has no first half, so no first tag.
   const lead = entry.hold && !button ? "" : turnTag(turnOwnerOf({ actor, entry }));
-  const escTag = esc ? turnTag({ id: actor.id, name: actor.name }) : "";
+  const escTag = esc ? turnTag({ id: actor.id, name: nameOf(actor) }) : "";
 
-  return `<li><b>${actor.name} — ${entry.name}</b>` +
+  return `<li><b>${nameOf(actor)} — ${entry.name}</b>` +
          (bits.length ? ` <i>(${bits.join("; ")})</i>` : "") +
          (entry.text ? `<div>${entry.text}</div>` : "") +
          (entry.magnetField ? magneticFieldHtml(actor) : "") +
@@ -645,11 +645,14 @@ export function survivesCombatEnd(entry)
 
 export async function clearAll()
 {
-  for (const actor of game.actors)
+  // Unlinked tokens too, their own entries only (effect-board.js tokenCopies,
+  // 2026-10-01) - an inherited entry is cleared with its world actor.
+  const holders = [...game.actors.map(actor => ({ actor, own: () => true })), ...tokenCopies()];
+  for (const { actor, own } of holders)
   {
     const keep = [], drop = [];
     for (const entry of entriesOf(actor))
-      (survivesCombatEnd(entry) ? keep : drop).push(entry);
+      (!own(entry) || survivesCombatEnd(entry) ? keep : drop).push(entry);
     // Healing Field (2026-09-22): an entry that is its actor's whole lifetime
     // takes the actor with it, the same as on expiry and on removal.
     if (drop.some(e => e.removesActor)) await removeActorAndTokens(actor);

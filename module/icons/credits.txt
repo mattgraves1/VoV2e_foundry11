@@ -23,7 +23,6 @@ Food
     Grain - https://game-icons.net/1x1/delapouite/grain.html
     Herbs - https://game-icons.net/1x1/delapouite/herbs-bundle.html
     Lard - https://game-icons.net/1x1/delapouite/butter.html
-    Onion - https://www.flaticon.com/authors/freepik
     Salt - https://game-icons.net/1x1/lorc/powder.html
     Spices - https://game-icons.net/1x1/lorc/cool-spices.html
     Travel Rations - https://game-icons.net/1x1/delapouite/bindle.html
@@ -33,7 +32,6 @@ Light
     Candle - https://game-icons.net/1x1/lorc/candle-light.html
     Lantern - https://game-icons.net/1x1/delapouite/old-lantern.html
     Torch - https://game-icons.net/1x1/delapouite/torch.html
-    Lamp Oil - https://www.flaticon.com/authors/eucalyp"
     Tinderbox - https://game-icons.net/1x1/delapouite/matchbox.html
 
 Weapons
@@ -42,24 +40,18 @@ Weapons
     Battle Axe - https://game-icons.net/1x1/lorc/battle-axe.html
     Bow - https://game-icons.net/1x1/lorc/high-shot.html
     Crossbow - https://game-icons.net/1x1/carl-olsen/crossbow.html
-    Cudgel - https://www.flaticon.com/authors/good-ware
     Dagger - https://game-icons.net/1x1/lorc/high-shot.html
     Flail - https://game-icons.net/1x1/delapouite/flail.html
     Halberd - https://game-icons.net/1x1/delapouite/sharp-halberd.html
     Long Sword - https://game-icons.net/1x1/delapouite/two-handed-sword.html
-    Mace - https://www.flaticon.com/free-icon/mace_2614302?term=mace&page=2&position=36
     Quiver - https://game-icons.net/1x1/delapouite/quiver.html
     Sickle - https://game-icons.net/1x1/delapouite/sickle.html
-    Spear - https://www.flaticon.com/free-icon/spear_1083342?term=spear&page=2&position=9
     Sling - https://game-icons.net/1x1/delapouite/sling.html
     Staff - https://game-icons.net/1x1/delapouite/bo.html
-    Sword - https://www.flaticon.com/free-icon/sword_2928005?term=sword&page=1&position=22
     War Hammer - https://game-icons.net/1x1/lorc/flat-hammer.html
 
 Items
-    Air Bladder - https://www.flaticon.com/free-icon/wineskin_1015524?term=wineskin&page=1&position=3
     Bear Trap - https://game-icons.net/1x1/lorc/wolf-trap.html
-    Bedroll - https://www.flaticon.com/free-icon/bedroll_1937458?term=bed%20roll&page=1&position=4
     Bellows - https://game-icons.net/1x1/delapouite/bellows.html
     Black Grease - https://game-icons.net/1x1/lorc/round-bottom-flask.html
     Block and Tackle - https://game-icons.net/1x1/delapouite/pulley-hook.html
@@ -75,7 +67,6 @@ Items
     Crowbar - https://game-icons.net/1x1/delapouite/crowbar.html
     Drill - https://game-icons.net/1x1/delapouite/corkscrew.html
     Gems - https://game-icons.net/1x1/lorc/gems.html
-    Glue - https://www.flaticon.com/free-icon/glue_3237805?term=glue%20bottle&page=1&position=2
     Face Paint - https://game-icons.net/1x1/delapouite/lipstick.html
     Fishing Pole - https://game-icons.net/1x1/delapouite/fishing-pole.html   
     Glass Marbles - https://game-icons.net/1x1/delapouite/marbles.html 
@@ -85,14 +76,11 @@ Items
     Hour Glass - https://game-icons.net/1x1/lorc/hourglass.html
     Horn - https://game-icons.net/1x1/delapouite/trumpet-flag.html
     Incesnse Packet - https://game-icons.net/1x1/lorc/incense.html
-    Iron Tongs - https://www.flaticon.com/free-icon/tongs_106478?term=tongs&page=1&position=13
     Ladder - https://game-icons.net/1x1/delapouite/ladder.html
-    Large Sponge - https://www.flaticon.com/free-icon/sponge_995071?term=sponge&page=1&position=9
     Lens - https://game-icons.net/1x1/lorc/magnifying-glass.html
     Lockpicks - https://game-icons.net/1x1/delapouite/lockpicks.html
     Manacles - https://game-icons.net/1x1/lorc/manacles.html
     Mirror - https://game-icons.net/1x1/lorc/mirror-mirror.html
-    Metal File - https://www.flaticon.com/authors/monkik
     Musical Instrument - https://game-icons.net/1x1/delapouite/flute.html
     Nails - https://game-icons.net/1x1/lorc/nails.html
     Net - https://game-icons.net/1x1/lorc/fishing-net.html
@@ -117,3 +105,36 @@ Items
     Twine - https://game-icons.net/1x1/delapouite/yarn.html
     Water Skin - https://game-icons.net/1x1/delapouite/magic-potion.html
     Whistle - https://game-icons.net/1x1/delapouite/whistle.html
+
+Region Generator locations (module/icons/region, CC BY 3.0, recoloured when drawn)
+    Ruin - https://game-icons.net/1x1/delapouite/ancient-ruins.html (Delapouite)
+    Settlement - https://game-icons.net/1x1/delapouite/village.html (Delapouite)
+    Oasis - https://game-icons.net/1x1/delapouite/oasis.html (Delapouite)
+    Vault - https://game-icons.net/1x1/delapouite/airtight-hatch.html (Delapouite)
+    Lair - https://game-icons.net/1x1/delapouite/cave-entrance.html (Delapouite)
+    Holy Place - https://game-icons.net/1x1/delapouite/temple-gate.html (Delapouite)
+    Arcology - https://game-icons.net/1x1/delapouite/habitat-dome.html (Delapouite)
+    Grave - https://game-icons.net/1x1/lorc/tombstone.html (Lorc)
+    Cacklemaw Den - https://game-icons.net/1x1/caro-asercion/hyena-head.html (Caro Asercion)
+    Wreck - https://game-icons.net/1x1/delapouite/ship-wreck.html (Delapouite)
+    Faa Nomad Camp - https://game-icons.net/1x1/delapouite/desert-camp.html (Delapouite)
+    Bandit Camp - https://game-icons.net/1x1/delapouite/bandit.html (Delapouite)
+    Oracle's Sanctum - https://game-icons.net/1x1/lorc/crystal-ball.html (Lorc)
+    Science-Mystic's Abode - https://game-icons.net/1x1/delapouite/observatory.html (Delapouite)
+    Hegemony Outpost - https://game-icons.net/1x1/delapouite/watchtower.html (Delapouite)
+    Fortress - https://game-icons.net/1x1/delapouite/castle.html (Delapouite)
+    Trade Post - https://game-icons.net/1x1/delapouite/shop.html (Delapouite)
+    Archive - https://game-icons.net/1x1/delapouite/archive-research.html (Delapouite)
+    Bounty Hunter's Camp - https://game-icons.net/1x1/delapouite/wanted-reward.html (Delapouite)
+    Anomaly - https://game-icons.net/1x1/lorc/vortex.html (Lorc)
+    landmark-star.svg and route-signpost.svg (the landmark and route pins) are
+    simple shapes drawn for this system, not from game-icons.net; they are
+    covered by the system's MIT licence.
+
+Region Map Legend images (module/icons/region/legend, the Vaarn Region Map Legend compendium)
+    Drawn by this system's region map painter. The location-*.png images are the
+    Region Generator location icons above, recoloured, under the same CC BY 3.0
+    terms and authors. The landscape-*.png and key-*.png images are the painter's
+    own terrain patterns and map marks, covered by the system's MIT licence.
+
+rolled-stat-unknown.svg (Roll for Level / AV / Morale) - https://game-icons.net/1x1/lorc/uncertainty.html (Lorc), its black background removed

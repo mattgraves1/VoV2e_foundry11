@@ -126,6 +126,18 @@ export const NAMED_WOUNDS = {
   // Spambot, Spamblast: "Fills one Item Slot. To remove this, make a sale pitch
   // to five strangers regarding the bizarre product filling your
   // consciousness." The pitches are a tally the holder clicks (Matt: "b").
+  // Generate Monster's Parasite Implant (Generated Gear and Attacks as Items,
+  // RULED 2026-10-04 by Matt): "Fills 1 slot, d6 damage per day". Not healed by
+  // rest - removing it is adjudicated - and removing it heals nothing already
+  // dealt. The daily d6 is its recurrence, which ends when the wound is gone.
+  parasite: { name: "Parasite", slots: 1,
+    effect: "A parasite has been implanted. It deals d6 damage each day until it is removed; removing it does not heal the damage it dealt.",
+    restProof: "it must be removed - the Referee decides how", recurrence: "parasite" },
+  // A Quantum Daemon's Parasite Seed: the same, d6 each ROUND - the hit also puts
+  // a per-round damage line on the victim's round card (generated-specials.js).
+  parasiteSeed: { name: "Parasite Seed", slots: 1,
+    effect: "A Daemon's seed has been implanted. It deals d6 damage each round until it is removed; removing it does not heal the damage it dealt.",
+    restProof: "it must be removed - the Referee decides how" },
   spamAd: { name: "Spam Ad", slots: 1,
     effect: "To remove this, make a sale pitch to five strangers regarding the bizarre product filling your consciousness.",
     restProof: "it goes only after a sale pitch to five strangers", tally: { count: 5, label: "makes a sale pitch" } },

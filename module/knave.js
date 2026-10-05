@@ -31,6 +31,8 @@ import { isExotica } from "./item/xp-value.js";
 import { VaarnCombat, registerInitiativeSetting } from "./combat/initiative.js";
 import { registerVaultSettings } from "./vault/vault-journal.js";
 import { registerVaultControls } from "./vault/vault-controls.js";
+import { registerRegionControls } from "./region/region-controls.js";
+import { registerRegionLocation } from "./region/region-encounters.js";
 import { registerVaultLocation, registerVaultEncounterCards } from "./vault/vault-encounters.js";
 import { registerVaultScenes } from "./vault/vault-scene.js";
 import { ALWAYS_INTRINSIC_TYPES, isIntrinsic } from "./item/intrinsic.js";
@@ -57,7 +59,7 @@ import { WINDSONG_BUTTON } from "./actor/granted-ability.js";
 import { spawnBeside, performSplit, spawnInPlace } from "./actor/bestiary-spawn.js";
 import { registerDayStartCardButtons } from "./time/day-start.js";
 import { VaarnEffectBoard, registerBoardControls } from "./time/effect-board-app.js";
-import { onTimeAdvance as onEffectBoardTime, removeEntry, updateEntry } from "./time/effect-board.js";
+import { onTimeAdvance as onEffectBoardTime, removeEntry, updateEntry, actorFromRef } from "./time/effect-board.js";
 import { onTimeAdvance as onActivityTime } from "./time/activity.js";
 import { isSuppressed, suppressorsOf } from "./item/suppression.js";
 import { offersArmourChoice, isDegradingArmour, DEGRADE_FLAG, hasAnyCreatureType } from "./item/attack-properties.js";
@@ -528,7 +530,7 @@ Hooks.on('renderChatMessage', (message, html) =>
   html.find('.vaarn-round-roll').click(async ev =>
   {
     const btn = ev.currentTarget;
-    const actor = game.actors.get(btn.dataset.actorId);
+    const actor = actorFromRef(btn.dataset.actorId);
     const roll = new Roll(btn.dataset.formula);
     await roll.evaluate({async: true});
     // VISIBILITY MUST BE SET AS A ROLL MODE, NOT AS `whisper`. Roll#toMessage
@@ -557,7 +559,7 @@ Hooks.on('renderChatMessage', (message, html) =>
     const entryId = btn.dataset.entryId;
     if((message.getFlag("vaarn", "roundAbilityApplied") ?? []).includes(entryId))
       return ui.notifications.warn(`${btn.dataset.label} has already been applied this round.`);
-    const actor = game.actors.get(btn.dataset.actorId);
+    const actor = actorFromRef(btn.dataset.actorId);
     if(!actor) return ui.notifications.warn("That actor no longer exists.");
     if(!game.user.isGM && !actor.isOwner)
       return ui.notifications.warn(`Only the Referee or ${actor.name}'s player can apply this.`);
@@ -611,7 +613,7 @@ Hooks.on('renderChatMessage', (message, html) =>
     const entryId = btn.dataset.entryId;
     if((message.getFlag("vaarn", "roundAbilityApplied") ?? []).includes(entryId))
       return ui.notifications.warn(`${btn.dataset.label} has already been applied this round.`);
-    const actor = game.actors.get(btn.dataset.actorId);
+    const actor = actorFromRef(btn.dataset.actorId);
     if(!actor) return ui.notifications.warn("That actor no longer exists.");
     if(!game.user.isGM && !actor.isOwner)
       return ui.notifications.warn(`Only the Referee or ${actor.name}'s player can apply this.`);
@@ -688,7 +690,7 @@ Hooks.on('renderChatMessage', (message, html) =>
   html.find('.vaarn-round-escape').click(async ev =>
   {
     const btn = ev.currentTarget;
-    const actor = game.actors.get(btn.dataset.actorId);
+    const actor = actorFromRef(btn.dataset.actorId);
     if(!actor) return ui.notifications.warn("That actor no longer exists.");
     if(!mayRollFor(actor)) return ui.notifications.warn(`Only ${actor.name}'s player or the Referee can roll this.`);
     const entry = (actor.getFlag('vaarn', 'effects') ?? []).find(e => e.id === btn.dataset.entryId);
@@ -719,7 +721,7 @@ Hooks.on('renderChatMessage', (message, html) =>
   html.find('.vaarn-round-endsby').click(async ev =>
   {
     const btn = ev.currentTarget;
-    const actor = game.actors.get(btn.dataset.actorId);
+    const actor = actorFromRef(btn.dataset.actorId);
     if(!actor) return ui.notifications.warn("That actor no longer exists.");
     if(!mayRollFor(actor)) return ui.notifications.warn(`Only ${actor.name}'s player or the Referee can do this.`);
     const entry = (actor.getFlag('vaarn', 'effects') ?? []).find(e => e.id === btn.dataset.entryId);
@@ -737,7 +739,7 @@ Hooks.on('renderChatMessage', (message, html) =>
     const label = btn.dataset.label;
     if((message.getFlag("vaarn", "roundAbilityApplied") ?? []).includes(entryId))
       return ui.notifications.warn(`${label} has already been applied this round.`);
-    const actor = game.actors.get(btn.dataset.actorId);
+    const actor = actorFromRef(btn.dataset.actorId);
     if(!actor) return ui.notifications.warn("That actor no longer exists.");
     const entry = (actor.getFlag('vaarn', 'effects') ?? []).find(e => e.id === entryId);
     // This click's figure - the Black Cloud's doubling (see hpTickNow).
@@ -1029,7 +1031,7 @@ Hooks.on('renderChatMessage', (message, html) =>
     const label = btn.dataset.label;
     if((message.getFlag("vaarn", "roundAbilityApplied") ?? []).includes(entryId))
       return ui.notifications.warn(`${label} has already been applied this round.`);
-    const actor = game.actors.get(btn.dataset.actorId);
+    const actor = actorFromRef(btn.dataset.actorId);
     if(!actor) return ui.notifications.warn("That actor no longer exists.");
     const entry = (actor.getFlag('vaarn', 'effects') ?? []).find(e => e.id === entryId);
     const spec = entry?.spawn;
@@ -1670,7 +1672,9 @@ Hooks.once('init', async function() {
   registerInitiativeSetting();
   registerVaultSettings(); // the Generate Vault window's saved settings (Vault Journal)
   registerVaultControls(); // roll a vault room's lair and treasure from its page (Contents Buttons on Vault Pages)
+  registerRegionControls(); // a region's Vault page generates its vault when wanted (Region Generator)
   registerVaultLocation(); // the vault level the party is on (Vault Encounters from the Exploration Clock)
+  registerRegionLocation(); // the region section the party is in (Region Generator)
   registerVaultEncounterCards(); // Spawn one on a vault encounter card
   registerVaultScenes(); // activating a vault level's Scene sets the party's level (Vault Scene)
 
@@ -2411,7 +2415,7 @@ Hooks.on('renderChatMessage', (message, html) =>
     const label = btn.dataset.label;
     if((message.getFlag("vaarn", "roundAbilityApplied") ?? []).includes(entryId))
       return ui.notifications.warn(`${label} has already been called for this round.`);
-    const actor = game.actors.get(btn.dataset.actorId);
+    const actor = actorFromRef(btn.dataset.actorId);
     if(!actor) return ui.notifications.warn("That actor no longer exists.");
     const entry = (actor.getFlag('vaarn', 'effects') ?? []).find(e => e.id === entryId);
     if(!entry?.save) return ui.notifications.warn(`${label} is no longer on ${actor.name}'s board.`);

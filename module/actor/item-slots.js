@@ -111,6 +111,27 @@ export function stackSlotsOf(item)
  * pooled across the pack and rounded ONCE here (Per-Unit Slot Weight's ruling
  * of 2026-09-19); Per-Stack Slot Rounding replaced that.
  */
+/**
+ * The item in slot N of an actor's inventory, for a roll that "determines the
+ * item slot" - Destroy Item (Generated Gear and Attacks as Items, 2026-10-04)
+ * and the Damaged Item wound's d20. Slots are counted through the carried
+ * items that take slots, in the sheet's order (sort), each stack as wide as
+ * stackSlotsOf says; cargo is not carried. Returns the Item, or null for an
+ * empty slot. Claude's reading, for the Referee to adjudicate.
+ */
+export function itemAtSlot(items, n)
+{
+  let end = 0;
+  const carried = [...(items ?? [])].filter(i => !isCargo(i) && stackSlotsOf(i) > 0)
+    .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+  for(const i of carried)
+  {
+    end += stackSlotsOf(i);
+    if(n <= end) return i;
+  }
+  return null;
+}
+
 export function usedSlots(items)
 {
   let used = 0;

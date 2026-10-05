@@ -398,6 +398,13 @@ export function hasCondition(actor, name)
 export const DIS_SAVES_AND_ATTACKS = "disSavesAndAttacks";
 /** The older, narrower key: DIS on STR, DEX and CON saves (Synthskin Damaged). */
 export const DIS_PHYSICAL_SAVES = "disPhysicalSaves";
+/**
+ * DIS ON EVERY SAVE, AND ONLY SAVES - a Quantum Daemon's Misfortune Aura, "All
+ * Saves made with DIS" (Generated Gear and Attacks as Items, RULED 2026-10-04 by
+ * Matt: saves only, so not the Doom Song key, which also hits to-hit rolls).
+ * Morale saves count.
+ */
+export const DIS_SAVES = "disSaves";
 
 /**
  * The NAMES of the running board entries that carry `key`, for a roll's
@@ -422,6 +429,7 @@ export function conditionSourceNames(actor, key)
 export function saveDisSources(actor, ability)
 {
   const out = conditionSourceNames(actor, DIS_SAVES_AND_ATTACKS);
+  out.push(...conditionSourceNames(actor, DIS_SAVES));
   if (["str", "dex", "con"].includes(ability)) out.push(...conditionSourceNames(actor, DIS_PHYSICAL_SAVES));
   return [...new Set(out)];
 }

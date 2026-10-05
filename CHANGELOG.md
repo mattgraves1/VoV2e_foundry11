@@ -5,6 +5,100 @@ by feature. Changes not yet released are listed under Unreleased.
 
 ## Unreleased
 
+## 0.2.0
+
+### New
+- Generate Region (Vaarn Macros, GM only): grows a region of
+  desert locations joined by routes on a hex map, divided into named sections
+  with their Landscapes, landmarks and encounter tables, and lets you edit
+  types, names and hazards on a preview. Create region writes the region's
+  journal: an overview, a page per section with its encounter table, and a
+  page per location with its details rolled from the book's tables (a Vault's
+  page generates the vault when you want it), then its Scene: the painted map
+  on a hex grid of one day per hex, a GM pin per location, each route as a
+  hidden drawing you reveal, and a Party token whose sight uncovers the map.
+  Each route has its own page and pin; an eye beside any route link, or a
+  button on its page, reveals it to players. A route with a lair rolls the
+  lair from its page, and any page naming a Bestiary creature can spawn one.
+  A hazardous route reveals looking like any other road; its page can show
+  its hazard when the party knows of it.
+  A location's page can make an NPC there - or a follower, companion, rival,
+  monster or a character from the character creator - and lists them under
+  People here.
+  A section's page rolls its own encounter table (with its local factions and
+  any famous monster in it), and "The party is in this section" makes the
+  Exploration Clock's desert encounters roll that table. Each section's table is
+  a real RollTable you can edit, and the section's page picks its die - a
+  smaller die for easier encounters.
+- Referee's Guide: a new chapter 8, Running a Region, on Generate Region from
+  the preview to the Scene, encounters and the journal's buttons. Running a
+  Vault is now chapter 9, and the chapters after it 10-12. A link you made to
+  one of those pages in your world will need making again.
+- Vaarn Region Map Legend, a new compendium every player can read: the key to
+  a region map - its Landscapes, place icons, landmarks, vaults, routes and
+  how the ground shows height.
+
+### Fixes
+- Generated monsters and Quantum Daemons now carry working special attacks and
+  abilities (ability damage, Lifesteal, Swallow Whole, Cause Blindness, Torment
+  Aura and more), and every Daemon starts Incorporeal on the Active Effects
+  board until it is forced to manifest.
+- The Xanthous Mycomorph's Spore Spray now counts as fungal as well as blast.
+- A generated monster's Cause Mutation adds a random mutation on a failed CON
+  save; a Quantum Daemon's immunities now work (fire, cold, electrical, beam,
+  poison and fungal spores, physical, Gifts and hypergeometry); and both list
+  their defenses on the sheet as reminder Items.
+- More generated specials now work: Acid Spray eats d3 AV of armour, a Daemon's
+  Mind Control holds its target until an EGO save each round throws it off,
+  Summons Monsters calls a creature from the party's current encounter table
+  (the vault level or region section the Exploration Clock records), Invert
+  Gravity counts the rounds a target falls on the round card, and Misfortune
+  Aura gives everyone else DIS on every save.
+- The last generated specials now work: Parasite Implant and Parasite Seed fill
+  a slot with a Wound that deals d6 a day (or a round) until removed; Cause
+  Wound rolls 2d8 on a character's Wounds table; Destroy Item names the item in
+  the slot it rolls for the Referee to rule on; and a Daemon's Inferior Clones
+  places d4 copies of it at 1 HP.
+- The last generated NPC gear now works: Medicinal Gourds heal d8 each when a
+  character uses one, and Medgels now heal d10 the same way; a Watermonger's
+  Water Wealth is 3d20 Water Rations; the Doomsinger's Vocal Amplifier is a d6
+  weapon; a rival mystic's Ego-Death Ray deals d6 EGO damage and can be looted;
+  and a Lizard Rancher's Tame War Lizard places a new Bestiary War Lizard
+  beside them. Medgels already in your world do not heal.
+- The encounter card for an effect that reaches everyone no longer says every
+  creature "sings" it; only the Doomsinger does.
+- Generate Monster and Generate Quantum Daemon now give a creature its attacks
+  with a plain damage die - Melee (d6), Lightning (d8, electrical) - as weapons
+  on its sheet.
+- Generate NPC and Generate Rival Adventurer now put the person's gear on
+  their sheet as Items - weapons ready to roll, armour carried as loot (their
+  AV already counts it) - instead of only describing it. The Referee's Guide
+  chapter 7 explains.
+- Roll for Level, Roll for AV and Roll for Morale on a creature now show a
+  question mark, not a die: the picture was easy to mistake for the roll
+  button, which is the small die beside the quantity. Creatures already in your
+  world keep the old picture.
+- An effect put on a creature dragged from the Bestiary (Blind from a gambit,
+  for example) now shows on the Active Effects board, is reminded on the
+  round card, and ends on time. Before, effects on those creatures were
+  invisible and never ended. With two of one creature on the map, each is
+  named by its own token.
+
+### Install and update
+- Verified on Foundry 11.315, so Foundry no longer warns that the system is
+  not verified for that build.
+- The README explains the World Data Migration window Foundry shows when you
+  open a world after an update: it is safe, and nothing in Vaarn needs
+  migrating.
+- The Vaarn Items compendium now updates itself when a world loads: new Items
+  are added, changed ones are brought up to date, and ones the system no
+  longer has are removed. Edits made inside that compendium are overwritten,
+  so keep customised Items in your world's Items or in a compendium of your
+  own. Items already on character sheets are not touched.
+- Twelve unused item icons from Flaticon, inherited from the Knave system, are
+  removed. Every icon the system ships is now from game-icons.net or drawn for
+  the system, as `module/icons/credits.txt` lists.
+
 ## 0.1.2
 
 ### Fixes

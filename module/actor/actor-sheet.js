@@ -33,7 +33,7 @@ import { MORALE_TARGET, MORALE_MODES, moraleFailRules, moraleFailCard } from "./
 import { ANCESTRY_RULE_ITEMS, ANCESTRY_KILL_REACTIONS } from "./ancestry-rules-data.js";
 import { saveSentence } from "./bestiary-build.js";
 import { postCompelledSave, postSaveCard, postSaveCardsToTargets, postToxSave, postToxSaves, toxSaveApplies } from "../combat/compelled-save.js";
-import { useFieldGenerator, healTargets } from "./healing-field.js";
+import { useFieldGenerator, healTargets, applyHeal } from "./healing-field.js";
 import { postGiftApplyCard } from "../combat/gift-damage.js";
 import { effectsOf, effectLabel, levelOf, costDieForLevels, giftConditionSpec } from "../item/gift-effects.js";
 import { postEquationDamageCard } from "../combat/equation-damage.js";
@@ -719,7 +719,9 @@ export class KnaveActorSheet extends ActorSheet
       onSaveResolved(this.actor, ability, verdict);
       const notes = this._saveNotesFor(this.actor, ability);
       if(encDis) notes.push("<b>Encumbered</b> — DIS on STR, DEX and CON saves while carrying more than your item slot limit.");
-      if(statDis) notes.push("<b>DIS on physical Saves</b> — from an effect currently running on you.");
+      // Named by source (2026-10-04): a Daemon's Misfortune Aura gives DIS on EVERY save, not only physical ones.
+      if(statDis) notes.push(`<b>DIS on this Save</b> — from ${[...conditionSourceNames(this.actor, "disSaves"),
+        ...(["str", "dex", "con"].includes(ability) ? conditionSourceNames(this.actor, "disPhysicalSaves") : [])].join(", ")}.`);
       this._postRollNotes(this.actor, notes);
     });
     html.find('.knave-morale-button').click(this._onMoraleCheck.bind(this));
@@ -1199,14 +1201,19 @@ export class KnaveActorSheet extends ActorSheet
       const item = this.actor.items.get(li.data('itemId'));
       const spec = item?.flags?.vaarn?.spawnNow;
       if(!spec) return;
+      // `loyal` and `removesItem` (2026-10-04, RULED by Matt): a Lizard
+      // Rancher's Tame War Lizard is placed once, loyal to its owner, and the
+      // Item that placed it goes - the Broodling Broth's shape.
       const roll = await new Roll(spec.dice).evaluate({ async: true });
-      const spawned = await spawnBeside(this.actor, spec.creature, roll.total, { loyal: false });
+      const spawned = await spawnBeside(this.actor, spec.creature, roll.total, { loyal: !!spec.loyal });
       if(!spawned) return ui.notifications.warn(`"${spec.creature}" is not in the Bestiary compendium.`);
       await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: this.actor }),
         whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
         content: `<b>${item.name}</b>: ${this.actor.name} brings <b>${roll.total} × ${spec.creature}</b>`
           + (/d/.test(spec.dice) ? ` (${spec.dice})` : "")
-          + (spawned.length ? ` — ${spawned.map(a => `@UUID[${a.uuid}]{${a.name}}`).join(", ")}` : "") + `.` });
+          + (spawned.length ? ` — ${spawned.map(a => `@UUID[${a.uuid}]{${a.name}}`).join(", ")}` : "")
+          + (spec.loyal ? `, loyal to ${this.actor.name}` : "") + `.` });
+      if(spec.removesItem) await item.delete();
     });
 
     // The Banisher's Summon: "Roll on the encounter table for this floor. The
@@ -1235,6 +1242,42 @@ export class KnaveActorSheet extends ActorSheet
         content: `<b>${item.name}</b>: Depth ${depth}${rolled.redirects.length ? ` (${rolled.redirects.join("; ")})` : ""} rolled `
           + `<i>${rolled.result ?? "nothing"}</i>. `
           + (spawned?.length ? `Summoned ${spawned.map(a => `@UUID[${a.uuid}]{${a.name}}`).join(", ")} — not loyal to ${this.actor.name}.`
+                             : `No Bestiary creature matches that line; nothing was summoned.`) });
+    });
+
+    // SUMMONS FROM THE PARTY'S LOCATION - a Quantum Daemon's Summons Monsters
+    // (Generated Gear and Attacks as Items, RULED 2026-10-04 by Matt): the vault
+    // level's encounter table in a vault, the region section's in the desert, as
+    // the Exploration Clock records them. Not loyal, as the Banisher's Summon.
+    // COPIES OF ITSELF - a Quantum Daemon's Inferior Clones (RULED 2026-10-04, Matt).
+    html.find('.item-clone-self').click(async ev =>
+    {
+      if(!game.user.isGM) return ui.notifications.warn("Only the Referee can make copies of a creature.");
+      const li = $(ev.currentTarget).parents('.item');
+      const item = this.actor.items.get(li.data('itemId'));
+      const spec = item?.flags?.vaarn?.cloneSelf;
+      if(!spec) return;
+      const n = (await new Roll(spec.dice).evaluate({ async: true })).total;
+      const { cloneSelfBeside } = await import("./bestiary-spawn.js");
+      const made = await cloneSelfBeside(this.actor, n, { hp: spec.hp ?? null, dropItemId: item.id });
+      await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+        whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
+        content: `<b>${item.name}</b>: ${spec.dice} = ${n}. ${made.map(a => `@UUID[${a.uuid}]{${a.name}}`).join(", ")}${spec.hp != null ? ` - ${spec.hp} HP each` : ""}.` });
+    });
+
+    html.find('.item-summon-location').click(async ev =>
+    {
+      if(!game.user.isGM) return ui.notifications.warn("Only the Referee can summon creatures.");
+      const li = $(ev.currentTarget).parents('.item');
+      const item = this.actor.items.get(li.data('itemId'));
+      const { rollPartyLocationEncounter } = await import("./location-encounter.js");
+      const rolled = await rollPartyLocationEncounter();
+      if(!rolled) return ui.notifications.warn(`${item?.name ?? "Summon"}: record where the party is first - the Exploration Clock's Party location (in a vault) or Party section (in the desert).`);
+      const spawned = rolled.creature ? await spawnBeside(this.actor, rolled.creature, 1, { loyal: false }) : null;
+      await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+        whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
+        content: `<b>${item.name}</b>: ${rolled.where} encounters, d${rolled.die} = ${rolled.total} - <i>${rolled.text}</i>. `
+          + (spawned?.length ? `Summoned ${spawned.map(a => `@UUID[${a.uuid}]{${a.name}}`).join(", ")} - not loyal to ${this.actor.name}.`
                              : `No Bestiary creature matches that line; nothing was summoned.`) });
     });
 
@@ -2128,7 +2171,7 @@ export class KnaveActorSheet extends ActorSheet
       if(spared) { this._postWoundMsg(token.actor, sparedHoldLine(item.name, spared)); continue; }
       await startHold(token.actor, spec, this.actor, item.name);
       this._postWoundMsg(token.actor, `is held by <b>${this.actor.name}</b>'s <b>${item.name}</b> - `
-        + `${spec.dice ? spec.dice + " damage" : spec.loss.dice + " " + String(spec.loss.ability).toUpperCase()} each round; `
+        + `${spec.dice ? spec.dice + " damage each round" : spec.loss ? spec.loss.dice + " " + String(spec.loss.ability).toUpperCase() + " each round" : (spec.effect ?? "held")}; `
         + `${String(spec.escape.ability).toUpperCase()} save to ${spec.escape.by} on their turn.`);
     }
   }
@@ -2259,19 +2302,49 @@ export class KnaveActorSheet extends ActorSheet
     await this._applyAbilityDamageOnHit(item);
   }
 
+  /** Cause Wound: roll the declared dice on the Wounds table for a character hit (creatures take no Wounds). */
+  async _rollWoundOnHit(item, target)
+  {
+    if(!target) return;
+    const dice = item.flags.vaarn.woundRoll;
+    if(target.type !== "character")
+      return this._postWoundMsg(target, `<b>${item.name}</b> would roll ${dice} on the Wounds table, but creatures do not suffer Wounds.`);
+    const r = (await new Roll(dice).evaluate({ async: true })).total;
+    await this._postWoundMsg(target, `<b>${item.name}</b>: a Wound (${dice} = ${r}, the -${r} HP row).`);
+    return this._applyWound(target, -r, 0, { setHP: false });
+  }
+
+  /** Destroy Item: roll the d20 and NAME the item in that slot, to the Referee only. */
+  async _rollDestroyItemOnHit(item, target)
+  {
+    if(!target) return;
+    const { itemAtSlot } = await import("./item-slots.js");
+    const roll = await new Roll(item.flags.vaarn.destroyItemRoll).evaluate({ async: true });
+    const hit = itemAtSlot(target.items, roll.total);
+    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+      whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
+      content: `<div class="vaarn-chat-card"><h3>${item.name}</h3><p>${target.name}, slot ${roll.total} (${item.flags.vaarn.destroyItemRoll}): `
+        + (hit ? `<b>@UUID[${hit.uuid}]{${hit.name}}</b>` : "<i>an empty slot</i>")
+        + `.</p><p><i>Nothing has been destroyed - whether and how it is, is the Referee's call.</i></p></div>` });
+  }
+
   async _applyArmourLossOnHit(item)
   {
     // A tag's loss (Ultra-Corrosive) plus a creature attack's declared one
     // (the Drill Drone's Drill, the Witchgrub's Corrosive Spit - Live AV
     // Computation wiring, 2026-09-25). The same write either way.
     const tagLoss = ARMOUR_LOSS_TAGS[(item?.system?.tags ?? []).find(t => ARMOUR_LOSS_TAGS[t])] || 0;
-    const loss = tagLoss + (Number(item?.flags?.vaarn?.armourLoss) || 0);
-    if(!loss) return;
+    // A declared loss may be DICE (Acid Spray's d3, 2026-10-04), rolled per target hit.
+    const declared = item?.flags?.vaarn?.armourLoss;
+    const lossDice = typeof declared === "string" && /d/i.test(declared) ? declared : null;
+    const fixed = tagLoss + (lossDice ? 0 : (Number(declared) || 0));
+    if(!fixed && !lossDice) return;
     const verb = tagLoss ? "corrodes" : "damages";
     for(const token of this.#_hitTargets)
     {
       const actor = token.actor;
       if(!actor) continue;
+      const loss = fixed + (lossDice ? (await new Roll(lossDice).evaluate({ async: true })).total : 0);
       const undamaged = Number(actor.system?.armor?.value ?? 0);
       const already = Math.max(0, Number(actor.system?.armor?.damage) || 0);
       const effective = Number(actor.system?.armor?.effective ?? undamaged);
@@ -4335,9 +4408,23 @@ export class KnaveActorSheet extends ActorSheet
    * Die, because the TD lives on the target's sheet and an item on the
    * user's sheet has no clean way to reach another actor. The GM
    * adjudicates the cure.
+   *
+   * A HEAL DIE, 2026-10-04 (Generated Gear and Attacks as Items, RULED by
+   * Matt: Medicinal Gourds' "d8 heal", shared with the Medgel's "D10 Heal"). An
+   * Item declaring flags.vaarn.useHeal heals its USER by that roll, through
+   * applyHeal - so Deprived and never-healing refuse it, as every HP gain. The
+   * unit is spent either way: it was eaten.
    */
-  _onConsumableUse(item)
+  async _onConsumableUse(item)
   {
+    const healDice = item.flags?.vaarn?.useHeal;
+    if(healDice)
+    {
+      const roll = await new Roll(healDice).evaluate({ async: true });
+      const line = await applyHeal(this.actor, roll.total, `the <b>${item.name}</b>`);
+      await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+        flavor: `<b>${item.name}</b> — heal ${healDice}${line ? `: ${this.actor.name} ${line}` : ""}` });
+    }
     const remaining = Number(item.system.quantity) - 1;
     if(remaining <= 0)
     {
@@ -5595,6 +5682,12 @@ export class KnaveActorSheet extends ActorSheet
           applyNamedWound(x.actor, woundOnHit.wound, { source: woundOnHit.atTotal == null ? `${this.actor.name}'s ${item.name}` : `${this.actor.name}'s ${item.name} (${roll.total})` });
         // The Sawbone Drone's Surgical Array, resolved per target hit.
         if(item.flags?.vaarn?.surgicalArray) resolveSurgicalArray(this.actor, x.actor);
+        // CAUSE WOUND (RULED 2026-10-04, Matt): a roll on the Wounds table for a
+        // character hit - the total is the negative-HP row, as the Surgical Array's.
+        if(item.flags?.vaarn?.woundRoll) this._rollWoundOnHit(item, x.actor);
+        // DESTROY ITEM (RULED 2026-10-04, Matt: adjudicated only): the d20 names
+        // the item in that slot for the Referee; nothing is deleted.
+        if(item.flags?.vaarn?.destroyItemRoll) this._rollDestroyItemOnHit(item, x.actor);
         // Hit-Count Progression (RULED 2026-09-27, Matt): the Desiccator's
         // Desiccate - the stage for this target's hit count, applied now.
         if(item.flags?.vaarn?.hitProgression)
@@ -5992,6 +6085,8 @@ export class KnaveActorSheet extends ActorSheet
    */
   _statefulSaveDis(actor, abilityKey)
   {
+    // DIS on every save (a Daemon's Misfortune Aura, 2026-10-04), any ability.
+    if(hasStatefulCondition(actor, "disSaves")) return true;
     if(!["str", "dex", "con"].includes(abilityKey)) return false;
     return hasStatefulCondition(actor, "disPhysicalSaves");
   }
@@ -6195,11 +6290,14 @@ export class KnaveActorSheet extends ActorSheet
       const actor = c.actor;
       if(!actor || actor === self || (self.isToken ? c.tokenId === self.token?.id : (!actor.isToken && actor.id === self.id))) continue;
       if(entriesOf(actor).some(e => e.name === item.name)) { already.push(actor.name); continue; }
-      await applyEffectToActor(actor, { name: item.name, text: `${spec.text} From <b>${self.name}</b>. <b>No printed end</b> - removed when the song stops.`,
+      await applyEffectToActor(actor, { name: item.name, text: `${spec.text} From <b>${self.name}</b>. <b>No printed end</b> - removed ${spec.ends ?? "when it ends"}.`,
         rounds: null, applied: { conditions: [...spec.conditions] } });
       reached.push(actor.name);
     }
-    this._postWoundMsg(self, `sings the <b>${item.name}</b>! ${spec.text}`
+    // The verb is the effect's own (2026-10-04, Matt): the Doomsinger declares
+    // "sings"; a creature that declares none "uses" it (a Daemon's Sickly Aura
+    // read "sings" before).
+    this._postWoundMsg(self, `${spec.verb ?? "uses"} the <b>${item.name}</b>! ${spec.text}`
       + (reached.length ? ` <i>Now on: ${reached.join(", ")}.</i>` : "")
       + (already.length ? ` <i>Already under it: ${already.join(", ")}.</i>` : ""));
   }

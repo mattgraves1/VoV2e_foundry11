@@ -329,6 +329,10 @@
                           <a class="item-control item-spawn-now" title="Spawn {{item.flags.vaarn.spawnNow.dice}} {{item.flags.vaarn.spawnNow.creature}} beside it"><i class="fas fa-people-group"></i></a>
                           {{/if}}{{#if item.flags.vaarn.summonFromDepth}}
                           <a class="item-control item-summon-depth" title="Roll this floor's encounter list and summon the creature beside it"><i class="fas fa-dungeon"></i></a>
+                          {{/if}}{{#if item.flags.vaarn.cloneSelf}}
+                          <a class="item-control item-clone-self" title="Place {{item.flags.vaarn.cloneSelf.dice}} copies of this creature beside it"><i class="fas fa-clone"></i></a>
+                          {{/if}}{{#if item.flags.vaarn.summonFromLocation}}
+                          <a class="item-control item-summon-location" title="Roll the party's encounter table (the Exploration Clock's vault level or region section) and summon the creature beside it"><i class="fas fa-map-location-dot"></i></a>
                           {{/if}}{{/if}}
                           {{!-- Cut an implant out as a capsule for the Dropped Items (Item
                                 Creation from Roll Table wiring, 2026-09-25). GM-only, any time. --}}

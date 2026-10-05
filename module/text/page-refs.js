@@ -38,7 +38,15 @@ export function stripPageRefs(text)
   return out;
 }
 
-/** A deep copy with every string stripped. */
+/**
+ * A deep copy with every string stripped. Exported for anything that COMPARES
+ * built data against stored documents (macros/dev/sync-bestiary.js, 2026-10-04):
+ * a stored document was stripped when it was created, so comparing it with the
+ * raw built text reports a difference that no write can ever clear - the
+ * Advocate's "(see p.xx)" was listed on every Bestiary sync (Group 508).
+ */
+export function stripPageRefsDeep(value) { return stripDeep(value); }
+
 function stripDeep(value)
 {
   if(typeof value === "string") return stripPageRefs(value);

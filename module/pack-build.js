@@ -40,8 +40,9 @@
  * GM who has edited their compendium will never find this quietly
  * overwriting them.
  *
- * ONE EXCEPTION, vaarn.macros (2026-09-27): it is re-synced to macros/*.js on
- * every load - see syncMacroPack below for why that one is safe.
+ * TWO EXCEPTIONS, re-synced on every load: vaarn.macros (2026-09-27) to
+ * macros/*.js - see syncMacroPack below for why that one is safe - and
+ * vaarn.items (2026-10-04) to the rosters - see syncItemPack.
  */
 
 import { BESTIARY } from "./actor/bestiary-data.js";
@@ -53,7 +54,7 @@ import { ROLLTABLES } from "./actor/rolltable-data.js";
 import { buildCreatureDoc } from "./actor/bestiary-build.js";
 import { tokenPath, artAvailable } from "./actor/bestiary-art.js";
 import { makeFolderResolver, buildDescription, desiredResults } from "./actor/rolltable-build.js";
-import { buildPackItems } from "./item/pack-items.js";
+import { buildPackItems, planItemSync } from "./item/pack-items.js";
 import { MUSIC_PLAYLIST } from "./music-data.js";
 import { stableId, withStableIds } from "./stable-id.js";
 
@@ -236,30 +237,87 @@ export async function buildRollTables(pack)
 }
 
 /**
- * The Item pack — Item Compendium Packs, 2026-09-20.
+ * The Item pack — Item Compendium Packs, 2026-09-20; KEPT CURRENT ON EVERY
+ * LOAD since Item Pack Repair (RULED 2026-10-04 by Matt), like vaarn.macros.
  *
- * Folders first and one at a time for the same reason buildRollTables does
- * it: each level needs its parent's id. The resolver is the RollTable one
- * with its type parameter set to Item — see makeFolderResolver on why it was
- * parameterised rather than copied.
+ * Built only-when-empty until then, so a world whose pack predated a roster's
+ * growth never caught up: the ninth regression run found the test world 20
+ * Items and a folder behind. Now a missing Item is created, one that differs
+ * from its roster is put back, and one no roster names is deleted - a GM's
+ * edits inside the pack included. A GM keeps customised Items in a compendium
+ * of their own or in the world's Items, which this never reads; Items on a
+ * character sheet are copies, and links into the pack survive because the ids
+ * are stable. An empty pack is simply the case where every Item is created.
  *
  * WHAT IS IN HERE AND WHY IS NOT DECIDED HERE. pack-items.js holds the
- * roster walk and every ruling behind it; this function only writes what it
- * is handed, so the contents can be counted without a world.
+ * roster walk and every ruling behind it, and the comparison (planItemSync);
+ * this function only reads the pack and writes what the plan says.
+ *
+ * Folders one at a time for the same reason buildRollTables does it: each
+ * level needs its parent's id. A folder no roster names is deleted once it is
+ * empty.
  */
-export async function buildItems(pack)
+function folderPath(folder)
 {
+  const parts = [];
+  for(let f = folder; f; f = f.folder) parts.unshift(f.name);
+  return parts.join("/");
+}
+
+export async function syncItemPack()
+{
+  if(!game.user.isGM) return null;
+  const designated = game.users?.activeGM;               // same guard as buildEmptyPacks
+  if(designated && designated.id !== game.user.id) return null;
+  const pack = game.packs.get(ITEM_PACK);
+  if(!pack) return null;
+
   const groups = await buildPackItems();
+  const want = withStableIds(pack.collection, groups.flatMap(g => g.docs.map(doc => ({ ...doc, folder: g.folder }))));
+  const pathOf = new Map(pack.folders.map(f => [f.id, folderPath(f)]));
+  const have = (await pack.getDocuments()).map(d =>
+  {
+    const o = d.toObject();
+    return { ...o, folder: o.folder ? (pathOf.get(o.folder) ?? null) : null };
+  });
+  const plan = planItemSync(want, have);
 
-  const resolve = makeFolderResolver(pack.collection, "Item");
-  const folderIds = new Map();
+  const wantedPaths = new Set();
   for(const g of groups)
-    folderIds.set(g.folder, (await resolve(g.folder)).id);
+  {
+    const parts = g.folder.split("/");
+    for(let i = 1; i <= parts.length; i++) wantedPaths.add(parts.slice(0, i).join("/"));
+  }
+  const staleFolders = () => pack.folders.filter(f => !wantedPaths.has(folderPath(f)));
+  const missingFolders = [...new Set(groups.map(g => g.folder))]
+    .filter(p => ![...pathOf.values()].includes(p));
 
-  const docs = groups.flatMap(g => g.docs.map(doc => ({ ...doc, folder: folderIds.get(g.folder) })));
+  const writes = plan.create.length + plan.update.length + plan.recreate.length + plan.remove.length;
+  if(!writes && !missingFolders.length && !staleFolders().length) return null;
 
-  await Item.createDocuments(withStableIds(pack.collection, docs), { pack: pack.collection, keepId: true });
-  return docs.length;
+  let foldersRemoved = 0;
+  await withUnlocked(pack, async () =>
+  {
+    const resolve = makeFolderResolver(pack.collection, "Item");
+    const folderIds = new Map();
+    for(const g of groups) folderIds.set(g.folder, (await resolve(g.folder)).id);
+    const placed = docs => docs.map(d => ({ ...d, folder: folderIds.get(d.folder) }));
+
+    const opts = { pack: pack.collection };
+    const gone = [...plan.remove, ...plan.recreate.map(d => d._id)];
+    if(gone.length) await Item.deleteDocuments(gone, opts);
+    const fresh = [...plan.create, ...plan.recreate];
+    if(fresh.length) await Item.createDocuments(placed(fresh), { ...opts, keepId: true });
+    if(plan.update.length) await Item.updateDocuments(placed(plan.update), opts);
+
+    // Deepest first. Every Item no roster names is already gone, so a folder
+    // no roster names is empty by now.
+    const stale = staleFolders()
+      .sort((a, b) => folderPath(b).split("/").length - folderPath(a).split("/").length);
+    for(const f of stale) { await f.delete(); foldersRemoved++; }
+  });
+  return { created: plan.create.length, updated: plan.update.length + plan.recreate.length,
+           deleted: plan.remove.length, foldersRemoved };
 }
 
 /**
@@ -293,17 +351,15 @@ export async function buildEmptyPacks()
   const steeds = game.packs.get(STEEDS_PACK);
   const vehicles = game.packs.get(VEHICLES_PACK);
   const rolltables = game.packs.get(ROLLTABLE_PACK);
-  const items = game.packs.get(ITEM_PACK);
   const todo = [];
   if(bestiary && bestiary.index.size === 0) todo.push("bestiary");
   if(pets && pets.index.size === 0) todo.push("pets");
   if(steeds && steeds.index.size === 0) todo.push("steeds");
   if(vehicles && vehicles.index.size === 0) todo.push("vehicles");
   if(rolltables && rolltables.index.size === 0) todo.push("rolltables");
-  if(items && items.index.size === 0) todo.push("items");
   if(!todo.length) return null;
 
-  const report = { creatures: 0, pets: 0, steeds: 0, vehicles: 0, tables: 0, items: 0, art: false, errors: [] };
+  const report = { creatures: 0, pets: 0, steeds: 0, vehicles: 0, tables: 0, art: false, errors: [] };
 
   if(todo.includes("bestiary"))
   {
@@ -357,16 +413,6 @@ export async function buildEmptyPacks()
     {
       console.error("Vaarn | building the RollTables pack failed:", err);
       report.errors.push(`RollTables: ${err.message}`);
-    }
-  }
-
-  if(todo.includes("items"))
-  {
-    try { report.items = await withUnlocked(items, () => buildItems(items)); }
-    catch(err)
-    {
-      console.error("Vaarn | building the Items pack failed:", err);
-      report.errors.push(`Items: ${err.message}`);
     }
   }
 
@@ -567,6 +613,27 @@ export function registerPackBuild()
       ui.notifications.error(`Vaarn: could not update the Vaarn Music compendium — ${err.message}. See the console.`);
     }
 
+    // Items on their own too (Item Pack Repair, 2026-10-04).
+    try
+    {
+      const m = await syncItemPack();
+      if(m)
+      {
+        const parts = [];
+        if(m.created) parts.push(`added ${m.created}`);
+        if(m.updated) parts.push(`updated ${m.updated}`);
+        if(m.deleted) parts.push(`removed ${m.deleted}`);
+        if(m.foldersRemoved) parts.push(`removed ${m.foldersRemoved} empty folder${m.foldersRemoved === 1 ? "" : "s"}`);
+        if(!parts.length) parts.push("rebuilt its folders");
+        ui.notifications.info(`Vaarn: Vaarn Items compendium ${parts.join(", ")} to match the system's data.`);
+      }
+    }
+    catch(err)
+    {
+      console.error("Vaarn | item pack sync failed:", err);
+      ui.notifications.error(`Vaarn: could not update the Vaarn Items compendium — ${err.message}. See the console.`);
+    }
+
     let report;
     try { report = await buildEmptyPacks(); }
     catch(err)
@@ -582,7 +649,6 @@ export function registerPackBuild()
     if(report.steeds) built.push(`${report.steeds} steeds`);
     if(report.vehicles) built.push(`${report.vehicles} vehicles`);
     if(report.tables) built.push(`${report.tables} RollTables`);
-    if(report.items) built.push(`${report.items} Items`);
 
     if(built.length)
     {

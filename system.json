@@ -3,18 +3,18 @@
   "name": "vaarn",
   "title": "Vaults of Vaarn",
   "description": "A game system for Vaults of Vaarn (second edition) by Leo Hunt. Forked from the unofficial Knave system. Not affiliated with Leo Hunt, Ben Milton or the original Knave system's authors.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "minimumCoreVersion": "11",
   "compatibleCoreVersion": "11",
   "compatibility": {
     "minimum": 11,
-    "verified": "11.302"
+    "verified": "11.315"
   },
   "templateVersion": 11,
   "authors": [{ "name": "Matt Graves" }],
   "url": "https://github.com/mattgraves1/VoV2e_foundry11",
   "manifest": "https://github.com/mattgraves1/VoV2e_foundry11/releases/latest/download/system.json",
-  "download": "https://github.com/mattgraves1/VoV2e_foundry11/releases/download/v0.1.2/vaarn-0.1.2.zip",
+  "download": "https://github.com/mattgraves1/VoV2e_foundry11/releases/download/v0.2.0/vaarn-0.2.0.zip",
   "esmodules": ["module/knave.js"],
   "styles": ["css/knave.css"],
   "scripts": [],
@@ -104,6 +104,14 @@
       "label": "Vaarn Ancestries",
       "system": "vaarn",
       "path": "./packs/ancestries.db",
+      "type": "JournalEntry",
+      "flags": {}
+    },
+    {
+      "name": "region-legend",
+      "label": "Vaarn Region Map Legend",
+      "system": "vaarn",
+      "path": "./packs/region-legend.db",
       "type": "JournalEntry",
       "flags": {}
     },

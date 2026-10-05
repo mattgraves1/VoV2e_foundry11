@@ -310,6 +310,50 @@ export async function performSplit(actor, causes, hpAfter)
 }
 
 /**
+ * COPIES OF A CREATURE ITSELF beside it - a Quantum Daemon's "Creates d4
+ * Inferior Clones of Itself (1 HP each)" (Generated Gear and Attacks as Items,
+ * RULED 2026-10-04 by Matt). Unlike spawnBeside this copies the Actor, not a
+ * pack creature: a generated Daemon is in no pack. Each copy has `hp` HP when
+ * given, and loses the Item that makes copies, so a clone cannot clone
+ * (Claude's choice, Matt's to overturn). Returns the copies.
+ */
+export async function cloneSelfBeside(actor, count, { hp = null, dropItemId = null } = {})
+{
+  const n = Math.max(0, Number(count) || 0);
+  const base = actor.name.replace(/ Clone \d+$/, "");
+  const prefix = base + " Clone ";
+  const taken = game.actors.map(a => a.name.startsWith(prefix) ? Number(a.name.slice(prefix.length)) : NaN).filter(Number.isFinite);
+  const start = taken.length ? Math.max(...taken) : 0;
+  const token = actor.getActiveTokens?.(false, true)?.[0] ?? null;
+  const grid = token?.parent?.grid?.size ?? 100;
+  const made = [];
+  for(let i = 0; i < n; i++)
+  {
+    const data = actor.toObject();
+    delete data._id;
+    data.name = prefix + (start + i + 1);
+    // Every Item that makes copies goes, not only the one used: a clone cannot clone (Group 511
+    // found a Daemon carrying two, one rolled and one added).
+    data.items = (data.items ?? []).filter(it => it._id !== dropItemId && !it.flags?.vaarn?.cloneSelf);
+    if(hp != null)
+    {
+      foundry.utils.setProperty(data, "system.health.value", Number(hp));
+      foundry.utils.setProperty(data, "system.health.max", Number(hp));
+    }
+    const created = await getDocumentClass("Actor").create(data);
+    if(token)
+    {
+      const angle = (2 * Math.PI * i) / Math.max(n, 1);
+      const tokenData = (await created.getTokenDocument({ x: Math.round(token.x + Math.cos(angle) * grid), y: Math.round(token.y + Math.sin(angle) * grid) })).toObject();
+      tokenData.actorLink = true;
+      await token.parent.createEmbeddedDocuments("Token", [tokenData]);
+    }
+    made.push(created);
+  }
+  return made;
+}
+
+/**
  * Start the day's reminder that spawned retainers wither - the Neobloom's
  * Sapling Retainers serve "for the rest of the day" (Actor Spawning wiring,
  * RULED 2026-09-25 by Matt: a reminder, not a deletion). One GM card naming
