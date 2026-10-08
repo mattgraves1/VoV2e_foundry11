@@ -5,6 +5,24 @@ by feature. Changes not yet released are listed under Unreleased.
 
 ## Unreleased
 
+## 0.3.1
+
+### New
+- Referee's Guide: a new chapter 13, Making Your Own Items. It covers the Effects
+  tab's builder - when an effect happens, what it does, its conditions, the Stats
+  section, equipping and hands - and Mystic Gifts, with worked examples of new
+  items and of changing a book item. No other chapter moves.
+
+### Fixes
+- Player's Guide chapter 5 explains the Effects tab and "In effect" lines, and
+  no longer tells players to write a Gift's effects themselves: only the Referee
+  can change the Effects tab.
+- The guides now describe 0.3.0 correctly: a weapon's trade value and its "In
+  effect" line (Referee 11), creatures marked defeated however they die (2, 12),
+  who presses the round card's Apply buttons (2), exposure saves that infect by
+  themselves and rounds counted in the creature's own turns (5), the Reaction
+  button and faction standing (6), and which items can be equipped (Player 2).
+
 ## 0.3.0
 
 ### New
