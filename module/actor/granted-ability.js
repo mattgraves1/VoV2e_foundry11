@@ -42,11 +42,12 @@
  * the Item is there to try again. Combat ending removes the Item with the
  * flag (knave.js's deleteCombat sweep), so nothing leaks past the fight.
  */
-import { ELIXIRS } from "./chargen-data.js";
+import { elixirGrantView } from "../item/consumable-effects.js";
 import { WEATHER_TYPES } from "../time/weather-data.js";
 import { postSaveCardsToTargets } from "../combat/compelled-save.js";
 import { postMetalReachCard } from "../combat/metal-cards.js";
 import { resolveSave, SAVE_TARGET } from "../combat/saves.js";
+import { entriesOf, removeEntry } from "../time/effect-board.js";
 
 const SCOPE = "vaarn";
 export const GRANTED_FLAG = "grantedBy";
@@ -59,10 +60,14 @@ const USE_TEXT = {
   metalPull: "Use it from the sheet to draw metal towards you; the card lists what is in reach and the Referee resolves it."
 };
 
-/** The roster elixir of this name, if it grants an ability. */
+/**
+ * What the elixir of this name grants, if anything - read from its sentences
+ * since Effect Engine: Consumables chunk 3a (RULED 2026-10-06, Matt, ruling 3),
+ * in the roster row's shape: { name, effect, grants, save, applies }.
+ */
 export function elixirGranting(name)
 {
-  return ELIXIRS.find(e => e.name === name && e.grants) ?? null;
+  return elixirGrantView(name);
 }
 
 /** The elixir that granted this Item, or null for an ordinary Item. */
@@ -214,12 +219,17 @@ async function useEndFrenzy(sheet, actor, item, elixir, say)
     await say(`is not in a frenzy; <b>${item.name}</b> is no longer needed.`);
     return;
   }
-  const roll = sheet._onAbility_Clicked("ego", null);
+  // Extra Head's ADV on EGO saves applies here too (chunk 7).
+  const roll = sheet._onAbility_Clicked("ego", null, ...sheet._ownSaveMods("ego"));
   const verdict = resolveSave(roll.total, roll.dice[0]?.total, SAVE_TARGET);
   if(verdict.passed)
   {
-    await actor.unsetFlag(SCOPE, "berserkerActive");
-    await item.delete();
+    // The frenzy's board entry (Shared Pipelines chunk 6): removing it clears
+    // the flag and takes this Item. A frenzy from before chunk 6 has none.
+    const entry = entriesOf(actor).find(e => e.clearFlag === "vaarn.berserkerActive");
+    if(entry) await removeEntry(actor, entry.id);
+    if(actor.getFlag(SCOPE, "berserkerActive")) await actor.unsetFlag(SCOPE, "berserkerActive");
+    if(actor.items.get(item.id)) await item.delete();
     await say(`<b>EGO Save passed</b> — shakes off the <b>${elixir.name}</b> frenzy. Double damage dealt and received ends.`);
   }
   else

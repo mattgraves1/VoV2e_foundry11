@@ -3,7 +3,7 @@
 A game system for playing **Vaults of Vaarn** (second edition) in Foundry VTT.
 
 - **Foundry VTT compatibility:** v11 (verified on 11.315)
-- **Version:** 0.2.0
+- **Version:** 0.3.0
 - **Translation support:** none
 
 It started as a fork of the unofficial Knave system for Foundry, and still

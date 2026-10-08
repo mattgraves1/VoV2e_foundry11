@@ -33,6 +33,9 @@ import {
   adjacency, fromColRow
 } from "./weather-chart.js";
 import { WEATHER_TYPES, DIRECTIONS } from "./weather-data.js";
+// A weather's Beam note and Vigilance DIS are its sentences (Remaining Sources chunk 2c-i, 2026-10-07);
+// BEAM_STORMS lives in weather-data.js, which builds them.
+import { weatherSentencesOf } from "../item/remaining-effects.js";
 
 const SCOPE = "vaarn";
 const SETTING_STATE = "weatherState";
@@ -97,14 +100,6 @@ export function currentWeather()
 }
 
 /**
- * The weathers that count as a sandstorm for Beam ("Beam attacks are ... not
- * effective during sandstorms"). RULED 2026-09-23 (Matt): Sand Storm and
- * Prismatic Tempest, whose sheets of sand make it one; NOT Dust Storm, which
- * is dust.
- */
-export const BEAM_STORMS = new Set(["sand", "tempest"]);
-
-/**
  * The reminder a Beam attack posts, or null. A REMINDER, not a rule (Matt,
  * option B of three): whether this fight is actually out in the storm - or
  * sheltering from it, as a Sand Storm day's encounters are - is the Referee's
@@ -114,9 +109,7 @@ export function beamStormNote(environment)
 {
   if (environment !== "desert") return null;
   const w = currentWeather();
-  return BEAM_STORMS.has(w?.key)
-    ? `${w.name}: beam attacks are not effective during sandstorms — resolve by hand.`
-    : null;
+  return weatherSentencesOf(w?.key).find(s => s.do?.from === "beamStorm")?.text ?? null;
 }
 
 /** Where the marker is, in the transcription's own column.row terms. */

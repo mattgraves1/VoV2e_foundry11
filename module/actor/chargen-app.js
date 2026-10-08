@@ -22,6 +22,7 @@ import { THIRD_OF_A_SLOT } from "./rest.js";
 import { sampleRecipe, blankRecipe, RECIPES_SCOPE, RECIPES_FLAG } from "../item/crucible-recipes.js";
 import { spanFieldFrom } from "../time/declared-span.js";
 import { rollWeaponBase } from "./weapon-roller.js";
+import { exoticaArmourAv } from "./exotica-effects-data.js";
 
 /**
  * Vaarn native character creator — a Foundry Application wizard that ports
@@ -933,10 +934,13 @@ export class KnaveCharacterCreator extends Application
     }
 
     const notes = [];
-    const effective = this._effectiveAbilities();
 
+    // THE BASE, not _effectiveAbilities (Stats as Sentences chunk 2d-iii, RULED
+    // 2026-10-07): the rolled mutations' and the implant's ability bonuses run
+    // live from their Items (marked below), clamped at +10 as the sum was here.
+    // The review step still shows _effectiveAbilities' totals.
     const abilities = {};
-    for(const a of effective)
+    for(const a of this.state.abilities)
       abilities[a.key] = { value: a.bonus, max: 10, woundDamage: 0 };
 
     const creatureFlags = ANCESTRY_CREATURE_TYPES[s.ancestry] || [];
@@ -990,9 +994,6 @@ export class KnaveCharacterCreator extends Application
     const superseded = s.spark?.mutationsSuperseded || [];
     const mutationHpBonus = mutations.reduce((sum, m) => sum + (m.hpBonus || 0), 0);
     const mutationSlotBonus = mutations.reduce((sum, m) => sum + (m.slotBonus || 0), 0);
-    // Work-queue item 11 (2026-08-25): Extra Arms' "extra pair of arms" is a
-    // flat +2 hands.max, same shape as Centaur/Kangaroo Pouch's slotBonus.
-    const mutationHandsBonus = mutations.reduce((sum, m) => sum + (m.handsBonus || 0), 0);
     const hpBonus = (s.boon?.implant?.hp_bonus || 0) + mutationHpBonus;
     const maxHP = s.hp.maximum + hpBonus;
     const characterName = (s.characterName || "").trim() || s.spark?.personality?.Name || `New ${s.ancestry}`;
@@ -1022,10 +1023,10 @@ export class KnaveCharacterCreator extends Application
     // Item Slots.md's hard 20-slot cap is a per-actor field (template.json
     // default 20), not derived — a few mutations (Centaur, Kangaroo Pouch)
     // raise it directly, same as everything else this wizard bakes in.
-    if(mutationSlotBonus) actorSystem.inventorySlots = { max: 20 + mutationSlotBonus };
+    // Live since Stats as Sentences chunk 2d-iii: the mutations' slots come from their Items.
     // Same pattern for hands.max (item 11) — Extra Arms is the only
     // handsBonus mutation today.
-    if(mutationHandsBonus) actorSystem.hands = { max: 2 + mutationHandsBonus };
+    // Live since 2d-iii, as the slots.
     // A player without Create New Actors has the GM's client create it, as
     // its owner (gm-relay.js, RULED 2026-09-28). Refused or unanswered, the
     // wizard stays open with everything rolled, so Create can be clicked again.
@@ -1047,14 +1048,15 @@ export class KnaveCharacterCreator extends Application
     const startingWeaponTags = [eq.weapon.tag, ...(eq.weapon.base_tags || [])].filter(Boolean);
     const weaponSystem =
     {
-      slots: applySlotTagModifiers(eq.weapon.slots ?? 1, startingWeaponTags),
+      // The base in the fields, the tags live (Stats as Sentences chunk 2d-i, RULED 2026-10-07).
+      slots: eq.weapon.slots ?? 1,
       hands: eq.weapon.hands ?? 1,
-      damageDice: applyDamageTagModifiers(normalizeDamageDice(eq.weapon.damage), startingWeaponTags),
+      damageDice: normalizeDamageDice(eq.weapon.damage),
       tags: startingWeaponTags,
       // Trade-value tags were never applied on this path — a Gilded starting
       // weapon was worth 1 while a Gilded generated one was worth 2. Starting
       // weapons are Basic tier, so no tier bonus applies.
-      tradeValue: applyTradeValueTagModifiers(eq.weapon.tradeValue ?? 1, startingWeaponTags),
+      tradeValue: eq.weapon.tradeValue ?? 1,
       description: `${eq.weapon.tag ? `<p><b>Tag:</b> ${eq.weapon.tag} — ${eq.weapon.tag_effect}</p>` : ""}${(eq.weapon.base_tags || []).length ? `<p><b>Built-in tags:</b> ${eq.weapon.base_tags.join(", ")}</p>` : ""}`,
     };
     if(eq.weapon.ammo_die)
@@ -1062,7 +1064,7 @@ export class KnaveCharacterCreator extends Application
       const die = normalizeUsageDie(eq.weapon.ammo_die);
       weaponSystem.usageDie = { die, max: die };
     }
-    items.push({ name: eq.weapon.full_name, type: eq.weapon.type === "ranged" ? "weaponRanged" : "weaponMelee", system: weaponSystem });
+    items.push({ name: eq.weapon.full_name, type: eq.weapon.type === "ranged" ? "weaponRanged" : "weaponMelee", system: weaponSystem, flags: { vaarn: { liveStats: true, tier: "Basic" } } });
 
     // A Helmet or Shield rolled as GEAR (JADE IBIS gear 20A / 20B) is a
     // separate armor Item, +1 AV each, the same shape the retired "Helm &
@@ -1070,14 +1072,14 @@ export class KnaveCharacterCreator extends Application
     // 11, 2026-08-25) tell a Helm/Shield apart from body armor and from each
     // other, avBonus is live-summed by actor.js, `defense: 11` is decorative.
     if(eq.helm)
-      items.push({ name: eq.helm, type: "armor", system: { slots: 1, defense: 11, armorSlot: "helm", avBonus: 1, description: "<p>+1 AV while worn.</p>" } });
+      items.push({ name: eq.helm, type: "armor", system: { slots: 1, armorSlot: "helm", avBonus: 1, description: "<p>+1 AV while worn.</p>" } });
     if(eq.shield)
-      items.push({ name: eq.shield, type: "armor", system: { slots: 1, defense: 11, armorSlot: "shield", avBonus: 1, description: "<p>+1 AV while carried. Must be actively carried — lost if you drop it or are disarmed.</p>" } });
+      items.push({ name: eq.shield, type: "armor", system: { slots: 1, armorSlot: "shield", avBonus: 1, description: "<p>+1 AV while carried. Must be actively carried — lost if you drop it or are disarmed.</p>" } });
     items.push(
     {
       name: `${eq.armour.quality} ${eq.armour.name}`,
       type: "armor",
-      system: { slots: eq.armour.slots ?? 1, defense: eq.armour.av ?? 11, armorSlot: "body", avBonus: (eq.armour.av ?? 11) - 10, description: eq.armour.special ? `<p>${eq.armour.special}</p>` : "", toxSaveAdv: eq.armour.toxSaveAdv ?? false }
+      system: { slots: eq.armour.slots ?? 1, armorSlot: "body", avBonus: (eq.armour.av ?? 11) - 10, description: eq.armour.special ? `<p>${eq.armour.special}</p>` : "", toxSaveAdv: eq.armour.toxSaveAdv ?? false }
     });
 
     for(const gearName of eq.gear || [])
@@ -1118,7 +1120,16 @@ export class KnaveCharacterCreator extends Application
     // actorSystem.inventorySlots above; everything else in `effect` is
     // narrative/GM-adjudicated for now (see work-queue.txt item 1).
     for(const m of mutations)
-      items.push({ name: m.name, type: "mutation", system: { slots: 0, roll: m.roll, description: `<p><b>d100 roll:</b> ${m.roll}</p><p>${m.effect}</p>` } });
+      items.push({ name: m.name, type: "mutation", system: { slots: 0, roll: m.roll, description: `<p><b>d100 roll:</b> ${m.roll}</p><p>${m.effect}</p>` },
+        // LIVE (2d-iii): Extra Eyes keeps the count rolled above; max HP stays written
+        // into the actor (ruling 1) and is recorded so a delete lowers it.
+        flags: { vaarn: { liveStats: m.name === "Extra Eyes" ? { rolled: { psy: Number(m.abilityMod?.psyche ?? 0) } } : true,
+                          ...(m.hpBonus ? { bakedEffects: { hpBonus: m.hpBonus } } : {}) } } });
+    // Ruling C 7 (Matt, 2026-10-05): an Albino starts with the sunshade its
+    // mutation needs - "You must carry a sunshade (1 slot)" - so its daylight DIS
+    // is the player's choice to put down, not a shopping trip.
+    if(mutations.some(m => m.name === "Albino"))
+      items.push({ name: "Sunshade", type: "item", system: { slots: 1, description: "<p>A sunshade. Carried, it spares an Albino their DIS on Saves in daylight.</p>" } });
 
     // Ancestry special rules the player actively uses get their own Item
     // (0 slots — a trait, not gear), so they are clickable instead of
@@ -1279,12 +1290,14 @@ export class KnaveCharacterCreator extends Application
       const advWeaponTags = ["Fragile", w.basic_tag, w.advanced_tag, ...(w.base_tags || [])].filter(Boolean);
       const advWeaponSystem =
       {
-        slots: applySlotTagModifiers(w.slots ?? 1, advWeaponTags),
+        // The base in the fields, the tags and the tier live (Stats as Sentences chunk 2d-i).
+        slots: w.slots ?? 1,
         hands: w.hands ?? 1,
-        damageDice: applyDamageTagModifiers(normalizeDamageDice(w.damage), advWeaponTags),
+        damageDice: normalizeDamageDice(w.damage),
         tags: advWeaponTags,
-        // Advanced tier: tag multipliers, then Matt's x2 tier bonus last.
-        tradeValue: applyTierTradeMultiplier(applyTradeValueTagModifiers(1, advWeaponTags), "Advanced"),
+        // Advanced tier: the tags' multipliers and Matt's x2 tier bonus live; the base's own value,
+        // as every other site (no base table carries one, so 1 - CHECKED 2026-10-07).
+        tradeValue: w.tradeValue ?? 1,
         description: `<p><b>Fragile:</b> breaks on a natural 1 attack roll (cleared manually from this sheet once repaired — narratively, Advanced-tier repairs are said to take d10−INT days).</p><p><b>${w.basic_tag}:</b> ${w.basic_tag_effect}</p><p><b>${w.advanced_tag}:</b> ${w.advanced_tag_effect}</p>${w.ammo_die ? "<p>Ammo only available in Vaarnish cities.</p>" : ""}`,
       };
       if(w.ammo_die)
@@ -1292,7 +1305,7 @@ export class KnaveCharacterCreator extends Application
         const die = normalizeUsageDie(w.ammo_die);
         advWeaponSystem.usageDie = { die, max: die };
       }
-      items.push({ name: `${w.full_name} (Fragile)`, type: w.type === "ranged" ? "weaponRanged" : "weaponMelee", system: advWeaponSystem });
+      items.push({ name: `${w.full_name} (Fragile)`, type: w.type === "ranged" ? "weaponRanged" : "weaponMelee", system: advWeaponSystem, flags: { vaarn: { liveStats: true, tier: "Advanced" } } });
     }
     else if(boon.name === "Cybernetic Implant" && boon.implant)
     {
@@ -1303,7 +1316,9 @@ export class KnaveCharacterCreator extends Application
       // work-queue.txt item 10.
       // slots: 0 — Cybernetics - Starting.md: implants do NOT occupy Item
       // Slots (bug fix, item 10.7, 2026-08-26: this used to say slots: 1).
-      items.push({ name: i.name, type: "implant", system: { slots: 0, usesRemaining: i.name === "Trauma-Response Rig" ? 1 : 0, description: `<p><b>Ability slot:</b> ${i.ability_slot}</p><p>${i.effect}</p>` } });
+      items.push({ name: i.name, type: "implant", system: { slots: 0, usesRemaining: i.name === "Trauma-Response Rig" ? 1 : 0, description: `<p><b>Ability slot:</b> ${i.ability_slot}</p><p>${i.effect}</p>` },
+        // LIVE (2d-iii), its HP bonus recorded as the mutations' are.
+        flags: { vaarn: { liveStats: true, ...(i.hp_bonus ? { bakedEffects: { hpBonus: i.hp_bonus } } : {}) } } });
       // Natural-weapon implants (Carbide Knucklebones) get a real
       // weaponMelee/weaponRanged Item too, same shape as item 3.2's
       // mutation naturalWeapon push — born already-equipped/0-hands since
@@ -1319,7 +1334,7 @@ export class KnaveCharacterCreator extends Application
         });
       }
       if(i.stat_mod || i.hp_bonus)
-        notes.push(`${i.name}'s ability/HP modifiers were already applied to the actor above.`);
+        notes.push(`${i.name}'s ability bonus counts live from the implant; its HP bonus is in the actor's maximum, and removing the implant takes it back.`);
       if(i.naturalWeapon)
         notes.push(`${i.name} created a separate 0-slot weapon item — roll it like any other weapon.`);
       if(i.avBonus)
@@ -1333,7 +1348,8 @@ export class KnaveCharacterCreator extends Application
       // counterparts (see generate-advanced-exotica.js).
       if(boon.item.armorType)
       {
-        const armorSystem = { slots: 1, description: `<p>${boon.item.description}</p>`, armorSlot: boon.item.armorType.armorSlot, avBonus: boon.item.armorType.avBonus };
+        // The AV from its sentence (Stats as Sentences chunk 2b, ruling C).
+        const armorSystem = { slots: 1, description: `<p>${boon.item.description}</p>`, armorSlot: boon.item.armorType.armorSlot, avBonus: exoticaArmourAv(boon.item.name) };
         if(boon.item.armorType.liveAbilityBonus) armorSystem.liveAbilityBonus = boon.item.armorType.liveAbilityBonus;
         // flags.vaarn.exotica, 2026-09-20, same fix and same reason as
         // loot-builders.js startingExoticaData: without it xp-value.js cannot
@@ -1366,7 +1382,7 @@ export class KnaveCharacterCreator extends Application
     }
 
     if(mutations.some(m => m.abilityMod || m.hpBonus || m.slotBonus || m.avBonus || m.handsBonus))
-      notes.push("Rolled mutations' ability/HP/item-slot/AV/hands bonuses were already applied above — everything else in their descriptions is narrative, adjudicate at the table.");
+      notes.push("Rolled mutations' ability, Item Slot, AV and hands bonuses count live from the mutations; their HP bonuses are in the actor's maximum, and removing a mutation takes its own back — everything else in their descriptions is narrative, adjudicate at the table.");
     // blocksTwoHanded/blocksHelmet/blocksBodyArmour aren't in _rollMutations'
     // whitelist (they're read live off MUTATION_TABLE by name at equip-time,
     // never baked into the actor) — looked up the same way here.
@@ -1755,6 +1771,6 @@ export function gearItemData(gearName)
   // which gives them the equip toggle without a new field on plain gear. The
   // armour type composes the usage die template, so the die carries over.
   if(FACE_GEAR.includes(name))
-    return { name, type: "armor", system: { ...system, defense: 11, armorSlot: "face", avBonus: 0 } };
+    return { name, type: "armor", system: { ...system, armorSlot: "face", avBonus: 0 } };
   return { name, type: "item", system };
 }

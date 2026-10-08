@@ -44,7 +44,7 @@
  * from the one this file exists to remove: a shared resolver that every caller
  * hands its own hardcoded target to still has the number written out five
  * times. The three callers with a DIFFERENT target — ambush, flee, and an
- * affliction's 10 + Virulence — keep passing their own, which is why the
+ * affliction's Virulence — keep passing their own, which is why the
  * target stays a parameter and this is a default nobody is forced to use.
  */
 export const SAVE_TARGET = 15;

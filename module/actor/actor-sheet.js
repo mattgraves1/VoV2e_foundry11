@@ -5,10 +5,13 @@ import { applyHitProgression } from "../combat/hit-progression.js";
 import { isCargo, CARGO_FLAG } from "./item-slots.js";
 import { findFigment } from "./figments.js";
 import { openLevelLoss } from "./level-loss.js";
-import { EQUATIONS, MISHAPS, substituteINT } from "./codex-data.js";
-import { SPARK_TABLES, ANCESTRY_NOTES, IMPLANTS, GIFT_QUALITIES_ALL, GIFT_FORMS_ALL, ELIXIRS } from "./chargen-data.js";
+import { MISHAPS, substituteINT } from "./codex-data.js";
+import { codexOf, mishapOf, remainingItemFlagsOf, remainingActorFlagsOf } from "../item/remaining-effects.js";
+import { SPARK_TABLES, ANCESTRY_NOTES, IMPLANTS, GIFT_QUALITIES_ALL, GIFT_FORMS_ALL } from "./chargen-data.js";
 import { rollUsageDie, upgradeDie, flagWeaponFiredInCombat } from "../item/usage-die.js";
-import { DAMAGE_NOTES, TO_HIT_NOTES, SAVE_NOTES, HIT_NOTES } from "./roll-notes-data.js";
+import { isExoticaItem } from "../item/implant-exotica-effects.js";
+import { DAMAGE_NOTES, TO_HIT_NOTES, HIT_NOTES } from "./roll-notes-data.js";
+import { saveNotesFor, saveModifierSources, askSaveQuestions } from "./save-notes.js";
 import { beamStormNote } from "../time/weather.js";
 import { currentEnvironment } from "../time/exploration-clock.js";
 import { GAMBIT_THRESHOLD } from "./gambit-data.js";
@@ -20,7 +23,7 @@ import { ADVANCED_IMPLANTS, ADVANCED_IMPLANT_SLOTS } from "./advanced-implants-d
 import { FORGETTABLE_EFFECTS } from "./forgettable-effects-data.js";
 import { resolveDamageInteractions, damageOverride, hasAttackProperty, attackPropertiesOrKinetic, targetDisadvantage, FLAMMABLE_BURN, isFlammable,
          incomingDamageMultiplier, outgoingDamageMultiplier, ignoresEvenDamage,
-         woundDamageMultiplier, ARMOUR_LOSS_TAGS,
+         woundDamageMultiplier,
          offersArmourChoice, isDegradingArmour, setDegradingArmour, clearArmourChoice,
          advantageVsTargets, abilityDamageSpecsOf, abilityTickSpecsOf, escalatingSpecsOf, tagSaveSpecsOf,
          hasAnyCreatureType, immuneToAttackProperty, isFlat, reboundsAttack } from "../item/attack-properties.js";
@@ -34,8 +37,24 @@ import { ANCESTRY_RULE_ITEMS, ANCESTRY_KILL_REACTIONS } from "./ancestry-rules-d
 import { saveSentence } from "./bestiary-build.js";
 import { postCompelledSave, postSaveCard, postSaveCardsToTargets, postToxSave, postToxSaves, toxSaveApplies } from "../combat/compelled-save.js";
 import { useFieldGenerator, healTargets, applyHeal } from "./healing-field.js";
-import { postGiftApplyCard } from "../combat/gift-damage.js";
-import { effectsOf, effectLabel, levelOf, costDieForLevels, giftConditionSpec } from "../item/gift-effects.js";
+import { levelOf, costDieForLevels, OTHER_USE } from "../item/gift-effects.js";
+import { useSentences, sentenceLabel, optionsOf } from "../effects/interpret.js";
+import { runUse, activePassives } from "../effects/interpreter.js";
+import { builtReminders, effectUses, askedAutoHitLine } from "../effects/item-readers.js";
+import { bodyForbids, helmRefusal, bodySentences, attackKindHolds, bodyTabReminders } from "../effects/body.js";
+import { sentencesOf } from "../effects/interpret.js";
+// Stats as Sentences chunk 2a (RULED 2026-10-07): damage dice, hands and the usage die through their sentences.
+import { statOf, usageDieOf, armourSlotOf } from "../effects/item-stats.js";
+import { BITE_WORDS } from "../item/attack-properties.js";
+import { hitArmourLoss, hitTargetAv, valueReachesSentences, toHitAbility, damageAbilityBonus, ignoresArmour, reflectsMisses,
+         naturalRollSentences, itemForbids, autoHitSentences, attackForbids, equipForbids, drawSentences, tabReminders,
+         hitReminders, reloadOf } from "../item/weapon-tags.js";
+import { healsOnKill } from "../effects/weapon-heals.js";
+import { openReactionDialog } from "./reaction-roll.js";
+import { computeGate } from "../effects/gates.js";
+import { isTargetGate } from "../effects/interpret.js";
+import { settleGates } from "../effects/gates.js";
+import { reachValue } from "../effects/value-reaches.js";
 import { postEquationDamageCard } from "../combat/equation-damage.js";
 import { reputationRows, setRep, changeRep, SPEND_EXAMPLES } from "./faction-reputation.js";
 import { openTransferDialog, handleItemDrop } from "./item-transfer.js";
@@ -45,7 +64,7 @@ import { ownerOf, ownerIsDangling, openOwnerDialog, companionsOf, companionKindO
          COMPANION_KINDS } from "./companion.js";
 import { companionUpkeep } from "./companion-upkeep.js";
 import { activate as activateRoundEffect, deactivate as deactivateRoundEffect,
-         isRoundEffectActive, formulaFrom, PER_ROUND_WORDING } from "../combat/round-effects.js";
+         isRoundEffectActive } from "../combat/round-effects.js";
 import { SCALES, removeEntry as removeEffectEntry, entriesOf, addEntry } from "../time/effect-board.js";
 import { startGiftSustain, addFading, fadingSummary } from "../time/recurrence.js";
 import { resolveDeltas as resolveStatefulDeltas,
@@ -54,8 +73,8 @@ import { resolveDeltas as resolveStatefulDeltas,
          hasCondition as hasStatefulCondition,
          entriesEndedByDamage, conditionSourceNames, saveDisSources,
          DIS_SAVES_AND_ATTACKS } from "../time/stateful-effect.js";
-import { permanentAbilitySpecFor, eligibleForGain, promptAbilityChoice,
-         applyPermanentAbilityChange, exoticaPermanentAbilitySpecFor,
+import { eligibleForGain, promptAbilityChoice,
+         applyPermanentAbilityChange,
          promptDistinctAbilities } from "./permanent-ability.js";
 import { BIFURCATING_BREW, bifurcate, cloneFromElixir } from "./bifurcation.js";
 import { watchdogRedirect, watchdogKillButton } from "../combat/watchdog.js";
@@ -66,7 +85,8 @@ import { levelDrainSpecOf, applyLevelDrain, applyDrainerGain,
 import { isDeprived, setDeprived, deprivedElapsedLabel, deprivedFuseLine,
          blocksHealing, noHealRule } from "./deprived.js";
 import { repair, repairWound, synthPartTotal } from "./synth-repair.js";
-import { scaleHealing } from "./healing-multiplier.js";
+import { heal } from "../effects/heal.js";
+import { maxHpChange } from "../effects/max-hp.js";
 import { shortRest, longRest, healWound, rationFreeRule, rationTotal,
          damagedAbilities, restoreAbilityPoints, healFloor,
          FOOD_RATION, WATER_RATION, supplyTotal, rationKindsFor, spendSupply,
@@ -78,79 +98,13 @@ import { dailyPoolSize } from "./daily-pool.js";
 import { levelUpAvailable, openLevelUp, loseLevels, ABILITY_CAP,
          companionLevelUpAvailable, applyCompanionLevelUp, companionCanLevel } from "./advancement.js";
 
-/**
- * The four Elixirs whose whole effect is a stated duration.
- *
- * Berserker Brew is deliberately NOT here: Matt ruled it fiction-locked to the
- * frenzy wearing off, so it ends when the encounter does and has no span to
- * track. It keeps its own branch and its own actor flag.
- */
-const DURATION_ELIXIRS = ["Hilarious Strength", "Spineskin Syrup",
-                          "Lithification Syrup", "Regeneration Serum"];
+// THE ELIXIR DRINK PATH reads the drink's sentences since Effect Engine:
+// Consumables chunk 3a (RULED 2026-10-06, Matt): DURATION_ELIXIRS,
+// statefulElixirNames() and statefulSpecFor() - the roster lists and lookups
+// that chose a drink's branch - are gone; the branch is the sentence's handler
+// (_elixirOneOff), its figures the sentence's.
 
-/**
- * Every Elixir that goes down the duration path: the four above, plus any the
- * roster gives a `stateful` spec.
- *
- * DERIVED FROM THE ROSTER RATHER THAN LISTED. Stateful Effect Application
- * (2026-09-09) brought Plating Potion, Growth Serum and Squishflesh Balm into
- * this path, and a second hand-written list would have needed editing every
- * time a spec was added — the exact drift that had all four literals above
- * stating HOURS when the roster said Exploration Turns. A spec IS the
- * statement that this elixir does something mechanical for a span.
- */
-//
-// A DECLARED SPAN ADMITS AN ELIXIR TOO (2026-09-21, Group 297). Before this,
-// an Elixir with a span and nothing mechanical - Windsong, Skulk Salve,
-// Fellowship and seven more - fell past this gate, and its USE control did
-// nothing at all: no board entry, no chat line, the vial kept. A declared span
-// is as much a statement that the elixir runs for a time as a stateful spec is.
-//
-// AND A drinkAsText FLAG (Elixir Use Normalisation, 2026-09-23): the elixir
-// does nothing this system tracks, and the ruling is that drinking it still
-// posts the card and spends the vial. It takes the same path and lands in the
-// no-span, no-stateful branch below, which was already the "drunk, nothing
-// tracked" outcome; the flag only stops that branch warning about it.
-function statefulElixirNames()
-{
-  return new Set([...DURATION_ELIXIRS,
-                  ...ELIXIRS.filter(e => e.stateful || e.declaredSpan || e.drinkAsText).map(e => e.name)]);
-}
-
-/** The roster's declared stateful spec for an Item, by name. Null if none. */
-function statefulSpecFor(name)
-{
-  return ELIXIRS.find(e => e.name === name)?.stateful ?? null;
-}
-
-/**
- * How far a berserk frenzy reaches — "melee", "all", or null for none.
- *
- * ONE FLAG, TWO SCOPES, because two items set it and the book gives them
- * different words. The Berserker StimRig: "While active, you take and deal
- * double MELEE damage." Berserker Brew: "They deal and receive double damage",
- * with no melee clause anywhere in the entry. They shared `berserkerActive`
- * from the day both were built and the narrower reading won by default, so the
- * Brew has been under-applying ever since. RULED 2026-09-19 (Matt): "it
- * shouldn't be melee-only."
- *
- * A LEGACY `true` READS AS MELEE. Nothing migrates existing world state — a
- * flag written before this change means what it meant when it was written, and
- * the only actors that could hold one are mid-combat right now. Widening them
- * silently is the change that would actually surprise someone.
- */
-function berserkScope(actor)
-{
-  const v = actor?.getFlag?.("vaarn", "berserkerActive");
-  return v === "all" ? "all" : (v ? "melee" : null);
-}
-
-/** Does the frenzy bite on THIS attack? */
-function berserkApplies(actor, isMelee)
-{
-  const scope = berserkScope(actor);
-  return scope === "all" || (scope === "melee" && isMelee);
-}
+import { doDamage, resolveHPChange, berserkApplies, dealDamage, applyWound, crumbleInevitable, kill } from "../effects/hp-pipeline.js";
 import { dropItem } from "./dropped-container.js";
 import { TOXIN_DIE_OPTIONS, TOXIN_CURED, hasToxinDie, toxSaveTarget, stepDownToxinDie, resolveToxSave, toxinModifiers, toxDieOfFormula } from "./toxin-die.js";
 import { needsAttunement, needsAttunementToUse, refusalFor, startAttunement } from "../item/attunement.js";
@@ -161,6 +115,7 @@ import { resolveSave, SAVE_TARGET } from "../combat/saves.js";
 import { hiddenFrom, markUnidentified, appraise, openIdentifySave, trackItemUse } from "../item/identification.js";
 import { NO_GIFTS, afflictionByKey } from "./affliction-data.js";
 import { stageReached } from "./affliction.js";
+import { afflictionOverTimeOf } from "../item/affliction-effects.js";
 import { BLIND, conditionByKey, conditionApplySpec, creatureRuleApplySpec, tagApplies } from "./condition-data.js";
 import { ADVANCED_EXOTICA } from "./advanced-exotica-data.js";
 import { postApplyCard, startAbilityTick, startEscalatingTick,
@@ -174,9 +129,10 @@ import { suppressesDeath, suppressionMsg } from "../combat/fatality.js";
 import { isSpirit, fadeMessage, useAbility as useCreatureAbility } from "./spirit.js";
 import { MAX_HP_CAUSE } from "./zero-max-hp.js";
 import { saveGatedSpecFor, saveGatedRefusal, applySaveGated } from "../combat/save-gated.js";
+import { elixirSentencesByName, elixirDrinkOf, elixirHpTick, floraToxDieOf } from "../item/consumable-effects.js";
 import { touchSearch } from "./touch-search.js";
 import { declaredSpanOf, spanFieldFrom } from "../time/declared-span.js";
-import { grantAbility, grantAbilities, isGrantedAbility, useGrantedAbility } from "./granted-ability.js";
+import { grantAbility, grantAbilities, isGrantedAbility, useGrantedAbility, elixirGranting } from "./granted-ability.js";
 import { isIntrinsic } from "../item/intrinsic.js";
 import { generateMonster, GENERATED_FOLDER } from "./monster-generator.js";
 import { pickGift, pickMutation, randomGiftData } from "./granted-pick.js";
@@ -187,6 +143,8 @@ import { TEMP_HP_FIELD, tempHpOf, soakDamage, soakLine, burstsAt } from "../comb
 import { protectorsOf, wouldKill, heldBlowCard, HELD_BLOW_FLAG, protecteeRecord, PROTECTING_FLAG } from "../combat/protector.js";
 import { growthRefusal, partItemData, fruitItemData, isGrownFruit, eatFruit } from "./bloomboon-growth.js";
 import { graftHostOf, splitForHost } from "./grafted-arm.js";
+// Creature attack flags from their sentences (Effect Engine: Creatures chunk 2a).
+import { creatureAttackOf, creatureFlagsOf, roundWordingOf, creatureActorFlagsOf, namedWoundEffectsOf } from "../item/creature-effects.js";
 
 /**
  * Extend the basic ActorSheet with some very simple modifications
@@ -571,42 +529,51 @@ export class KnaveActorSheet extends ActorSheet
 
   /**
    * Work-queue item 12's data-population step: matches the actor's owned
-   * Items against FORGETTABLE_EFFECTS (mutation/implant/exotica/armor by
-   * Item name, weaponTag by an equipped weapon's system.tags), then groups
+   * weapons against FORGETTABLE_EFFECTS (weaponTag by a carried weapon's
+   * system.tags) and reads the body's rows (bodyTabReminders), then groups
    * the matches by Section then Polarity for the tab template. Detriments
    * are grouped ahead of benefits within each section — the whole point of
    * this tab, per Matt, is surfacing what a GM/player is likely to forget,
    * and players remember buffs far more reliably than debuffs.
-   * "armor" is its own case (not folded into "exotica") because several
-   * ADVANCED_EXOTICA entries with an armorType field get created as real
-   * type:"armor" Items by item 10.3.2's conversion, not type:"exotica" —
-   * confirmed via generate-advanced-exotica.js.
+   * Implant, Exotica and Exotica-armour rows come from their sentences since
+   * Effect Engine: Implants, Exotica and Figments chunk 4 (2026-10-06).
    */
   _buildForgettableEffects(actor)
   {
     // Exotica Identification: an item the viewer may not see contributes no
     // entry, because the entry names it.
     const items = actor.items.filter(i => !hiddenFrom(i));
-    const mutationNames = items.filter(i => i.type === "mutation").map(i => i.name);
-    const implantNames = items.filter(i => i.type === "implant").map(i => i.name);
-    const exoticaNames = items.filter(i => i.type === "exotica").map(i => i.name);
-    const armorNames = items.filter(i => i.type === "armor").map(i => i.name);
-    const weaponTagNames = items
+    // A weapon's reminders come from its sentences since Weapon Tags chunk 5a,
+    // for any CARRIED weapon (Matt: a reminder can spur a player to equip it);
+    // one whose effect needs the weapon equipped says so while it is not.
+    const weaponReminders = items
       .filter(i => i.type === "weaponMelee" || i.type === "weaponRanged")
-      .flatMap(i => i.system.tags || []);
+      .flatMap(i => tabReminders(i));
+    const weaponTagNames = weaponReminders.map(r => r.tag);
 
-    const matches = FORGETTABLE_EFFECTS.filter(entry =>
+    const matches = FORGETTABLE_EFFECTS.map(entry =>
+      entry.itemType === "weaponTag" && weaponTagNames.includes(entry.name)
+        && !weaponReminders.some(r => r.tag === entry.name && r.inForce)
+        ? { ...entry, note: `${entry.note} (equip it to use this)` } : entry).filter(entry =>
     {
-      switch(entry.itemType)
-      {
-        case "mutation": return mutationNames.includes(entry.name);
-        case "implant": return implantNames.includes(entry.name);
-        case "exotica": return exoticaNames.includes(entry.name);
-        case "armor": return armorNames.includes(entry.name);
-        case "weaponTag": return weaponTagNames.includes(entry.name);
-        default: return false;
-      }
+      return entry.itemType === "weaponTag" && weaponTagNames.includes(entry.name);
     });
+
+    // The body's rows - a mutation's, an ancestry rule's, an implant's, a
+    // figment's or an Exotica's own reminder sentences (Mutations and Ancestry
+    // Rules chunk 5; Implants, Exotica and Figments chunk 4, both RULED
+    // 2026-10-06): none for a suppressed mutation or implant, an ancestry rule
+    // with no Item read from the text, an unworn Exotica armour's saying to equip it.
+    for(const r of bodyTabReminders(actor))
+      if(!r.item || !hiddenFrom(r.item)) matches.push(r);
+
+    // GM Effect Builder chunk 1 (2026-10-05): a passive reminder a GM wrote on
+    // any Item shows under that Item's name; one needing a state its Item is
+    // not in says how to bring it into force.
+    for(const item of items)
+      for(const r of builtReminders(item))
+        matches.push({ name: r.name, itemType: "effect", category: r.category, section: r.section, polarity: r.polarity,
+                       note: r.inForce ? r.note : `${r.note} (equip it to use this)` });
 
     const group = (section) =>
     {
@@ -694,9 +661,12 @@ export class KnaveActorSheet extends ActorSheet
     html.find('.item-create').click(this._onItemCreate.bind(this));
 
     //ability button clicked
-    html.find('.knave-ability-button').click(ev =>
+    html.find('.knave-ability-button').click(async ev =>
     {
       const ability = $(ev.currentTarget)[0].id;
+      // Albino's "is it daylight?", once per scene, before the save (Mutations
+      // and Ancestry Rules chunk 2b, ruling C 7).
+      await askSaveQuestions(this.actor, ability);
       // Encumbrance Penalty (2026-09-07): DIS on STR/DEX/CON SAVES. It is
       // applied HERE, at the button click, and deliberately not inside
       // _onAbility_Clicked — that method is also how weapon attack rolls are
@@ -708,7 +678,10 @@ export class KnaveActorSheet extends ActorSheet
       // Stateful Effect Application (2026-09-09) joins the same boolean rather
       // than adding a second one: two sources of DIS are still DIS.
       const statDis = this._statefulSaveDis(this.actor, ability);
-      const roll = this._onAbility_Clicked(ability, ev, encDis || statDis);
+      // The character's own unconditional rules - Extra Head's ADV, Small
+      // Stature's DIS (save-notes.js, Shared Pipelines chunk 7, RULED 2026-10-05).
+      const own = saveModifierSources(this.actor, ability);
+      const roll = this._onAbility_Clicked(ability, ev, encDis || statDis || own.dis.length > 0, own.adv.length > 0);
       // Item 14: Save-button notes only apply to a direct button click, not
       // to _onAbility_Clicked's internal reuse for weapon attack rolls
       // (STR/DEX) — those are attack rolls, not Saves.
@@ -718,6 +691,8 @@ export class KnaveActorSheet extends ActorSheet
       const verdict = resolveSave(roll.total, roll.dice[0]?.total, SAVE_TARGET);
       onSaveResolved(this.actor, ability, verdict);
       const notes = this._saveNotesFor(this.actor, ability);
+      for(const name of own.adv) notes.push(`<b>${name}</b> — ADV on this Save (applied).`);
+      for(const name of own.dis) notes.push(`<b>${name}</b> — DIS on this Save (applied).`);
       if(encDis) notes.push("<b>Encumbered</b> — DIS on STR, DEX and CON saves while carrying more than your item slot limit.");
       // Named by source (2026-10-04): a Daemon's Misfortune Aura gives DIS on EVERY save, not only physical ones.
       if(statDis) notes.push(`<b>DIS on this Save</b> — from ${[...conditionSourceNames(this.actor, "disSaves"),
@@ -725,6 +700,8 @@ export class KnaveActorSheet extends ActorSheet
       this._postRollNotes(this.actor, notes);
     });
     html.find('.knave-morale-button').click(this._onMoraleCheck.bind(this));
+    // Reaction Roll Button (2026-10-05): the NPC sheet's GM-only reaction roll.
+    html.find('.vaarn-reaction-button').click(() => openReactionDialog(this.actor));
     html.find('.knave-flee-button').click(this._onFlee.bind(this));
     html.find('.knave-tox-save').click(this._onToxSave.bind(this));
     html.find('.knave-tox-roll').click(this._onToxRoll.bind(this));
@@ -869,15 +846,17 @@ export class KnaveActorSheet extends ActorSheet
       const wounds = duplicate(this.actor.system.wounds ?? []);
       const w = wounds[index];
       if(!w?.tally) return;
+      // The count and label from the wound's sentence (Creatures chunk 2e); the progress is the entry's.
+      const spec = (w.named ? namedWoundEffectsOf(w.named)?.tally : null) ?? w.tally;
       const done = (Number(w.tally.done) || 0) + 1;
-      if(done >= Number(w.tally.count))
+      if(done >= Number(spec.count))
       {
-        this._postWoundMsg(this.actor, `${w.tally.label} (${done} of ${w.tally.count}) — <b>${w.name}</b> is gone.`);
+        this._postWoundMsg(this.actor, `${spec.label} (${done} of ${spec.count}) — <b>${w.name}</b> is gone.`);
         return this._healWound(this.actor, index);
       }
       w.tally = { ...w.tally, done };
       await this.actor.update({ "system.wounds": wounds });
-      this._postWoundMsg(this.actor, `${w.tally.label} for <b>${w.name}</b> (${done} of ${w.tally.count}).`);
+      this._postWoundMsg(this.actor, `${spec.label} for <b>${w.name}</b> (${done} of ${spec.count}).`);
     });
 
     //inventory weapon rolls
@@ -895,6 +874,15 @@ export class KnaveActorSheet extends ActorSheet
       const li = $(ev.currentTarget).parents(".item");
       const item = this.actor.items.get(li.data("itemId"));
       this._onGiftUse(item);
+    });
+
+    // GM Effect Builder chunk 1 (2026-10-05): use an effect a GM wrote on any Item.
+    html.find('.effect-use').click(async ev =>
+    {
+      const li = $(ev.currentTarget).parents(".item");
+      const item = this.actor.items.get(li.data("itemId"));
+      if(await this._attunementRefuses(item, "use")) return;
+      this._onEffectUse(item);
     });
 
     // Usable Creature Ability (Spirit Form, 2026-09-27): an Item that spends
@@ -921,7 +909,7 @@ export class KnaveActorSheet extends ActorSheet
     {
       const li = $(ev.currentTarget).parents(".item");
       const item = this.actor.items.get(li.data("itemId"));
-      this._onAncestryRuleUse(item, ev);
+      this._onBodyUse(item, ev);
     });
 
     // Use a per-use Usage Die item (gear/Exotica/Armor) — rolls its usage
@@ -932,39 +920,13 @@ export class KnaveActorSheet extends ActorSheet
       const li = $(ev.currentTarget).parents(".item");
       const item = this.actor.items.get(li.data("itemId"));
       if(await this._attunementRefuses(item, "use")) return;
-      // A use that only means something in a fight - the Fate Invertor
-      // (RULED 2026-09-26, Matt), and AV until combat ends, the Active
-      // Camouflage Ring (Matt, 2026-09-28) - is refused before its die rolls.
-      const combatOnly = ADVANCED_EXOTICA.find(e => e.name === item?.name && e.untilCombatEnd);
-      const combatAv = ADVANCED_EXOTICA.find(e => e.name === item?.name && e.combatAv);
-      if((combatOnly || combatAv) && !game.combat)
-        return this._postWoundMsg(this.actor, `cannot use the <b>${item.name}</b> - it only works in combat, and no combat is running.`);
-      const result = await rollUsageDie(item, this.actor);
-      if(combatOnly)
-      {
-        await addEntry(this.actor, { name: combatOnly.untilCombatEnd.name, text: combatOnly.untilCombatEnd.text,
-          note: `from the ${item.name}`, endsWithCombat: true });
-        this._postWoundMsg(this.actor, `activates the <b>${item.name}</b> — until combat ends, all nearby failed Saves `
-          + `succeed and successes fail, missed attacks hit and hits miss. <i>Flip each result by hand.</i>`);
-      }
-      // Post the item's own extra flavor text, if it has one — work-queue
-      // items 10.3.4/10.3.7 (2026-08-27). Fires on every use regardless of
-      // type, including the depleting one.
-      this._postUsageDieFlavorText(item);
-      await this._activateCombatAv(item);
-      await this._applyBodyChange(item);
-      // Exotica items never recharge (Matt's ruling, item 10.3.3) — once
-      // expended they're a used-up consumable, not a tool to keep around
-      // empty like a depleted weapon. Armor's own Ud8-limited activated
-      // abilities (item 10.3.4 — Fascinator Helm/Horror Helm) are
-      // deliberately excluded from this: Matt's ruling is that an
-      // expended armor usageDie just sits inert, tracking the activated
-      // ability's use only, same default behavior gear/weapons already
-      // get — not deleted or marked broken. Gear/other usageDie item
-      // types are likewise unaffected — this only fires for `type:
-      // "exotica"`.
-      if(item.type === "exotica" && result?.newDie === "expended")
-        this._deleteUsedUpExotica(item);
+      // An Exotica - its own type, or an armour made from one - runs its use
+      // sentence since Implants, Exotica and Figments chunk 3b (2026-10-06): the
+      // interpreter rolls the usage die, says the use's line, does the effect
+      // and removes an Exotica whose die is expended. Gear keeps the plain roll.
+      if(isExoticaItem(item) && useSentences(item).some(({ s }) => !s.baked))
+        return this._onExoticaSentenceUse(item, ev);
+      await rollUsageDie(item, this.actor);
     });
 
     // Use a fixed-charge Exotica item ("x6 uses" etc., not a UdN die) —
@@ -984,7 +946,7 @@ export class KnaveActorSheet extends ActorSheet
       const li = $(ev.currentTarget).parents(".item");
       const item = this.actor.items.get(li.data("itemId"));
       if(await this._attunementRefuses(item, "use")) return;
-      this._onExoticaChargeUse(item);
+      this._onExoticaSentenceUse(item, ev);
     });
 
     // Use a no-pool "Unlimited" Exotica item with a real activated effect
@@ -995,7 +957,7 @@ export class KnaveActorSheet extends ActorSheet
       const li = $(ev.currentTarget).parents(".item");
       const item = this.actor.items.get(li.data("itemId"));
       if(await this._attunementRefuses(item, "use")) return;
-      this._onExoticaUse(item);
+      this._onExoticaSentenceUse(item, ev);
     });
 
     // Install a sealed Cocoon/Pack capsule's specific implant — work-queue
@@ -1015,7 +977,7 @@ export class KnaveActorSheet extends ActorSheet
     {
       const li = $(ev.currentTarget).parents(".item");
       const item = this.actor.items.get(li.data("itemId"));
-      this._onMutationUse(item, ev);
+      this._onBodyUse(item, ev);
     });
 
     // Save-Gated Effect. ONE listener for every entry that declares a
@@ -1036,7 +998,7 @@ export class KnaveActorSheet extends ActorSheet
     {
       const li = $(ev.currentTarget).parents(".item");
       const item = this.actor.items.get(li.data("itemId"));
-      this._onFigmentTargetSave(item);
+      this._onBodyUse(item, ev);
     });
 
     // Refresh a mutation's daily use pool back to the bearer's Level.
@@ -1199,7 +1161,7 @@ export class KnaveActorSheet extends ActorSheet
       if(!game.user.isGM) return ui.notifications.warn("Only the Referee can spawn creatures.");
       const li = $(ev.currentTarget).parents('.item');
       const item = this.actor.items.get(li.data('itemId'));
-      const spec = item?.flags?.vaarn?.spawnNow;
+      const spec = creatureFlagsOf(item).spawnNow;
       if(!spec) return;
       // `loyal` and `removesItem` (2026-10-04, RULED by Matt): a Lizard
       // Rancher's Tame War Lizard is placed once, loyal to its owner, and the
@@ -1255,7 +1217,7 @@ export class KnaveActorSheet extends ActorSheet
       if(!game.user.isGM) return ui.notifications.warn("Only the Referee can make copies of a creature.");
       const li = $(ev.currentTarget).parents('.item');
       const item = this.actor.items.get(li.data('itemId'));
-      const spec = item?.flags?.vaarn?.cloneSelf;
+      const spec = creatureFlagsOf(item).cloneSelf;
       if(!spec) return;
       const n = (await new Roll(spec.dice).evaluate({ async: true })).total;
       const { cloneSelfBeside } = await import("./bestiary-spawn.js");
@@ -1310,7 +1272,7 @@ export class KnaveActorSheet extends ActorSheet
         return ui.notifications.warn("Only the Referee can change a creature's AV.");
       const li = $(ev.currentTarget).parents('.item');
       const item = this.actor.items.get(li.data('itemId'));
-      const step = Number(item?.flags?.vaarn?.avStep) || 0;
+      const step = Number(creatureFlagsOf(item).avStep) || 0;
       if(!step) return;
       const av = (Number(this.actor.system.armor?.value) || 0) + step;
       await this.actor.update({ "system.armor.value": av });
@@ -1412,7 +1374,7 @@ export class KnaveActorSheet extends ActorSheet
     {
       const li = $(ev.currentTarget).parents(".item");
       const item = this.actor.items.get(li.data("itemId"));
-      this._onImplantUse(item, ev);
+      this._onBodyUse(item, ev);
     });
 
     // Refresh an implant's daily use pool — work-queue item 10.2. Same
@@ -1520,7 +1482,9 @@ export class KnaveActorSheet extends ActorSheet
    */
   _toHitAbilityKey(item)
   {
-    if((item.system.tags || []).includes("Psionic")) return "psy";
+    // A to-hit ability from the weapon's sentences (Psionic's PSY), Weapon Tags chunk 4.
+    const own = toHitAbility(item);
+    if(own) return own;
     return item.type === "weaponRanged" ? "dex" : "str";
   }
 
@@ -1633,7 +1597,8 @@ export class KnaveActorSheet extends ActorSheet
     }
 
     const target = toxSaveTarget(die);
-    const roll = this._onAbility_Clicked("con", event, false, mods.advantage);
+    const [ownDis, ownAdv] = this._ownSaveMods("con");
+    const roll = this._onAbility_Clicked("con", event, ownDis, mods.advantage || ownAdv);
     // dice[0].total is the KEPT die under ADV/DIS, which is what Saving
     // Throws.md's natural-20 clause is about — the same value the crit
     // labelling in _rollD20 reads.
@@ -1740,8 +1705,10 @@ export class KnaveActorSheet extends ActorSheet
         : { "system.toxinDie.die": next });
     }
 
-    const currentHP = actor.system.health.value;
-    this._resolveHPChange(actor, currentHP, currentHP - roll.total);
+    // Through the whole HP pipeline (Shared Pipelines chunk 2, 2026-10-05), as
+    // tox damage with no attacker, so a tox immunity, a multiplier and temp HP
+    // all apply as they would to a hit.
+    dealDamage(actor, roll.total, { types: ["tox"], name: "Toxin Die" });
   }
 
   /**
@@ -1810,7 +1777,7 @@ export class KnaveActorSheet extends ActorSheet
    */
   _sporesDepleted(item)
   {
-    if(!item.flags?.vaarn?.sporeDepletion || !this.actor.system.sporeLockout) return false;
+    if(!creatureAttackOf(item).sporeDepletion || !this.actor.system.sporeLockout) return false;
     this._postWoundMsg(this.actor, `has no spores left — no more can be expelled without a Long Rest.`);
     return true;
   }
@@ -1818,7 +1785,7 @@ export class KnaveActorSheet extends ActorSheet
   _sporeDepletionSave(item)
   {
     const actor = this.actor;
-    const roll = this._rollD20(actor.system.abilities.con.effective, `${item.name} — CON Save to keep its spores`);
+    const roll = this._rollD20(actor.system.abilities.con.effective, `${item.name} — CON Save to keep its spores`, null, ...this._ownSaveMods("con"));
     const { passed } = resolveSave(roll.total, roll.dice[0].total, SAVE_TARGET);
     if(passed) return;
     actor.update({ "system.sporeLockout": true });
@@ -1859,31 +1826,39 @@ export class KnaveActorSheet extends ActorSheet
         // A declared auto-hit makes no roll (RULED 2026-09-25, Matt): every
         // targeted token is hit, and the damage click follows as usual.
         // A staged attack (Hiveyhump's swarm) waits on its stage, then auto-hits.
-        if(item.flags?.vaarn?.stagedBy)
-          return void this._stagedAttackReady(item).then(ok => ok && this._checkToHitTargets(null, item));
-        if(item.flags?.vaarn?.autoHit) return this._checkToHitTargets(null, item);
-        const blindDis = hasStatefulCondition(this.actor, BLIND);
-        const advVs = this._advantageVsNotes(item);
-        // A target that makes this attack roll at DIS - the Ickbulb's smear,
-        // Vantablossom (To-Hit Resolution Override wiring, 2026-09-25).
-        const tDis = targetDisadvantage(item, Array.from(game.user?.targets ?? []).map(t => t.actor), hasStatefulCondition);
-        const roll = this._onAbility_Clicked(this._toHitAbilityKey(item), event, blindDis || tDis.force, advVs.length > 0);
-        this._checkWeaponCrit(item, roll);
-        // An Exotica weapon's usage die rolls on every use (10.3.3) - each
-        // stab of Philosopher's Dirk (2026-09-22). A spent one is removed
-        // after its damage click, or on the next attempt if this one missed,
-        // so the hit it just made can still land.
-        if(item.flags?.vaarn?.exotica && item.system.usageDie?.die) rollUsageDie(item, this.actor);
+        // The questions before the roll (Weapon Tags chunk 4): Flaming's
+        // underwater and submerged, Heat-Seeking's warm-blooded. Nothing to ask
+        // resolves at once.
+        return void this._attackQuestions(item).then(asked =>
+        {
+          if(asked.stop) return;
+          if(item.flags?.vaarn?.stagedBy)
+            return void this._stagedAttackReady(item).then(ok => ok && this._checkToHitTargets(null, item, asked));
+          if(creatureAttackOf(item).autoHit) return this._checkToHitTargets(null, item, asked);
+          const blindDis = hasStatefulCondition(this.actor, BLIND);
+          const advVs = this._advantageVsNotes(item);
+          // A target that makes this attack roll at DIS - the Ickbulb's smear,
+          // Vantablossom (To-Hit Resolution Override wiring, 2026-09-25).
+          const tDis = targetDisadvantage(item, Array.from(game.user?.targets ?? []).map(t => t.actor), hasStatefulCondition);
+          const roll = this._onAbility_Clicked(this._toHitAbilityKey(item), event, blindDis || tDis.force || asked.bodyDis.length > 0,
+            advVs.length > 0 || asked.bodyAdv.length > 0);
+          this._checkWeaponCrit(item, roll);
+          // An Exotica weapon's usage die rolls on every use (10.3.3) - each
+          // stab of Philosopher's Dirk (2026-09-22). A spent one is removed
+          // after its damage click, or on the next attempt if this one missed,
+          // so the hit it just made can still land.
+          if(item.flags?.vaarn?.exotica && usageDieOf(item).die) rollUsageDie(item, this.actor);
 
-        this._checkToHitTargets(roll, item);
-        this._checkTooHotToHold(item);
-        this._postRollNotes(this.actor, [...advVs, ...tDis.notes, ...this._attackNotes(), ...this._tagNotes(item, TO_HIT_NOTES), ...this._stormNotes(item), ...this._followUpNotes(item)]);
-        // A condition the weapon inflicts - a creature attack's declared
-        // effect (2026-09-16). A PC weapon's Entangling / Blinding tag no
-        // longer posts here: since 2026-09-24 its save card follows each HIT,
-        // and a failed roll puts the condition on (_checkToHitTargets).
-        this._postConditionCards(item.flags?.vaarn?.applies ?? [], item.name);
-        if(item.flags?.vaarn?.sporeDepletion) this._sporeDepletionSave(item);
+          this._checkToHitTargets(roll, item, asked);
+          this._checkTooHotToHold(item);
+          this._postRollNotes(this.actor, [...advVs, ...this._bodyAttackNotes(asked), ...tDis.notes, ...this._attackNotes(), ...this._tagNotes(item, TO_HIT_NOTES), ...this._stormNotes(item), ...this._followUpNotes(item)]);
+          // A condition the weapon inflicts - a creature attack's declared
+          // effect (2026-09-16). A PC weapon's Entangling / Blinding tag no
+          // longer posts here: since 2026-09-24 its save card follows each HIT,
+          // and a failed roll puts the condition on (_checkToHitTargets).
+          this._postConditionCards(creatureFlagsOf(item).applies ?? [], item.name);
+          if(creatureAttackOf(item).sporeDepletion) this._sporeDepletionSave(item);
+        }).catch(err => console.error("Vaarn | attack:", err));
       }
       else if(item.type === "weaponRanged" && !this._itemIsBroken(item) && !this._itemIsSuppressed(item) && !this._itemIsUnequipped(item))
           this._rangedAttackRoll(item, event);
@@ -1901,9 +1876,9 @@ export class KnaveActorSheet extends ActorSheet
       // An attack with no HP formula - Chromavore's Envelop, a Star Vampire's
       // Latch (Ability Damage wiring, 2026-09-22) - deals only its ability loss,
       // so there is no HP die to roll.
-      if(!item.system.damageDice && (abilityDamageSpecsOf(item).length || abilityTickSpecsOf(item).length))
+      if(!statOf(item, "damage-dice") && (abilityDamageSpecsOf(item).length || abilityTickSpecsOf(item).length))
       {
-        this._applyAbilityDamageOnHit(item);
+        this._applyAbilityDamageOnHit(item).then(() => this._checkValueReachesOnHit(item));
         return;
       }
       // A HIT THAT TAKES A RATION - the Desiccator's water, the Faminebearer's
@@ -1911,11 +1886,11 @@ export class KnaveActorSheet extends ActorSheet
       // THEN the note that the rest of the rule (Deprived, the CON loss, the
       // save) is the Referee's - chained, because this handler is not async
       // and two unawaited cards can post in either order.
-      if(item.flags?.vaarn?.takesRation)
+      if(creatureAttackOf(item).takesRation)
       {
         const taking = this._takeRationOnHit(item);
-        if(!item.system.damageDice && item.flags?.vaarn?.hitProgression) return;
-        if(!item.system.damageDice)
+        if(!statOf(item, "damage-dice") && creatureAttackOf(item).hitProgression) return;
+        if(!statOf(item, "damage-dice"))
         {
           taking.then(() => this._postWoundMsg(this.actor, `<b>${item.name}</b> has no damage roll — resolve the rest of its effect on a hit from the biography.`));
           return;
@@ -1924,7 +1899,7 @@ export class KnaveActorSheet extends ActorSheet
       // A creature attack that rolls to hit but deals nothing the system can
       // write - Desiccate, Surgical Array (the to-hit rule, 2026-09-22). Say so
       // rather than rolling an empty formula.
-      if(!item.system.damageDice)
+      if(!statOf(item, "damage-dice"))
       {
         this._postWoundMsg(this.actor, `<b>${item.name}</b> has no damage roll — resolve its effect on a hit from the biography.`);
         return;
@@ -1933,7 +1908,7 @@ export class KnaveActorSheet extends ActorSheet
       // formula like "(@lvl)d4" or "@target.gleam" is read NOW, from the
       // attacker's current Level and the one targeted token. One that reads
       // the target and has none, or several, refuses and says why.
-      const valueRead = actorValueRollData(item.system.damageDice, this.actor,
+      const valueRead = actorValueRollData(statOf(item, "damage-dice"), this.actor,
         Array.from(game.user.targets ?? []).map(t => t.actor), item.name);
       if(valueRead.refusal)
       {
@@ -1947,13 +1922,15 @@ export class KnaveActorSheet extends ActorSheet
       // the same weapon (a Psionic-tagged weapon wielded by someone with
       // a matching implant), so this sums rather than replacing.
       let psionicBonus = null;
-      if((item.system.tags || []).includes("Psionic"))
+      // An ability added to damage, from the sentences (Psionic's EGO), Weapon Tags chunk 4.
+      const abilityBonus = damageAbilityBonus(item)[0];
+      if(abilityBonus)
       {
-        const egoAmount = Number(this.actor.system.abilities.ego.effective || 0);
-        if(egoAmount) psionicBonus = { amount: egoAmount, name: "Psionic" };
+        const egoAmount = Number(this.actor.system.abilities[abilityBonus.ability]?.effective || 0);
+        if(egoAmount) psionicBonus = { amount: egoAmount, name: abilityBonus.tag };
       }
       const totalBonus = (implantBonus?.amount || 0) + (psionicBonus?.amount || 0);
-      const formula = totalBonus ? `${item.system.damageDice}+${totalBonus}` : item.system.damageDice;
+      const formula = totalBonus ? `${statOf(item, "damage-dice")}+${totalBonus}` : statOf(item, "damage-dice");
 
       // DAMAGE ADD-ONS folded in (Matt's Option B, 2026-09-07). Each add-on
       // appends exactly one die term to this one roll, which is what makes crit,
@@ -2045,8 +2022,8 @@ export class KnaveActorSheet extends ActorSheet
       const dmgTypes = attackPropertiesOrKinetic(item).filter(t => t !== "kinetic");
       let messageHeader = "<b>" + item.name + "</b> damage"
         // The values the formula read, so the card shows the numbers used.
-        + (readsActorValue(item.system.damageDice)
-          ? ` (read: ${[/@lvl/.test(item.system.damageDice) ? `Level ${valueRead.data.lvl}` : null,
+        + (readsActorValue(statOf(item, "damage-dice"))
+          ? ` (read: ${[/@lvl/.test(statOf(item, "damage-dice")) ? `Level ${valueRead.data.lvl}` : null,
                        valueRead.data.target ? `${valueRead.data.target.name}'s Gleam ${valueRead.data.target.gleam}` : null]
                        .filter(Boolean).join(", ")})`
           : "")
@@ -2086,48 +2063,60 @@ export class KnaveActorSheet extends ActorSheet
       r.toMessage({ speaker: ChatMessage.getSpeaker({ actor: this.actor }), flavor: messageHeader});
       this._postRollNotes(this.actor, this._tagNotes(item, DAMAGE_NOTES));
 
-      let vampiricTotal = 0, vampiricDrained = 0;
-      let drainTotal = 0, drainVictims = 0;
-      let rapturousTotal = 0, rapturousKills = 0, meleeKills = 0;
-      this.#_hitTargets.forEach((target)=>
+      // ASK, THEN LAND (Effect Engine: Weapon Tags chunk 3, RULED 2026-10-05):
+      // electrical damage asks whether each target is submerged and eroding
+      // damage whether it is a structure, before any of it lands - so the
+      // landing waits for the answers. Nothing to ask resolves at once.
+      const land = async () =>
       {
-        // rollMultiplier: the factor already applied to the base dice above,
-        // passed through so a tag that adds its own die in _doDamage (Mauling)
-        // can multiply it the same way rather than sneaking in undoubled.
-        // Return value carries that target's healing contributions and whether
-        // the hit killed it — all summed and applied once below, never per
-        // target (see _doDamage's own note).
-        const res = this._doDamage(target, dmg, isMelee, item, rollMultiplier, damageComponents);
-        if(res.vampiricHeal > 0) { vampiricTotal += res.vampiricHeal; vampiricDrained++; }
-        if(res.drainHeal > 0) { drainTotal += res.drainHeal; drainVictims++; }
-        if(res.bloodRapturousHeal > 0) { rapturousTotal += res.bloodRapturousHeal; rapturousKills++; }
-        if(res.killed && isMelee) meleeKills++;
-        // A named wound on a hit that DEALS DAMAGE - the Deathblight Husk's
-        // Accursed Knife (Encumbrance Penalty wiring, RULED 2026-09-25, Matt).
-        if(res.dealt > 0 && item.flags?.vaarn?.woundOnDamage && target.actor)
-          applyNamedWound(target.actor, item.flags.vaarn.woundOnDamage, { source: `${this.actor.name}'s ${item.name}` });
-      });
-      const attackHeals = [
-        { verb: "drains", label: "Vampiric", amount: vampiricTotal, victims: vampiricDrained },
-        { verb: "drains", label: item.name, amount: drainTotal, victims: drainVictims },
-        { verb: "feeds on the death of", label: "Blood-Rapturous", amount: rapturousTotal, victims: rapturousKills },
-      ];
-      // THE LEVEL FIRST, THEN THE HEAL (the Hagfluke's Siphon, RULED 2026-09-27,
-      // Matt): its +4 max HP is room the heal can then fill. One Level per
-      // attack, whatever the number of qualifying targets it hit.
-      const gain = item.flags?.vaarn?.levelGain;
-      const gainsFrom = gain ? Array.from(this.#_hitTargets).filter(t => t.actor && (!gain.targets?.length || hasAnyCreatureType(t.actor, gain.targets))) : [];
-      Promise.resolve(gainsFrom.length ? this._applyLevelGain(item, gain) : null)
-        .then(() => this._applyAttackHeals(attackHeals, item.name));
-      this._postKillReactionReminder(meleeKills);
-      this._noteUnresolvedKillReactions(item);
-      this._resolveChargeDeclaration(item, addOns);
-      // A tag's ability damage "alongside base damage" - Freezing, Necrotic.
-      this._applyAbilityDamageOnHit(item);
-      // A tag that eats the target's armour - Ultra-Corrosive.
-      this._applyArmourLossOnHit(item);
-      // An ongoing hold the hit starts - the Piranha Mole's Flense.
-      this._startHoldsOnHit(item);
+        const asked = await this._damageQuestions(item, damageComponents, Array.from(this.#_hitTargets));
+        let vampiricTotal = 0, vampiricDrained = 0;
+        let drainTotal = 0, drainVictims = 0;
+        let rapturousTotal = 0, rapturousKills = 0, meleeKills = 0;
+        this.#_hitTargets.forEach((target)=>
+        {
+          // rollMultiplier: the factor already applied to the base dice above,
+          // passed through so a tag that adds its own die in _doDamage (Mauling)
+          // can multiply it the same way rather than sneaking in undoubled.
+          // Return value carries that target's healing contributions and whether
+          // the hit killed it — all summed and applied once below, never per
+          // target (see _doDamage's own note).
+          const res = this._doDamage(target, dmg, isMelee, item, rollMultiplier, damageComponents, { asked: asked.get(target) ?? null });
+          if(res.vampiricHeal > 0) { vampiricTotal += res.vampiricHeal; vampiricDrained++; }
+          if(res.drainHeal > 0) { drainTotal += res.drainHeal; drainVictims++; }
+          if(res.bloodRapturousHeal > 0) { rapturousTotal += res.bloodRapturousHeal; rapturousKills++; }
+          if(res.killed && isMelee) meleeKills++;
+          // A named wound on a hit that DEALS DAMAGE - the Deathblight Husk's
+          // Accursed Knife (Encumbrance Penalty wiring, RULED 2026-09-25, Matt).
+          if(res.dealt > 0 && creatureAttackOf(item).woundOnDamage && target.actor)
+            applyNamedWound(target.actor, creatureAttackOf(item).woundOnDamage, { source: `${this.actor.name}'s ${item.name}` });
+        });
+        const attackHeals = [
+          { verb: "drains", label: "Vampiric", amount: vampiricTotal, victims: vampiricDrained },
+          { verb: "drains", label: item.name, amount: drainTotal, victims: drainVictims },
+          { verb: "feeds on the death of", label: "Blood-Rapturous", amount: rapturousTotal, victims: rapturousKills },
+        ];
+        // THE LEVEL FIRST, THEN THE HEAL (the Hagfluke's Siphon, RULED 2026-09-27,
+        // Matt): its +4 max HP is room the heal can then fill. One Level per
+        // attack, whatever the number of qualifying targets it hit.
+        const gain = creatureAttackOf(item).levelGain;
+        const gainsFrom = gain ? Array.from(this.#_hitTargets).filter(t => t.actor && (!gain.targets?.length || hasAnyCreatureType(t.actor, gain.targets))) : [];
+        Promise.resolve(gainsFrom.length ? this._applyLevelGain(item, gain) : null)
+          .then(() => this._applyAttackHeals(attackHeals, item.name));
+        this._postKillReactionReminder(meleeKills);
+        this._noteUnresolvedKillReactions(item);
+        this._resolveChargeDeclaration(item, addOns);
+        // A tag's ability damage "alongside base damage" - Freezing, Necrotic.
+        await this._applyAbilityDamageOnHit(item);
+        // Lithifying's +1 AV per hit, and "at 0 DEX" (Weapon Tags chunk 3, RULED 2026-10-05).
+        await this._applyTargetAvOnHit(item);
+        await this._checkValueReachesOnHit(item);
+        // A tag that eats the target's armour - Ultra-Corrosive.
+        this._applyArmourLossOnHit(item);
+        // An ongoing hold the hit starts - the Piranha Mole's Flense.
+        this._startHoldsOnHit(item);
+      };
+      land().catch(err => console.error("Vaarn | landing the damage:", err));
     }
   }
 
@@ -2160,7 +2149,7 @@ export class KnaveActorSheet extends ActorSheet
 
   async _startHoldsOnHit(item)
   {
-    const spec = item?.flags?.vaarn?.holdOnHit;
+    const spec = creatureAttackOf(item).holdOnHit;
     if(!spec) return;
     for(const token of this.#_hitTargets)
     {
@@ -2302,11 +2291,84 @@ export class KnaveActorSheet extends ActorSheet
     await this._applyAbilityDamageOnHit(item);
   }
 
+  // RESTORED 2026-10-06 (Creatures chunk 2a): 4fbd94e deleted these two with
+  // the Exotica methods beside them, while their sheet controls still called them.
+  /**
+   * The Entropy Wight's touch - "Targets struck by the Wight lose d3 maximum
+   * HP ... Hit points lost in this way are never regained." RULED 2026-09-23
+   * (Matt): a GM control on the targeted tokens, and permanent - it is a
+   * write to max HP, which nothing restores. Current HP follows it down.
+   * Rolled per target, since each was struck separately. A max reaching 0 is
+   * announced by zero-max-hp.js, which hangs on the write.
+   */
+  async _cutTargetsMaxHP(item)
+  {
+    if(!game.user.isGM) return ui.notifications.warn("Only the Referee applies this.");
+    // From its sentence since Effect Engine: Creatures chunk 2a (2026-10-06).
+    const spec = creatureAttackOf(item).maxHPLoss;
+    if(!spec) return;
+    const targets = Array.from(game.user?.targets ?? []).map(t => t.actor).filter(Boolean);
+    if(!targets.length)
+      return this._postWoundMsg(this.actor, `<b>${item.name}</b>: no target is selected, so no maximum HP was lost.`);
+    for(const target of targets)
+    {
+      const roll = await new Roll(spec.dice).evaluate();
+      // The max HP verb (Shared Pipelines chunk 5): a loss, floored at 0, clamps current.
+      const change = maxHpChange(target, { add: -roll.total });
+      const newMax = change["system.health.max"];
+      await this._postWoundMsg(target, `loses <b>${roll.total}</b> maximum HP to <b>${item.name}</b>${spec.permanent ? ", never to be regained" : ""}${gmHP(target, ` — now ${newMax}`)}.`);
+      await target.update(change, { [MAX_HP_CAUSE]: item.name });
+    }
+  }
+
+  /**
+   * Temporary HP (foundry-system-index.csv "Temporary HP", RULED 2026-09-26 by
+   * Matt): the Zenithlight Negatick's Infusion. Rolled per target, since each
+   * is held separately, and added to that target's pool - the book's "+d8
+   * temporary HP per round".
+   *
+   * THE DEATH is the book's: "If temporary HP is more than double the
+   * character's maximum HP, they explode into flurries of zenithlight and
+   * die." A death here is a message, as every death in this system is (see
+   * fatality.js), and the Immortality Injector suppresses it like any other.
+   * A creature victim goes to 0 HP through the funnel as a set-to-zero death,
+   * which clears the pool and posts the ordinary creature death.
+   */
+  async _addTempHpToTargets(item)
+  {
+    if(!game.user.isGM) return ui.notifications.warn("Only the Referee applies this.");
+    const spec = creatureFlagsOf(item).tempHp;
+    if(!spec) return;
+    const targets = Array.from(game.user?.targets ?? []).map(t => t.actor).filter(Boolean);
+    if(!targets.length)
+      return this._postWoundMsg(this.actor, `<b>${item.name}</b>: no target is selected, so no temporary HP was added.`);
+    for(const target of targets)
+    {
+      const roll = await new Roll(spec.dice).evaluate();
+      const pool = tempHpOf(target) + roll.total;
+      const max = Number(target.system.health.max) || 0;
+      await target.update({ [TEMP_HP_FIELD]: pool });
+      await this._postWoundMsg(target, `gains <b>${roll.total}</b> temporary HP from <b>${item.name}</b>${gmHP(target, ` — now ${pool}, against ${max} maximum HP`)}.`);
+      if(!spec.burstAt || !burstsAt(pool, max, spec.burstAt)) continue;
+
+      const cause = `explodes into flurries of zenithlight (temporary HP more than ${spec.burstAt} times maximum HP)`;
+      if(suppressesDeath(target))
+        await this._postWoundMsg(target, suppressionMsg(cause));
+      else if(target.type === "character")
+        await this._postWoundMsg(target, `${cause} and <b>dies</b>.`);
+      else
+      {
+        await this._postWoundMsg(target, `${cause}.`);
+        this._kill(target);
+      }
+    }
+  }
+
   /** Cause Wound: roll the declared dice on the Wounds table for a character hit (creatures take no Wounds). */
   async _rollWoundOnHit(item, target)
   {
     if(!target) return;
-    const dice = item.flags.vaarn.woundRoll;
+    const dice = creatureAttackOf(item).woundRoll;
     if(target.type !== "character")
       return this._postWoundMsg(target, `<b>${item.name}</b> would roll ${dice} on the Wounds table, but creatures do not suffer Wounds.`);
     const r = (await new Roll(dice).evaluate({ async: true })).total;
@@ -2319,13 +2381,91 @@ export class KnaveActorSheet extends ActorSheet
   {
     if(!target) return;
     const { itemAtSlot } = await import("./item-slots.js");
-    const roll = await new Roll(item.flags.vaarn.destroyItemRoll).evaluate({ async: true });
+    const roll = await new Roll(creatureAttackOf(item).destroyItemRoll).evaluate({ async: true });
     const hit = itemAtSlot(target.items, roll.total);
     await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: this.actor }),
       whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
-      content: `<div class="vaarn-chat-card"><h3>${item.name}</h3><p>${target.name}, slot ${roll.total} (${item.flags.vaarn.destroyItemRoll}): `
+      content: `<div class="vaarn-chat-card"><h3>${item.name}</h3><p>${target.name}, slot ${roll.total} (${creatureAttackOf(item).destroyItemRoll}): `
         + (hit ? `<b>@UUID[${hit.uuid}]{${hit.name}}</b>` : "<i>an empty slot</i>")
         + `.</p><p><i>Nothing has been destroyed - whether and how it is, is the Referee's call.</i></p></div>` });
+  }
+
+  /**
+   * The questions a damage click asks before anything lands - Effect Engine:
+   * Weapon Tags chunk 3, RULED 2026-10-05 (Matt): ANY electrical damage asks
+   * whether each target is submerged (Electrical doubles there), and ANY
+   * eroding damage whether it is a static structure (Eroding doubles there).
+   * The damage type decides, not the tag, as the metal-armour doubling does.
+   * The GM answers about a target; prompts off or no answer uses "no" and the
+   * line saying so is posted (gates.js). Returns Map(token -> { submerged,
+   * structure }); doDamage applies the doubling.
+   */
+  async _damageQuestions(item, components, targets)
+  {
+    const asked = new Map();
+    const props = new Set((components?.length ? components : [{ types: null }])
+      .flatMap(c => c.types?.length ? c.types : attackPropertiesOrKinetic(item)));
+    const electrical = props.has("electrical"), eroding = props.has("eroding");
+    if(!electrical && !eroding) return asked;
+    for(const target of targets)
+    {
+      const answer = {};
+      const lines = [];
+      if(electrical)
+      {
+        const r = await settleGates([{ gate: "submerged" }], { actor: this.actor, target, title: item.name });
+        answer.submerged = r.pass; lines.push(...r.lines);
+      }
+      if(eroding)
+      {
+        const r = await settleGates([{ gate: "target-is-object" }], { actor: this.actor, target, title: item.name });
+        answer.structure = r.pass; lines.push(...r.lines);
+      }
+      for(const line of lines) this._postWoundMsg(target.actor ?? this.actor, `<i>${line}</i>`);
+      asked.set(target, answer);
+    }
+    return asked;
+  }
+
+  /**
+   * A hit that raises the TARGET's AV - Lithifying's "gain +1 AV". RULED
+   * 2026-10-05 (Matt): per hit and stacking, one board entry per hit, until
+   * the Referee ends it; removing the entry takes the AV off (board AV is
+   * live, never written to the stored value).
+   */
+  async _applyTargetAvOnHit(item)
+  {
+    const sentences = hitTargetAv(item);
+    if(!sentences.length) return;
+    for(const token of this.#_hitTargets)
+    {
+      const actor = token.actor;
+      if(!actor) continue;
+      for(const s of sentences)
+      {
+        const av = Number(String(s.do.amount).replace("+", "")) || 0;
+        await applyEffectToActor(actor, { name: `${s.tag ?? item.name}: ${av > 0 ? "+" : ""}${av} AV`,
+          text: `${s.text ?? ""} From <b>${this.actor.name}</b>'s <b>${item.name}</b>. <b>Lasts until the Referee ends it.</b>`,
+          applied: { av }, rounds: null, sourceActorId: this.actor.id, sourceName: this.actor.name });
+        this._postWoundMsg(actor, `gains <b>${av > 0 ? "+" : ""}${av} AV</b> from <b>${s.tag ?? item.name}</b> — on the board until the Referee ends it.`);
+      }
+    }
+  }
+
+  /**
+   * "At 0 DEX, they are frozen solid" (Freezing) / "At 0 DEX they turn to
+   * stone" (Lithifying) - the weapon's value-reaches sentences, checked on
+   * every target the hit reached. RULED 2026-10-05 (Matt): it triggers
+   * whenever the ability is at or below the threshold after the hit (option
+   * B), and the state - Paralysed under the tag's wording - lasts while the
+   * ability stays there, ending when it recovers (value-reaches.js).
+   */
+  async _checkValueReachesOnHit(item)
+  {
+    const sentences = valueReachesSentences(item);
+    if(!sentences.length) return;
+    for(const token of this.#_hitTargets)
+      if(token.actor) await reachValue(token.actor, sentences, { source: this.actor, item });
   }
 
   async _applyArmourLossOnHit(item)
@@ -2333,9 +2473,10 @@ export class KnaveActorSheet extends ActorSheet
     // A tag's loss (Ultra-Corrosive) plus a creature attack's declared one
     // (the Drill Drone's Drill, the Witchgrub's Corrosive Spit - Live AV
     // Computation wiring, 2026-09-25). The same write either way.
-    const tagLoss = ARMOUR_LOSS_TAGS[(item?.system?.tags ?? []).find(t => ARMOUR_LOSS_TAGS[t])] || 0;
+    // From the weapon's sentences since Weapon Tags chunk 3 (2026-10-05).
+    const tagLoss = hitArmourLoss(item);
     // A declared loss may be DICE (Acid Spray's d3, 2026-10-04), rolled per target hit.
-    const declared = item?.flags?.vaarn?.armourLoss;
+    const declared = creatureAttackOf(item).armourLoss;
     const lossDice = typeof declared === "string" && /d/i.test(declared) ? declared : null;
     const fixed = tagLoss + (lossDice ? 0 : (Number(declared) || 0));
     if(!fixed && !lossDice) return;
@@ -2393,7 +2534,7 @@ export class KnaveActorSheet extends ActorSheet
     // A hit that STARTS a per-round loss - the Psyche Leech's syphon.
     if(ticks.length) await this._startAbilityTicks(ticks, targets);
     // The Exotica weapon whose usage die ran out on this attack.
-    if(item.flags?.vaarn?.exotica && item.system.usageDie?.die === "expended") this._deleteUsedUpExotica(item);
+    if(item.flags?.vaarn?.exotica && usageDieOf(item).die === "expended") this._deleteUsedUpExotica(item);
   }
 
   /**
@@ -2442,8 +2583,9 @@ export class KnaveActorSheet extends ActorSheet
               + `until the Referee removes this — the focus broken, or the Seeker switched target.`,
           start: spec.start, factor: spec.factor, source: this.actor
         });
-        const currentHP = actor.system.health.value;
-        this._resolveHPChange(actor, currentHP, currentHP - spec.start);
+        // Through the whole HP pipeline since chunk 2 (2026-10-05): untyped
+        // ("unblockable"), from this sheet's creature.
+        dealDamage(actor, spec.start, { source: this.actor, name: spec.source });
         this._postWoundMsg(actor, `is under <b>${spec.source}</b> — <b>${spec.start}</b> unblockable damage now, `
           + `x${spec.factor} each round from the round card until it is removed from the board. `
           + `<i>A creature without a brain cannot be harmed by this — the Referee decides which those are.</i>`);
@@ -2500,7 +2642,7 @@ export class KnaveActorSheet extends ActorSheet
    */
   _exoticaWeaponSpent(item)
   {
-    if(!item.flags?.vaarn?.exotica || item.system.usageDie?.die !== "expended") return false;
+    if(!item.flags?.vaarn?.exotica || usageDieOf(item).die !== "expended") return false;
     this._deleteUsedUpExotica(item);
     return true;
   }
@@ -2635,15 +2777,18 @@ export class KnaveActorSheet extends ActorSheet
   _checkWeaponCrit(item, roll)
   {
     const total = roll.dice[0].total;
-    const tags = item.system.tags || [];
-    const breaks = tags.includes("Fragile") || tags.includes("Crystalline")
-      || (tags.includes("Delicate") && total <= 2);
-
     if(total !== 20) this.#_criticalWeapons.delete(item.id);
+
+    // WHAT THE NATURAL ROLL SETS OFF, from the weapon's sentences (Effect
+    // Engine: Weapon Tags chunk 4, RULED 2026-10-05): Fragile and Crystalline
+    // on a 1, Delicate on a 1-2, Unstable's explosion on ANY 1 (ruling F) -
+    // a natural-roll gate on an attack-roll sentence, read off the die.
+    const fired = naturalRollSentences(item)
+      .filter(s => (s.if ?? []).every(g => g.gate !== "natural-roll" || computeGate(g, { natural: total })));
+    if(fired.length) { this._weaponNat1(item, fired); return; }
 
     if(total === 1)
     {
-      if(breaks) this._weaponNat1(item);
       // A BODY PART POSTS NOTHING (Matt, 2026-09-22). Making Attacks.md: "the
       // weapon is dropped or jams and must be retrieved or fixed before it can
       // be used again" - a Claw is neither, and the line was the only thing a
@@ -2653,10 +2798,8 @@ export class KnaveActorSheet extends ActorSheet
       // move, so the question is already answered on the Item. Breakage above
       // is untouched: a tagged intrinsic weapon still breaks, which is a real
       // consequence rather than a sentence.
-      else if(!item.system.intrinsic) this._weaponFumble(item);
+      if(!item.system.intrinsic) this._weaponFumble(item);
     }
-    else if(total === 2 && tags.includes("Delicate"))
-      this._weaponNat1(item);
     else if(total === 20)
       this.#_criticalWeapons.add(item.id);
   }
@@ -2680,52 +2823,48 @@ export class KnaveActorSheet extends ActorSheet
    * from the item sheet whenever repairs are narratively done — no
    * automated repair-day timer.
    */
-  async _weaponNat1(item)
+  async _weaponNat1(item, fired = [])
   {
-    const tags = item.system.tags || [];
+    const say = content => ChatMessage.create({ user: game.user._id, speaker: ChatMessage.getSpeaker({ actor: this.actor }), content });
+    // What each fired sentence would do to the weapon, and whether the weapon
+    // forbids it: Strong and Indestructible forbid BREAKING, Indestructible
+    // also forbids DESTRUCTION - so an Unstable explosion (destruction by
+    // explosion, not a break) is stopped by Indestructible and not by Strong
+    // (chunk 4 ruling 1, 2026-10-05).
+    const states = fired.filter(s => s.do?.verb === "item-state");
+    const allowed = s => !itemForbids(item, s.do.by === "explode" ? "destroy" : "break");
+    const destroy = states.find(s => s.do.state === "destroyed" && allowed(s));
+    const brk = states.find(s => s.do.state === "broken" && allowed(s));
+    const boom = fired.find(s => s.do?.verb === "damage");
 
-    if(tags.includes("Indestructible") || tags.includes("Strong"))
+    if(boom)
     {
-      ChatMessage.create({
-        user: game.user._id,
-        speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-        content: `<b>${item.name}</b> would break, but its tags prevent it!`
-      });
-      return;
-    }
-
-    if(tags.includes("Unstable"))
-    {
-      const explosion = new Roll("2d6");
+      const explosion = new Roll(boom.do.dice);
       explosion.evaluate({async: false});
-      const currentHP = this.actor.system.health.value;
-      ChatMessage.create({
-        user: game.user._id,
-        speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-        content: `<span class="knave-ability-crit knave-ability-critFailure"><b>${item.name}</b> explodes violently, dealing ${explosion.total} damage to its wielder — and is destroyed in the blast!</span>`
-      });
-      this._resolveHPChange(this.actor, currentHP, currentHP - explosion.total);
-      await item.delete();
-      return;
+      const exploded = states.some(s => s.do.by === "explode");
+      const fate = destroy?.do.by === "explode" ? " — and is destroyed in the blast!"
+        : exploded ? " — and holds together: nothing can destroy it." : "";
+      await say(`<span class="knave-ability-crit knave-ability-critFailure"><b>${item.name}</b> explodes violently, dealing ${explosion.total} damage to its wielder${fate}</span>`);
+      // Through the whole HP pipeline since chunk 2 (2026-10-05): untyped, no
+      // attacker - the weapon itself went off.
+      dealDamage(this.actor, explosion.total, { name: item.name });
     }
 
-    if(tags.includes("Crystalline"))
+    if(destroy)
     {
-      ChatMessage.create({
-        user: game.user._id,
-        speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-        content: `<span class="knave-ability-crit knave-ability-critFailure"><b>${item.name}</b> shatters into a thousand glittering pieces — utterly destroyed!</span>`
-      });
+      if(destroy.do.by === "break")
+        await say(`<span class="knave-ability-crit knave-ability-critFailure"><b>${item.name}</b> shatters into a thousand glittering pieces — utterly destroyed!</span>`);
       await item.delete();
       return;
     }
-
-    await item.update({"system.broken": true});
-    ChatMessage.create({
-      user: game.user._id,
-      speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-      content: `<span class="knave-ability-crit knave-ability-critFailure"><b>${item.name}</b> is broken!</span> It needs repair before it can be used again — clear the Broken flag on its sheet once that's done.`
-    });
+    if(brk)
+    {
+      await item.update({"system.broken": true});
+      await say(`<span class="knave-ability-crit knave-ability-critFailure"><b>${item.name}</b> is broken!</span> It needs repair before it can be used again — clear the Broken flag on its sheet once that's done.`);
+      return;
+    }
+    if(states.some(s => s.do.by === "break") && !boom)
+      await say(`<b>${item.name}</b> would break, but its tags prevent it!`);
   }
 
   /**
@@ -2813,15 +2952,16 @@ export class KnaveActorSheet extends ActorSheet
   {
     const weaponType = item.type === "weaponRanged" ? "ranged" : "melee";
     const actor = this.actor;
-    for(const i of actor.items)
+    // The implant's attack-hit sentence since Implants, Exotica and Figments
+    // chunk 2 (2026-10-06): an ability's bonus ("@str") on its attack kind,
+    // not suppressed - the body's, so an implant installed.
+    for(const { sentence: s, source } of bodySentences(actor, "attack-hit"))
     {
-      if(i.type !== "implant") continue;
-      const entry = IMPLANTS.find(m => m.name === i.name);
-      if(entry?.damageBonusWeaponType === weaponType)
-      {
-        const amount = Number(actor.system.abilities[entry.damageBonusAbility]?.effective || 0);
-        if(amount) return { amount, name: entry.name };
-      }
+      const m = /^@(str|dex|con|int|psy|ego)$/.exec(String(s.do?.dice ?? ""));
+      if(s.do?.verb !== "damage" || !m) continue;
+      if((s.if ?? []).some(g => g.gate === "attack-kind" && !attackKindHolds(g, weaponType))) continue;
+      const amount = Number(actor.system.abilities[m[1]]?.effective || 0);
+      if(amount) return { amount, name: source };
     }
     return null;
   }
@@ -2837,8 +2977,11 @@ export class KnaveActorSheet extends ActorSheet
    */
   async _rangedAttackRoll(item, event)
   {
+    // The questions before the roll (Weapon Tags chunk 4), as the melee branch.
+    const asked = await this._attackQuestions(item);
+    if(asked.stop) return;
     // A declared auto-hit makes no roll (RULED 2026-09-25, Matt).
-    if(item.flags?.vaarn?.autoHit) return this._checkToHitTargets(null, item);
+    if(creatureAttackOf(item).autoHit) return this._checkToHitTargets(null, item, asked);
     // Blind CONDITION (JADE IBIS Combat Conditions, RULED 2026-09-16 by
     // Matt): "Blind characters cannot make ranged attacks". Refused before
     // the ammo check - the rule holds with or without ammunition - and the
@@ -2854,31 +2997,31 @@ export class KnaveActorSheet extends ActorSheet
       return;
     }
 
-    if(item.system.usageDie?.die === "expended")
+    if(usageDieOf(item).die === "expended")
     {
       // A weapon that names its reload offers it instead (the Tempest Cannon,
       // RULED 2026-09-26 by Matt: 3 Water Rations refill the die).
-      if(item.flags?.vaarn?.reload) return this._offerReload(item);
+      if(reloadOf(item)) return this._offerReload(item);
       this._postNoAmmoMsg(item);
       return;
     }
 
-    // Blind (work-queue item 3.10): "DIS on ranged attacks" — forced here
-    // rather than left to the player to remember, unlike Blind's other two
-    // clauses (no code hook exists for those).
-    const isBlind = this.actor.items.some(i => i.type === "mutation" && i.name === "Blind");
+    // Blind (work-queue item 3.10): "DIS on ranged attacks" - its sentence since
+    // Mutations and Ancestry Rules chunk 3, with ADV in the dark (ruling C 8),
+    // settled before the roll by _attackQuestions.
     const advVs = this._advantageVsNotes(item);
     const tDis = targetDisadvantage(item, Array.from(game.user?.targets ?? []).map(t => t.actor), hasStatefulCondition);
-    const roll = this._onAbility_Clicked(this._toHitAbilityKey(item), event, isBlind || tDis.force, advVs.length > 0);
+    const roll = this._onAbility_Clicked(this._toHitAbilityKey(item), event, asked.bodyDis.length > 0 || tDis.force,
+      advVs.length > 0 || asked.bodyAdv.length > 0);
     this._checkWeaponCrit(item, roll);
 
-    this._checkToHitTargets(roll, item);
-    this._postRollNotes(this.actor, [...advVs, ...tDis.notes, ...this._attackNotes(), ...this._tagNotes(item, TO_HIT_NOTES), ...this._stormNotes(item), ...this._followUpNotes(item)]);
+    this._checkToHitTargets(roll, item, asked);
+    this._postRollNotes(this.actor, [...advVs, ...this._bodyAttackNotes(asked), ...tDis.notes, ...this._attackNotes(), ...this._tagNotes(item, TO_HIT_NOTES), ...this._stormNotes(item), ...this._followUpNotes(item)]);
     // A condition the weapon inflicts - a creature attack's declared effect,
     // or a PC weapon's Entangling / Blinding tag (2026-09-16).
-    this._postConditionCards(item.flags?.vaarn?.applies ?? [], item.name);
+    this._postConditionCards(creatureFlagsOf(item).applies ?? [], item.name);
 
-    if(!item.system.usageDie?.die) return;
+    if(!usageDieOf(item).die) return;
 
     // An Exotica weapon's die rolls on EVERY use, not once per combat - the
     // Dirk's ruling (2026-09-22), applied to the Tempest Cannon 2026-09-26.
@@ -2897,11 +3040,14 @@ export class KnaveActorSheet extends ActorSheet
   async _offerReload(item)
   {
     const actor = this.actor;
-    const { item: kind, count } = item.flags.vaarn.reload;
+    // The weapon's refill sentence since Implants, Exotica and Figments chunk 3b-ii.
+    const spec = reloadOf(item);
+    if(!spec) return;
+    const { item: kind, count } = spec;
     // Only a SPENT die reloads: a Ud4 is either full or gone, so a loaded one
     // has nothing to top up (the sheet control is always shown).
-    if(item.system.usageDie?.die !== "expended")
-      return ui.notifications.info(`The ${item.name} is still loaded (${item.system.usageDie?.die}).`);
+    if(usageDieOf(item).die !== "expended")
+      return ui.notifications.info(`The ${item.name} is still loaded (${usageDieOf(item).die}).`);
     const have = rationTotal(actor, kind);
     if(have < count)
       return this._postWoundMsg(actor, `cannot reload the <b>${item.name}</b> — it needs ${count} ${kind}s and they have ${have}.`);
@@ -2909,8 +3055,9 @@ export class KnaveActorSheet extends ActorSheet
       content: `<p>The <b>${item.name}</b> is spent. Reload it with ${count} ${kind}s (${have} carried)?</p>` });
     if(!ok) return;
     for(let i = 0; i < count; i++) await spendRation(actor, kind);
-    await item.update({ "system.usageDie.die": item.system.usageDie.max });
-    this._postWoundMsg(actor, `reloads the <b>${item.name}</b> with ${count} ${kind}s — its usage die is back to ${item.system.usageDie.max}.`);
+    const size = usageDieOf(item).max;
+    await item.update({ "system.usageDie.die": size });
+    this._postWoundMsg(actor, `reloads the <b>${item.name}</b> with ${count} ${kind}s — its usage die is back to ${size}.`);
   }
 
   _postNoAmmoMsg(item)
@@ -2927,6 +3074,21 @@ export class KnaveActorSheet extends ActorSheet
    * pay it and roll the effect. The GM/player decides how to apply the
    * result (damage, healing, or something else) — Gifts are freeform.
    */
+  /**
+   * GM Effect Builder chunk 1 (2026-10-05): the generic Use control. One use
+   * runs at once; several ask which, one button each. Everything after the
+   * choice is the interpreter's - item state, cost, gates, the verb's mode.
+   */
+  _onEffectUse(item)
+  {
+    const uses = effectUses(item);
+    if(!uses.length) return;
+    if(uses.length === 1) return runUse(this.actor, item, uses[0].s);
+    const buttons = {};
+    uses.forEach(({ s }, i) => buttons[`e${i}`] = { label: sentenceLabel(s), callback: () => runUse(this.actor, item, s) });
+    new Dialog({ title: `Use ${item.name}`, content: "<p>Which effect?</p>", buttons, default: "e0" }).render(true);
+  }
+
   _onGiftUse(item)
   {
     // Mind Shield (work-queue item 10.3.10): "Cannot use Mystic Gifts" is a
@@ -2934,8 +3096,9 @@ export class KnaveActorSheet extends ActorSheet
     // reminder, since this is the single entry point every Gift-use click
     // routes through. Only blocks while actually worn, same as every other
     // armorType effect in this codebase.
-    const hasMindShield = this.actor.items.some(i =>
-      i.type === "armor" && i.name === "Mind Shield" && i.system.equipped);
+    // Its forbid sentence since Implants, Exotica and Figments chunk 2
+    // (2026-10-06): worn, not suppressed (body.js bodyForbids).
+    const hasMindShield = bodyForbids(this.actor, "use-gift").length > 0;
     if(hasMindShield)
     {
       ChatMessage.create({
@@ -2950,10 +3113,8 @@ export class KnaveActorSheet extends ActorSheet
     // — a real restriction rather than a reminder, blocked here because
     // every Gift-use click routes through this method. "Holding" reads as
     // equipped, the same mapping Annihilating's "drawn" got.
-    const suppressor = this.actor.items.find(i =>
-      (i.type === "weaponMelee" || i.type === "weaponRanged") &&
-      i.system.equipped &&
-      (i.system.tags || []).includes("Psyche-Suppressant"));
+    // From the passive sentences in force since Weapon Tags chunk 5a.
+    const suppressor = activePassives(this.actor, { verb: "forbid" }).find(p => p.sentence.do.what === "use-gift")?.item;
     if(suppressor)
     {
       ChatMessage.create({
@@ -2980,20 +3141,29 @@ export class KnaveActorSheet extends ActorSheet
     // defined effects asks which use this is, one button each, then the cost.
     // "Other use" keeps the freeform cast every Gift had before - the table
     // can always agree something new on the spot.
-    const effects = effectsOf(item);
-    if(!effects.length) return this._openGiftCostDialog(item, null);
+    // Effect Engine: Interpreter and Mystic Gifts, chunk 3 (RULED 2026-10-05):
+    // the uses are the Gift's sentences - its own vaarn.effects, or an old
+    // effect list read through the translator - and "Other use" is the
+    // built-in OTHER_USE sentence (ruling B), so every use runs through the
+    // interpreter.
+    const uses = useSentences(item);
+    if(!uses.length) return this._openGiftCostDialog(item, OTHER_USE);
     const choices = {};
-    effects.forEach((e, i) => choices[`e${i}`] = { label: effectLabel(e), callback: () => this._openGiftCostDialog(item, e) });
-    choices.other = { label: "Other use", callback: () => this._openGiftCostDialog(item, null) };
+    uses.forEach(({ s }, i) => choices[`e${i}`] = { label: sentenceLabel(s), callback: () => this._openGiftCostDialog(item, s) });
+    choices.other = { label: "Other use", callback: () => this._openGiftCostDialog(item, OTHER_USE) };
     new Dialog({ title: `Use ${item.name}`, content: "<p>How is the Gift being used?</p>", buttons: choices, default: "e0" }).render(true);
   }
 
   /**
-   * The HP cost dialog. `effect` is the chosen entry of the Gift's effect
-   * list, or null for a freeform use.
+   * The HP cost dialog - the handler for a Gift sentence's hp cost of the
+   * chosen die (Interpreter chunk 3). `sentence` is the chosen use, or
+   * OTHER_USE for a freeform one.
    */
-  _openGiftCostDialog(item, effect)
+  _openGiftCostDialog(item, sentence)
   {
+    const freeform = sentence === OTHER_USE;
+    const options = optionsOf(sentence);
+    const verbs = options.map(o => o.verb);
     // RULED 2026-09-28 (Matt): the table's two uses. To damage or heal, the
     // die paid IS the effect die, so the player picks the effect they want;
     // for any other effect, the combined Level of the targets sets it (the
@@ -3016,21 +3186,22 @@ export class KnaveActorSheet extends ActorSheet
         // paid again, so it is orthogonal to the tier and ten buttons would
         // say otherwise.
         callback: html => this._resolveGiftUse(item, tier.die, tier.faces,
-          html.find('[name="gift-sustained"]').is(":checked"), effect)
+          html.find('[name="gift-sustained"]').is(":checked"), sentence)
       };
 
     // Mystic Gift Effect Modelling (2026-09-29): for an effect that is not
     // damage or healing, the targets' combined Level picks the default die -
     // any die can still be chosen, and the Referee has the final say.
-    const rolled = !effect || effect.kind === "damage" || effect.kind === "healing";
+    const rolled = verbs.every(v => v === "damage" || v === "heal");
     const targets = Array.from(game.user?.targets ?? []);
     const levels = targets.reduce((n, t) => n + levelOf(t.actor), 0);
     const byLevel = rolled ? null : costDieForLevels(levels);
-    const intro = !effect
+    const label = sentenceLabel(sentence);
+    const intro = freeform
       ? `<p>Choose the HP cost die. <b>To damage or heal</b>, pick the effect you want: the die you pay is the die you roll, plus PSY. <b>For any other effect</b>, pick by the targets' combined Level (nine Level 1 targets cost a d20). The Referee has the final say; the baseline is d6.</p>`
       : rolled
-        ? `<p><b>${effectLabel(effect)}</b>: choose the die - you pay it in HP and roll it, plus PSY, as the ${effect.kind === "damage" ? "damage" : "healing"}. The Referee has the final say.</p>`
-        : `<p><b>${effectLabel(effect)}</b>: the cost is set by the targets' combined Level${byLevel ? ` - <b>${levels}</b>, so ${byLevel.replace("1", "")} is picked` : " (nothing is targeted, so pick by the Level of whoever it is used on)"}. The Referee has the final say; the baseline is d6.</p>`;
+        ? `<p><b>${label}</b>: choose the die - you pay it in HP and roll it, plus PSY, as the ${verbs[0] === "damage" ? "damage" : "healing"}. The Referee has the final say.</p>`
+        : `<p><b>${label}</b>: the cost is set by the targets' combined Level${byLevel ? ` - <b>${levels}</b>, so ${byLevel.replace("1", "")} is picked` : " (nothing is targeted, so pick by the Level of whoever it is used on)"}. The Referee has the final say; the baseline is d6.</p>`;
 
     new Dialog(
     {
@@ -3042,52 +3213,18 @@ export class KnaveActorSheet extends ActorSheet
     }).render(true);
   }
 
-  async _resolveGiftUse(item, dieFormula, faces = 0, sustained = false, effect = null)
+  async _resolveGiftUse(item, dieFormula, faces = 0, sustained = false, sentence = OTHER_USE)
   {
     const actor = this.actor;
 
-    const costRoll = new Roll(dieFormula);
-    costRoll.evaluate({async: false});
-    costRoll.toMessage({speaker: ChatMessage.getSpeaker({actor}), flavor: `<b>${item.name}</b> — HP cost`});
-
-    const currentHP = actor.system.health.value;
-    this._resolveHPChange(actor, currentHP, currentHP - costRoll.total);
-
-    const targets = Array.from(game.user?.targets ?? []);
-
-    // Mystic Gift Effect Modelling (2026-09-29). A prose or condition effect
-    // rolls no effect die - the book's die + PSY is damage or healing - so it
-    // resolves here and only the cost above was paid.
-    if(effect?.kind === "prose")
-      await ChatMessage.create({ speaker: ChatMessage.getSpeaker({actor}),
-        // Only a label set by hand heads the text: an unlabelled prose entry's
-        // label IS its text, and would print it twice (found in Group 483).
-        content: `<p><b>${item.name}</b>${effect.label ? ` — ${effect.label}` : ""}</p><p>${effect.text ?? ""}</p>` });
-    else if(effect?.kind === "condition")
-    {
-      // No save (ruled: Gifts always hit) and no clock (ruled: until the
-      // Referee ends it). One Apply card per target, the Referee clicks -
-      // the same card every creature's condition uses. No target captured
-      // still posts one card, for the Referee to target at click time.
-      const spec = giftConditionSpec(effect, item.name);
-      for(const target of targets.length ? targets : [null])
-        await postApplyCard({ source: actor, spec, target });
-    }
-    else
-    {
-      const psy = actor.system.abilities.psy.effective;
-      const effectRoll = new Roll(`${dieFormula}+${psy}`);
-      effectRoll.evaluate({async: false});
-      const what = effect ? `${effectLabel(effect)} (${dieFormula}+PSY)` : `effect (${dieFormula}+PSY)`;
-      await effectRoll.toMessage({speaker: ChatMessage.getSpeaker({actor}), flavor: `<b>${item.name}</b> — ${what}`});
-
-      // Mystic Gift Damage to a Target (RULED 2026-09-26, Matt): with tokens
-      // targeted, a card offers the roll as damage or as healing. The floor a
-      // Gelationous-style rule reads is the die's 1 plus PSY. A defined
-      // effect offers only its own button, and damage carries its type.
-      await postGiftApplyCard(actor, item, effectRoll.total, 1 + psy, targets,
-        effect ? { modes: [effect.kind === "healing" ? "heal" : "damage"], damageType: effect.damageType || null, label: effectLabel(effect) } : {});
-    }
+    // Effect Engine: Interpreter and Mystic Gifts, chunk 3 (RULED 2026-10-05):
+    // the use runs through the interpreter - the cost paid at the chosen die,
+    // one roll of die + PSY, then the sentence's verb: damage or healing as
+    // the effect card (the old Gift card's rules, Psychic Mirror included),
+    // a condition or named effect as one Apply card per target until the
+    // Referee ends it, prose as a chat line. Gifts always hit: no save.
+    const result = await runUse(actor, item, sentence, { costDie: dieFormula, sustained });
+    if(result.refused) return;
 
     // Gift Sustained Use Cost. Started AFTER the cast has been paid and rolled,
     // so the recurrence's startTime is the moment of casting and its first tick
@@ -3115,13 +3252,15 @@ export class KnaveActorSheet extends ActorSheet
       return;
     }
 
-    // Known equations (one of the fixed 20) resolve their effect text from
-    // the table; a custom/homebrew equation name (no table match) falls back
-    // to the item's own description — the INT-save resolution below applies
-    // either way, since it's keyed off the reader, not the equation.
-    const known = EQUATIONS.find(e => e.name === item.system.equation);
-    const equationName = known ? known.name : (item.system.equation || item.name);
-    const rawEffect = known ? known.effect : (item.system.description || "(no effect text set on this codex)");
+    // What the equation does, from the Codex's sentences (Remaining Sources
+    // chunk 2a, RULED 2026-10-07): a known equation's through the codex
+    // translator, a GM's own where the Item carries them. A Codex that says
+    // nothing - a custom/homebrew equation name - falls back to the item's own
+    // description; the INT-save resolution below applies either way, since
+    // it's keyed off the reader, not the equation.
+    const known = codexOf(item);
+    const equationName = item.system.equation || item.name;
+    const rawEffect = known?.words ?? (item.system.description || "(no effect text set on this codex)");
 
     if(!known && !item.system.equation && !item.system.description)
     {
@@ -3130,7 +3269,7 @@ export class KnaveActorSheet extends ActorSheet
     }
 
     const intBonus = actor.system.abilities.int.effective;
-    const roll = this._rollD20(intBonus, `Read ${item.name}`, event);
+    const roll = this._rollD20(intBonus, `Read ${item.name}`, event, ...this._ownSaveMods("int"));
     const natural = roll.dice[0].total;
     // Saving Throw Resolution Duplication (2026-09-13): resolved through the
     // one shared function rather than restating the nat-20 / nat-1 / exceed
@@ -3179,14 +3318,16 @@ export class KnaveActorSheet extends ActorSheet
     {
       const mishapRoll = new Roll("1d20");
       mishapRoll.evaluate({async: false});
+      // The d20 picks the mishap from the table; what it does is its sentences (chunk 2a).
       const mishap = MISHAPS[mishapRoll.total - 1];
+      const said = mishapOf(mishap.name);
       mishapRoll.toMessage({speaker: ChatMessage.getSpeaker({actor}), flavor: `Hypergeometric Mishap roll`});
-      this._postWoundMsg(actor, `<b>Mishap: ${mishap.name}</b> — ${substituteINT(mishap.effect, intBonus)}`);
+      this._postWoundMsg(actor, `<b>Mishap: ${mishap.name}</b> — ${substituteINT(said?.words ?? mishap.effect, intBonus)}`);
       // Planeyfied declares its [INT] days of flatness (2026-09-21), resolved
       // exactly as an equation's applies is above.
-      if(mishap.applies)
+      if(said?.applies)
       {
-        const a = { ...mishap.applies };
+        const a = { ...said.applies };
         if(a.amount === "INT") a.amount = intBonus;
         if(a.text) a.text = substituteINT(a.text, intBonus);
         this._postConditionCards([a], `Mishap: ${mishap.name}`);
@@ -3225,6 +3366,19 @@ export class KnaveActorSheet extends ActorSheet
       + `— they serve until the day ends.`);
   }
 
+  /**
+   * A Bloomboon's grow sentence (Consumables chunk 3b, 2026-10-06): its spec, in
+   * the table row's shape the growth and retainer code take - { name, effect,
+   * grows } or { name, effect, retainers } - named by the variant.
+   */
+  async _bloomboonGrow(item, params, sentence)
+  {
+    const { verb, handler, retainers, ...grows } = params ?? {};
+    const boon = { name: sentence?.tag ?? item.system?.variant ?? item.name, effect: sentence?.text ?? "" };
+    if(retainers) return this._raiseRetainers({ ...boon, retainers });
+    return this._growBloomboon({ ...boon, grows });
+  }
+
   async _growBloomboon(boon)
   {
     const actor = this.actor;
@@ -3261,17 +3415,14 @@ export class KnaveActorSheet extends ActorSheet
    * have three points of the roll eaten by the debt. Deathblight halves the
    * gain, per slot (scaleHealing).
    */
-  _hourlyHeal(actor, formula, flavor, verb, gateLabel)
+  async _hourlyHeal(actor, formula, flavor, verb, gateLabel)
   {
     if(blocksHealing(actor, gateLabel)) return;
     const roll = new Roll(formula);
     roll.evaluate({async: false});
     roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor });
-    const before = actor.system.health.value;
-    const full = Math.min(actor.system.health.max, healFloor(before) + roll.total);
-    const { gained, note } = scaleHealing(actor, full - before);
-    const after = before + gained;
-    if(gained > 0) actor.update({ "system.health.value": after });
+    // The one heal path (Shared Pipelines chunk 3), ungated: gated above.
+    const { gained, after, note } = await heal(actor, roll.total, { gate: false });
     this._postWoundMsg(actor, gained > 0
       ? `${verb} — restores <b>${gained}</b> HP${gmHP(actor, ` (now ${after}/${actor.system.health.max})`)}.${note}`
       : note
@@ -3280,48 +3431,45 @@ export class KnaveActorSheet extends ActorSheet
   }
 
   /**
-   * Dispatcher for an ancestry special rule's "use" icon click, keyed by
-   * `system.rule` — foundry-system-index.csv "Ancestry Rule as Rollable
-   * Item", Matt's ruling 2026-09-01 from testing item 62.4.
+   * A mutation's or an ancestry rule's use control - Effect Engine: Mutations
+   * and Ancestry Rules, chunk 4 (CHUNK 4 RULED 2026-10-06 by Matt). The Item's
+   * use sentence runs through the interpreter, which settles its gates (the
+   * daylight question), pays its cost (Ink Ducts' and Gas Glands' daily pool),
+   * posts its targets' save cards (Gas Glands, Ink Ducts, Silk Production) or
+   * runs its named handler (body-uses.js). Nothing here names an Item.
+   */
+  _onBodyUse(item, event)
+  {
+    // Implants and figments since Implants, Exotica and Figments chunk 3a
+    // (2026-10-06): the self-saves, the Trauma-Response Rig's daily pool, the
+    // Voxbox's d8, Solar Scaling's hour, the Nerves' snare.
+    const uses = useSentences(item).filter(({ s }) => !s.baked);
+    if(!uses.length) return ui.notifications.warn(`${item.name} has no use the system resolves.`);
+    return runUse(this.actor, item, uses[0].s, { event });
+  }
+
+  /**
+   * The ancestry one-offs a use sentence names by handler (body-uses.js):
+   * Ambusher, Inheritor, Worm Wise, Repairs, Spores and Bloomboons, each its
+   * own behaviour, so nothing to factor out beyond the routing. Twice Born and
+   * Photosynthesis left for the shared self-save and hourly-heal handlers in
+   * chunk 4.
    *
-   * Keyed off `system.rule` rather than item.name deliberately: the
-   * display name folds in the rolled variant ("Twice Born: Soldier",
-   * "Bloomboon: Glue Resin") per Matt's design, so name-keying would break
-   * the moment a player renamed one. Same dispatcher shape as
-   * _onMutationUse/_onImplantUse below, and like those the four rules
-   * behave completely differently, so there is nothing to factor out
-   * beyond the routing.
-   *
-   * - Twice Born: a real INT save, the bearer's own — the rule says "you
-   *   may make INT saves to recall information", so it routes straight
-   *   through the shared ADV/DIS-aware roller like Frog Tongue does.
-   * - Photosynthesis: rolls d8 + CON and heals, clamped to max HP for the
-   *   same reason _applyAttackHeals clamps — _resolveHPChange writes an
-   *   increase through uncapped.
    * - Spores: a real CON save, plus the once-per-day lockout the rule
    *   describes. Modelled on _onCodexRead's hypergeometricLockout exactly,
    *   including being cleared by hand from the sheet.
-   * - Bloomboons: descriptive-only for now. The individual Bloomboon
-   *   effects are their own 20 atoms; the eight that compel a target to
-   *   save are waiting on Compel-a-Target Save, which today only knows
-   *   about Exotica names.
+   * - Bloomboons: the boon's table entry says what it does - a save, a hold,
+   *   a growth, retainers - else it is resolved by hand.
    */
-  _onAncestryRuleUse(item, event)
+  _ancestryOneOff(handler, item, event)
   {
     const actor = this.actor;
     const variant = item.system.variant;
 
-    if(item.system.rule === "Twice Born")
-    {
-      const intBonus = actor.system.abilities.int.effective;
-      this._rollD20(intBonus, `Twice Born — recall what ${variant ? `the ${variant.toLowerCase()}` : "the original body"} knew`, event);
-      return;
-    }
-
     // Ambusher and Worm Wise - the Faa Nomad's two rules in JADE IBIS, which
     // replaced Worm Rider (RULED 2026-09-21, Matt). The roll is made here so
     // the Jinx reaches it; what it means is ancestry-rule-effects.js's.
-    if(item.system.rule === "Ambusher")
+    if(handler === "ambusher")
     {
       const opponent = Array.from(game.user?.targets ?? [])[0]?.actor ?? null;
       if(!opponent)
@@ -3334,7 +3482,7 @@ export class KnaveActorSheet extends ActorSheet
     }
     // Inheritor - the True-kin's. Rolls with or without a target; see
     // inheritorOutcome for why it does not refuse the way Ambusher does.
-    if(item.system.rule === "Inheritor")
+    if(handler === "inheritor")
     {
       const machine = Array.from(game.user?.targets ?? [])[0]?.actor ?? null;
       const ego = actor.system.abilities.ego.effective;
@@ -3343,7 +3491,7 @@ export class KnaveActorSheet extends ActorSheet
       this._postWoundMsg(actor, out.text);
       return;
     }
-    if(item.system.rule === "Worm Wise")
+    if(handler === "worm-wise")
     {
       const ego = actor.system.abilities.ego.effective;
       const roll = this._rollD20(ego, "Worm Wise — EGO Save to charm the Sandworm", event);
@@ -3360,7 +3508,7 @@ export class KnaveActorSheet extends ActorSheet
     // exactly one thing a module cannot: asking WHICH Wound, when HP is full
     // and the character is carrying more than one. That is the same split
     // _onLongRest already uses for the full-HP recovery choice.
-    if(item.system.rule === "Repairs")
+    if(handler === "repairs")
     {
       repair(actor).then(result =>
       {
@@ -3370,19 +3518,7 @@ export class KnaveActorSheet extends ActorSheet
       return;
     }
 
-    if(item.system.rule === "Photosynthesis")
-    {
-      // Deprived State. GATED BEFORE THE ROLL, not after: rolling d8+CON and
-      // then refusing the HP shows the player a number they did not get, which
-      // reads as a bug rather than as a rule. The book's first clause is
-      // absolute — "cannot heal lost HP" — and rooting in damp soil is not a
-      // Rest, so this is that clause and not the Rests one.
-      this._hourlyHeal(actor, `1d8+${actor.system.abilities.con.effective}`,
-        "<b>Photosynthesis</b> — one hour rooted in damp soil under Urth's sun", "photosynthesises", "photosynthesising");
-      return;
-    }
-
-    if(item.system.rule === "Spores")
+    if(handler === "spores")
     {
       if(actor.system.sporeLockout)
       {
@@ -3391,7 +3527,7 @@ export class KnaveActorSheet extends ActorSheet
       }
 
       const conBonus = actor.system.abilities.con.effective;
-      const roll = this._rollD20(conBonus, `Release ${variant || "Spores"}`, event);
+      const roll = this._rollD20(conBonus, `Release ${variant || "Spores"}`, event, ...this._ownSaveMods("con"));
       // Saving Throws.md's target, same as every other save in this sheet.
       const natural = roll.dice[0].total;
       // Saving Throw Resolution Duplication (2026-09-13), same shared resolver
@@ -3425,128 +3561,15 @@ export class KnaveActorSheet extends ActorSheet
       return;
     }
 
-    if(item.system.rule === "Bloomboons")
+    // A Bloomboon's use is its variant's sentence since Effect Engine: Consumables
+    // chunk 3b (RULED 2026-10-06, Matt): the save cards, Mirrored Leaves' save,
+    // Vampiric Roots' hold and the growth run through the interpreter. Only a
+    // Bloomboon with no use of its own reaches the rule's handler here.
+    if(handler === "bloomboons")
     {
-      // A Bloomboon whose table entry declares a span on its targets posts the
-      // apply card for it (Empathogen and Soporific Pollen, 2026-09-21). The
-      // save and the once-per-day stay the table's, as for Gas Glands.
-      const boon = (SPARK_TABLES["Neobloom"]?.bloomboon_table ?? []).find(b => b.name === variant);
-      // Mirrored Leaves is the Neobloom's OWN save, Mirror Shield's shape
-      // (RULED 2026-09-22, Matt), so it goes down the Save-Gated Effect path.
-      if(boon?.saveGated) return this._onSaveGatedUse(item, event);
-      // An ongoing hold the boon puts on its targets - Vampiric Roots
-      // (Per-Round Effect Reminder wiring, 2026-09-25). Its escape save rides
-      // the hold, so no save card is posted here.
-      if(boon?.hold) return this._holdTargets(variant, boon.hold);
-      // A Bloomboon that compels its targets to save posts one card per
-      // targeted creature (Compel-a-Target Save, 2026-09-22), beside the apply
-      // card for any span it declares.
-      if(boon?.applies || boon?.save)
-      {
-        this._postWoundMsg(actor, `releases <b>${variant}</b> — ${boon.effect}`);
-        // The apply card waits for the save cards, so it follows them rather
-        // than landing between two targets' cards (Group 314).
-        // A save carries the effect and puts it on when failed (2026-09-24);
-        // only a Bloomboon with no save leaves it on an apply card.
-        if(boon.save) postSaveCardsToTargets(actor, variant, [boon.save], [], boon.applies ? [boon.applies] : []);
-        else this._postConditionCards([boon.applies], variant);
-        return;
-      }
-      // Bloomboon Growth (RULED 2026-09-24, Matt): a Bloomboon that grows a
-      // part or a fruit pays for it and makes the Item. No action is spent.
-      if(boon?.grows) return this._growBloomboon(boon);
-      // Sapling Retainers (Actor Spawning wiring, 2026-09-25).
-      if(boon?.retainers) return this._raiseRetainers(boon);
       this._postWoundMsg(actor, `draws on <b>${variant || "their Bloomboon"}</b> — resolve its effect by hand.`);
       return;
     }
-  }
-
-  /**
-   * Dispatcher for a mutation's "use" icon click, keyed by item.name — each
-   * of the three mutations wired to MUTATIONS_WITH_USE_ICON (knave.js)
-   * behaves completely differently, so there's no single shared behavior
-   * to factor out here beyond the click-routing itself.
-   *
-   * - Ink Ducts (work-queue item 3.6): spends a daily use-pool charge.
-   *   Descriptive-only — per Matt's 2026-08-23 ruling, this is the
-   *   TARGET's DEX save vs blindness, not the bearer's own save (mutation
-   *   text says "causing an opponent to DEX save"), and no automated roll
-   *   is triggered; same philosophy as item 14's roll-notes, GM/player
-   *   adjudicates by hand.
-   * - Frog Tongue (work-queue item 3.7): a real rolled DEX save — this is
-   *   the bearer's own save (text says "DEX save to snatch weapons"), so
-   *   it's routed straight through the shared _rollD20 roller for a real
-   *   ADV/DIS-aware roll, same as a plain DEX ability check.
-   * - Silk Production (work-queue item 3.7): descriptive-only until
-   *   2026-09-26, when the opposed save card and the hold's escape existed
-   *   to hook it into - see the branch below.
-   */
-  _onMutationUse(item, event)
-  {
-    const actor = this.actor;
-
-    if(item.name === "Frog Tongue")
-    {
-      this._rollD20(this.object.system.abilities.dex.effective, "Frog Tongue", event);
-      return;
-    }
-
-    // Apply Effect to Target wiring, RULED 2026-09-26 (Matt): a save card per
-    // targeted enemy, DEX against 10 + this bearer's DEX; a failure entangles
-    // them with a DEX escape on their turn (the roster's applies.escape).
-    if(item.name === "Silk Production")
-    {
-      this._postWoundMsg(actor, `produces sticky web from their <b>Silk Production</b>!`);
-      const silk = MUTATION_TABLE.find(m => m.name === item.name);
-      postSaveCardsToTargets(actor, item.name, [silk.save], [], [silk.applies]);
-      return;
-    }
-
-    // Gas Glands (Blinding) - Update Built Content for Blind and Entangled,
-    // 2026-09-16. JADE: "Once per day, you can release a cloud of blinding
-    // gas, which affects all biological targets in the room. Creatures in the
-    // cloud must CON Save or be blinded for d6 rounds." Descriptive on the
-    // save, like Ink Ducts, and the once-per-day is the player's to keep; the
-    // condition and its d6 ride the apply card, rolled once there.
-    // Gas Glands (Sleeping) joins the same branch (Activated Mutation Use
-    // wiring, RULED 2026-09-26 by Matt): EGO, and Asleep for d6 rounds.
-    if(item.name === "Gas Glands (Blinding)" || item.name === "Gas Glands (Sleeping)")
-    {
-      this._postWoundMsg(actor, item.name === "Gas Glands (Blinding)"
-        ? `releases a cloud of blinding gas from their <b>Gas Glands</b>! Biological creatures in the room must CON Save or be blinded for d6 rounds.`
-        : `releases a cloud of soporific gas from their <b>Gas Glands</b>! Biological creatures in the room must EGO Save or fall asleep for d6 rounds.`);
-      // A save card per targeted creature since 2026-09-24 (RULED, Matt): a
-      // failed roll puts the Blind on, so no apply card follows.
-      const row = MUTATION_TABLE.find(m => m.name === item.name);
-      if(row?.save) postSaveCardsToTargets(actor, item.name, [row.save], [], row.applies ? [row.applies] : []);
-      else if(row?.applies) this._postConditionCards([row.applies], item.name);
-      return;
-    }
-
-    // Leaves (Activated Mutation Use wiring, RULED 2026-09-26 by Matt): "Regain
-    // d4 HP per hour when resting in sunlight." One click is one hour; the hour
-    // is the table's (Hour-Long Healing on the Activity Clock, DECLINED).
-    if(item.name === "Leaves")
-    {
-      this._hourlyHeal(actor, "1d4", "<b>Leaves</b> — one hour resting in sunlight", "rests in sunlight", "resting in sunlight");
-      return;
-    }
-
-    // Ink Ducts — unchanged behavior from work-queue item 3.6.
-    if(item.system.usesRemaining <= 0)
-    {
-      this._postWoundMsg(actor, `has no uses of <b>${item.name}</b> left today.`);
-      return;
-    }
-
-    item.update({"system.usesRemaining": item.system.usesRemaining - 1});
-    this._postWoundMsg(actor, `sprays ink from their <b>Ink Ducts</b>! The target must DEX save or be blinded.`);
-    // One round of Blind on the apply card (2026-09-16), from the roster entry.
-    // Rolled from a save card since 2026-09-24; a failure puts the Blind on.
-    const ink = MUTATION_TABLE.find(m => m.name === item.name);
-    if(ink?.save) postSaveCard(actor, item.name, [ink.save], [], { applies: ink.applies ? [ink.applies] : [] });
-    else if(ink?.applies) this._postConditionCards([ink.applies], item.name);
   }
 
   /**
@@ -3593,54 +3616,20 @@ export class KnaveActorSheet extends ActorSheet
    *   deleteCombat hook. Re-clicking while already active just posts the
    *   rig's own in-universe refusal message, not a way to end it early.
    */
-  _onImplantUse(item, event)
+  async _implantOneOff(handler, item, event)
   {
     const actor = this.actor;
-
-    if(item.name === "Alluring Fakeface")
-    {
-      this._rollD20(this.object.system.abilities.ego.effective, "Alluring Fakeface", event);
-      return;
-    }
-
-    // Dream Artefact Assembler / Quantum Tunnelling BlinkPack — work-queue
-    // item 10.7 (2026-08-26): same "bearer rolls their own ability" shape
-    // as Alluring Fakeface/Frog Tongue above.
-    if(item.name === "Dream Artefact Assembler")
-    {
-      this._rollD20(this.object.system.abilities.psy.effective, "Dream Artefact Assembler", event);
-      return;
-    }
-
-    if(item.name === "Quantum Tunnelling BlinkPack")
-    {
-      this._rollD20(this.object.system.abilities.int.effective, "Quantum Tunnelling BlinkPack", event);
-      return;
-    }
 
     // Magnetised Palms (Synthetic Mind Magnetic Damage, RULED 2026-09-28 by
     // Matt): generating the field is a magnetic field for a nearby Synth, so
     // the card carries the same d6-INT-each-round button as the Magneticrab
     // and the Orb. Sticking to metal stays text (ruled 2026-09-27).
-    if(item.name === "Magnetised Palms")
+    if(handler === "magnetised-palms")
     {
       import("../combat/metal-cards.js").then(({ synthMindButton }) =>
         ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }),
           content: `<p><b>${actor.name}</b> generates a powerful magnetic field with <b>Magnetised Palms</b>, and can stick to metallic objects.</p>`
             + synthMindButton(`${actor.name}'s Magnetised Palms`) }));
-      return;
-    }
-
-    // Combat Voxbox — work-queue item 10.7 (2026-08-26). Matt's ruling:
-    // display-only. There's no clean way to apply "d8 damage + Morale
-    // check to all creatures with ears" to a specific target (it could
-    // even hit the user), so this rolls a real d8 for reference and
-    // leaves the damage/Morale check to be resolved manually.
-    if(item.name === "Combat Voxbox")
-    {
-      const r = new Roll("1d8");
-      r.evaluate({async: false});
-      r.toMessage({ flavor: `<b>${this.actor.name}</b> screams through their <b>Combat Voxbox</b>! ${r.total} damage to all creatures with ears in range — resolve manually, and have each make a Morale check.` });
       return;
     }
 
@@ -3650,7 +3639,7 @@ export class KnaveActorSheet extends ActorSheet
     // here at all — the only way it ends is the triggering combat ending
     // (see knave.js's deleteCombat hook). Activating requires an active
     // combat (Matt's ruling, same gate Berserker Brew uses below).
-    if(item.name === "Berserker StimRig")
+    if(handler === "berserker-stimrig")
     {
       if(actor.getFlag("vaarn", "berserkerActive"))
       {
@@ -3664,20 +3653,20 @@ export class KnaveActorSheet extends ActorSheet
       }
       // "melee" is the StimRig's own word — "you take and deal double melee
       // damage" — and stays its scope now that the Brew no longer shares it.
-      actor.setFlag("vaarn", "berserkerActive", "melee");
+      await actor.setFlag("vaarn", "berserkerActive", "melee");
+      // ON THE BOARD (Shared Pipelines chunk 6, RULED A 2026-10-05): the entry
+      // ends with the combat and clears the flag - by any path, so removing it
+      // by hand ends the frenzy too.
+      await addEntry(actor, { name: "Berserk (melee)", text: "Double melee damage dealt and received.",
+        note: "from the Berserker StimRig", endsWithCombat: true, clearFlag: "vaarn.berserkerActive" });
       this._postWoundMsg(actor, `activates their <b>Berserker StimRig</b> — battle madness overtakes them! Double melee damage dealt and received until combat ends.`);
       return;
     }
 
-    // Trauma-Response Rig — unchanged behavior from work-queue item 10.2.
-    if(item.system.usesRemaining <= 0)
-    {
-      this._postWoundMsg(actor, `has no uses of <b>${item.name}</b> left today.`);
-      return;
-    }
-
-    item.update({"system.usesRemaining": item.system.usesRemaining - 1});
-    this._postWoundMsg(actor, `activates their <b>${item.name}</b>! Remove one Wound by hand from the Wounds tab.`);
+    // Trauma-Response Rig: its once-a-day is the interpreter's per-day cost,
+    // spent before this runs (Implants, Exotica and Figments chunk 3a).
+    if(handler === "trauma-rig")
+      this._postWoundMsg(actor, `activates their <b>${item.name}</b>! Remove one Wound by hand from the Wounds tab.`);
   }
 
   /**
@@ -3712,7 +3701,7 @@ export class KnaveActorSheet extends ActorSheet
     if(spec.prompt) this._postWoundMsg(actor, spec.prompt);
 
     const score = actor.system.abilities[spec.ability]?.effective ?? 0;
-    const roll = this._rollD20(score, `${spec.ability.toUpperCase()} Save — ${item.name}`, event);
+    const roll = this._rollD20(score, `${spec.ability.toUpperCase()} Save — ${item.name}`, event, ...this._ownSaveMods(spec.ability));
     const verdict = resolveSave(roll.total, roll.dice[0].total, SAVE_TARGET);
 
     const report = await applySaveGated(actor, item, verdict);
@@ -3765,124 +3754,107 @@ export class KnaveActorSheet extends ActorSheet
     if(isGrantedAbility(item))
       return useGrantedAbility(this, item);
 
-    if(item.name === "Berserker Brew")
-    {
-      if(!game.combat)
-      {
-        ui.notifications.warn("Berserker Brew can only be drunk during combat.");
-        return;
-      }
-      // "all", not melee: the Brew's own text is "They deal and receive double
-      // damage" with no melee clause. It set the same value as the StimRig
-      // until 2026-09-19 and so inherited the StimRig's narrower reading.
-      await actor.setFlag("vaarn", "berserkerActive", "all");
-      // Elixir-Granted Ability Item, RULED 2026-09-23 (Matt): the Brew's
-      // granted ability is the way OUT - the EGO save to exit the frenzy -
-      // so the Item created here is what rolls it. Combat's end removes it
-      // with the flag (knave.js), a success removes it itself.
-      const exit = await grantAbility(actor, ELIXIRS.find(e => e.name === "Berserker Brew"));
-      await item.delete();
-      this._postWoundMsg(actor, `drinks <b>Berserker Brew</b> and flies into a battle frenzy — double damage dealt and received, melee or ranged, until combat ends. Must always attack the closest living being. <i>(<b>${exit.name}</b> on the sheet rolls the EGO Save that ends it.)</i>`);
-      return;
-    }
-
-    // Elixir Brewing / Antidotes (2026-09-19). Before the elixirs below
-    // because an antidote is not on the sample table and has its own rule:
-    // it cures the Toxin Die it is rated for, and is kept when it cannot.
+    // Elixir Brewing / Antidotes (2026-09-19). An antidote is not on the sample
+    // table and has its own rule: it cures the Toxin Die it is rated for, and is
+    // kept when it cannot.
     const antidoteDie = antidoteDieOf(item.name);
     if(antidoteDie) return this._useAntidote(item, antidoteDie);
 
-    if(permanentAbilitySpecFor(item.name))
-      return this._usePermanentAbilityElixir(item);
+    // AN ELIXIR IS DRUNK THROUGH ITS USE SENTENCE since Effect Engine:
+    // Consumables chunk 3a (RULED 2026-10-06, Matt): the interpreter settles its
+    // gates (Berserker Brew's started combat), runs its handler - the branch
+    // _elixirOneOff names - and spends the vial unless the handler kept it. The
+    // chain of roster lookups that stood here is gone.
+    const drink = elixirDrinkOf(item);
+    // The control asked the Referee about attunement first (_attunementRefuses), so a
+    // drink the Referee allowed is not refused again (found in Group 555).
+    if(drink) return runUse(actor, item, drink, { attunementChecked: true });
+  }
 
-    // A permanent, additive change to what the character IS - Planeyfication
-    // Potion (2026-09-24). Before the duration path, since it has no span.
-    if(ELIXIRS.find(e => e.name === item.name)?.permanentChange)
-      return this._usePermanentChangeElixir(item);
+  /**
+   * An Elixir's drink, by its sentence's handler - Effect Engine: Consumables
+   * chunk 3a (RULED 2026-10-06, Matt). Each branch is the code the drink had,
+   * its figures now the sentence's, its chat line word for word (ruling 4).
+   * Answers { keep: true } when the vial was not drunk (a refusal), so the
+   * interpreter does not spend it.
+   */
+  async _elixirOneOff(handler, item, params, sentence)
+  {
+    const actor = this.actor;
+    const kept = () => ({ keep: !!actor.items.get(item.id) });
+    const { verb, handler: _h, ...spec } = params ?? {};
+    const post = (a, msg) => this._postWoundMsg(a, msg);
 
-    // A roll on another generator whose result is a new Actor - Metamorphic
-    // Syrup (Grant-a-Roll on Another Table, 2026-09-24).
-    if(ELIXIRS.find(e => e.name === item.name)?.grantsRoll)
-      return this._useGeneratorElixir(item);
-
-    // A permanent Item that carries a baked bonus - Hollowheart Hooch's
-    // chest slots (Baked Flat-Bonus Fields, 2026-09-24).
-    if(ELIXIRS.find(e => e.name === item.name)?.bakedItem)
-      return this._useBakedItemElixir(item);
-
-    // The Referee's pick from another roster - Geneshock Tonic, Transcendence
-    // Tonic (Grant-a-Roll on Another Table, chosen form, 2026-09-24).
-    if(ELIXIRS.find(e => e.name === item.name)?.grantsPick)
-      return this._usePickElixir(item);
-
-    // One specific grant - Recursive Infusion's Recursive Gaze (Grant-a-Roll
-    // on Another Table, the chosen form with one option, 2026-09-24).
-    if(ELIXIRS.find(e => e.name === item.name)?.grantsFixed)
-      return this._useFixedGrantElixir(item);
-
-    // A spawn from the Bestiary - Broodling Broth (Actor Spawning from
-    // Bestiary, 2026-09-24).
-    if(ELIXIRS.find(e => e.name === item.name)?.spawns)
-      return this._useSpawnElixir(item);
-
-    // Character Split/Clone (2026-09-18) - before the duration elixirs,
-    // because the Brew's effect is a second Actor, not a delta.
-    if(item.name === BIFURCATING_BREW)
-      return bifurcate(item, (actor, msg) => this._postWoundMsg(actor, msg));
-
-    // A clone that dissolves with the span - Doppeldraught (Character
-    // Split/Clone, 2026-09-24). Before the duration path for the Brew's reason.
-    if(ELIXIRS.find(e => e.name === item.name)?.clone)
-      return cloneFromElixir(item, (actor, msg) => this._postWoundMsg(actor, msg));
-
-    if(statefulElixirNames().has(item.name))
-      return this._useDurationElixir(item);
-
-    // An Elixir that SETS the drinker's HP - Death Draught, "immediately
-    // reduced to 0 HP". RULED 2026-09-23 (Matt): through the normal HP
-    // pipeline, so whatever 0 HP already triggers runs as it would from a
-    // blow, and the vial is used up.
-    const setsHP = ELIXIRS.find(e => e.name === item.name && Number.isFinite(e.setsHP));
-    if(setsHP)
+    if(handler === "grant-ability")
     {
-      this._postWoundMsg(actor, `drinks <b>${item.name}</b> — ${setsHP.effect}`);
-      item.delete();
-      const currentHP = actor.system.health.value;
-      if(setsHP.setsHP < currentHP) this._resolveHPChange(actor, currentHP, setsHP.setsHP);
-      return;
-    }
-
-    // An Elixir whose drinker makes somebody ELSE save - Glittercough Tonic,
-    // Puppeteer Potion (Compel-a-Target Save, 2026-09-22). One card per
-    // targeted creature, the condition's apply card beside it, and the vial is
-    // drunk like any other.
-    const compel = ELIXIRS.find(e => e.name === item.name && e.save);
-    if(compel)
-    {
-      // Elixir-Granted Ability Item (2026-09-23): the save cards moved from
-      // the drink to the USE of the Item it grants. Glittercough's Item is
-      // single-use; Puppeteer's carries its own 4-turn span on the board,
-      // whose end removes the Item. An elixir with a save and no `grants`
-      // keeps the old shape - cards at the drink.
-      if(compel.grants)
+      const elixir = elixirGranting(item.name);
+      // Berserker Brew (2026-08-27; its started-combat gate is the sentence's since
+      // chunk 3a, ruling 2). "all", not melee: the Brew's own text is "They deal
+      // and receive double damage" with no melee clause. Elixir-Granted Ability
+      // Item, RULED 2026-09-23 (Matt): the Brew's granted ability is the way OUT -
+      // the EGO save to exit the frenzy. The board entry (Shared Pipelines chunk
+      // 6) takes it and the flag at combat end; a success removes the entry itself.
+      if(spec.use === "endFrenzy")
       {
-        const granted = await grantAbility(actor, compel);
-        if(compel.grants.span)
+        await actor.setFlag("vaarn", "berserkerActive", "all");
+        const exit = await grantAbility(actor, elixir);
+        await addEntry(actor, { name: "Berserk", text: "Double damage dealt and received, melee or ranged. Must always attack the closest living being.",
+          note: "from Berserker Brew", endsWithCombat: true, clearFlag: "vaarn.berserkerActive", grantedItemIds: exit ? [exit.id] : [] });
+        await item.delete();
+        this._postWoundMsg(actor, `drinks <b>Berserker Brew</b> and flies into a battle frenzy — double damage dealt and received, melee or ranged, until combat ends. Must always attack the closest living being. <i>(<b>${exit.name}</b> on the sheet rolls the EGO Save that ends it.)</i>`);
+        return kept();
+      }
+      // An Elixir whose drinker makes somebody ELSE save - Glittercough Tonic,
+      // Puppeteer Potion (Compel-a-Target Save, 2026-09-22). Elixir-Granted
+      // Ability Item (2026-09-23): the save cards moved from the drink to the
+      // USE of the Item it grants. Glittercough's Item is single-use;
+      // Puppeteer's carries its own 4-turn span on the board, whose end removes
+      // the Item.
+      if(elixir?.save)
+      {
+        const granted = await grantAbility(actor, elixir);
+        if(elixir.grants.span)
           await activateRoundEffect(item, {
-            rounds: this._resolveDurationToken(compel.grants.span.amount),
-            unit: compel.grants.span.unit,
+            rounds: this._resolveDurationToken(elixir.grants.span.amount),
+            unit: elixir.grants.span.unit,
             grantedItemId: granted.id
           });
-        this._postWoundMsg(actor, `drinks <b>${item.name}</b> — ${compel.effect} `
-          + `<i>(grants <b>${granted.name}</b> on the sheet${compel.grants.singleUse ? ", once" : compel.grants.span ? ` for ${compel.grants.span.amount} ${compel.grants.span.unit === "turn" ? "Exploration Turns" : compel.grants.span.unit + "s"}` : ""})</i>`);
+        this._postWoundMsg(actor, `drinks <b>${item.name}</b> — ${elixir.effect} `
+          + `<i>(grants <b>${granted.name}</b> on the sheet${elixir.grants.singleUse ? ", once" : elixir.grants.span ? ` for ${elixir.grants.span.amount} ${elixir.grants.span.unit === "turn" ? "Exploration Turns" : elixir.grants.span.unit + "s"}` : ""})</i>`);
         await item.delete();
-        return;
+        return kept();
       }
-      this._postWoundMsg(actor, `drinks <b>${item.name}</b> — ${compel.effect}`);
-      // A failed roll puts the effect on (2026-09-24), so no apply card follows.
-      postSaveCardsToTargets(actor, item.name, [compel.save], [], compel.applies ? [compel.applies] : []);
-      item.delete();
+      // A span that grants an ability (Windsong, Magnetic Draw): the board entry carries it.
+      await this._useDurationElixir(item, {});
+      return kept();
     }
+    if(handler === "stateful") { await this._useDurationElixir(item, spec); return kept(); }
+
+    // An Elixir that SETS the drinker's HP - Death Draught, "immediately reduced
+    // to 0 HP". RULED 2026-09-23 (Matt): through the normal HP pipeline, so
+    // whatever 0 HP already triggers runs as it would from a blow, and the vial
+    // is used up. A SET, not damage (Shared Pipelines chunk 2, 2026-10-05): to 0
+    // it is a set-to-zero death, which clears temp HP. THE ONE KILL ROUTE since
+    // chunk 4 (2026-10-05).
+    if(handler === "set-hp")
+    {
+      this._postWoundMsg(actor, `drinks <b>${item.name}</b> — ${sentence?.text ?? ""}`);
+      await item.delete();
+      if(Number(spec.amount) < actor.system.health.value) this._kill(actor);
+      return kept();
+    }
+    // Character Split/Clone (2026-09-18, 2026-09-24): a second Actor, not a delta.
+    if(handler === "bifurcate") { await bifurcate(item, post); return kept(); }
+    if(handler === "clone") { await cloneFromElixir(item, post, spec); return kept(); }
+    if(handler === "spawn") { await this._useSpawnElixir(item, { creature: spec.creature, dice: spec.count, loyal: spec.loyal }); return kept(); }
+    if(handler === "grant-pick") { await this._usePickElixir(item, spec); return kept(); }
+    if(handler === "grant-roll") { await this._useGeneratorElixir(item, spec); return kept(); }
+    if(handler === "baked-item") { await this._useBakedItemElixir(item, { name: spec.item, slotBonus: spec.slotBonus }, sentence?.text ?? ""); return kept(); }
+    if(handler === "grant-fixed") { await this._useFixedGrantElixir(item, { type: spec.type, name: spec.name, text: spec.giftText }); return kept(); }
+    if(handler === "permanent-change") { await this._usePermanentChangeElixir(item, spec); return kept(); }
+    if(handler === "permanent-ability") { await this._usePermanentAbilityElixir(item, spec); return kept(); }
+    ui.notifications.warn(`${item.name}: no elixir handler "${handler}".`);
+    return { keep: true };
   }
 
   /**
@@ -3912,10 +3884,9 @@ export class KnaveActorSheet extends ActorSheet
    * no picker; the gift Item is written here from the roster row's text, a
    * slot like any gift, the elixir as its source.
    */
-  async _useFixedGrantElixir(item)
+  async _useFixedGrantElixir(item, spec)
   {
     const actor = this.actor;
-    const spec = ELIXIRS.find(e => e.name === item.name)?.grantsFixed;
     if(spec.type !== "gift")
     {
       ui.notifications.warn(`"${item.name}" grants a kind this system does not know (${spec.type}). It has NOT been drunk.`);
@@ -3939,10 +3910,9 @@ export class KnaveActorSheet extends ActorSheet
    * times, tokens beside the drinker's. Loyal ones share the drinker's owners
    * so the player can move them; the loyalty itself is the table's.
    */
-  async _useSpawnElixir(item)
+  async _useSpawnElixir(item, spec)
   {
     const actor = this.actor;
-    const spec = ELIXIRS.find(e => e.name === item.name)?.spawns;
     const roll = new Roll(spec.dice);
     await roll.evaluate({ async: true });
     const count = Math.max(0, roll.total);
@@ -3971,10 +3941,9 @@ export class KnaveActorSheet extends ActorSheet
    * Referee to drink it from the sheet, and the vial is kept - the same shape
    * as a cancelled dialog, which also keeps it (the Ambrosia's rule).
    */
-  async _usePickElixir(item)
+  async _usePickElixir(item, spec = {})
   {
     const actor = this.actor;
-    const spec = ELIXIRS.find(e => e.name === item.name)?.grantsPick ?? {};
     if(!game.user.isGM)
     {
       ui.notifications.warn(`Only the Referee can resolve "${item.name}" — it names what the original owner had. The vial is kept.`);
@@ -4015,10 +3984,9 @@ export class KnaveActorSheet extends ActorSheet
    * two slots and sets no cap, so a second Item bakes two more, as a second
    * Manifold Box would. A refusal would be a cap nobody ruled.
    */
-  async _useBakedItemElixir(item)
+  async _useBakedItemElixir(item, spec, effect)
   {
     const actor = this.actor;
-    const spec = ELIXIRS.find(e => e.name === item.name)?.bakedItem;
     const before = Number(actor.system.inventorySlots?.max ?? 20);
     const [granted] = await actor.createEmbeddedDocuments("Item", [{
       name: spec.name,
@@ -4026,12 +3994,11 @@ export class KnaveActorSheet extends ActorSheet
       system: {
         slots: 0,
         intrinsic: true,
-        description: `<p>Granted by <b>${item.name}</b>: ${ELIXIRS.find(e => e.name === item.name).effect}</p>`
+        description: `<p>Granted by <b>${item.name}</b>: ${effect}</p>`
       }
     }]);
-    // The bake runs in the createItem hook on this client; give it its tick
-    // so the card can report the ceiling that actually landed.
-    for(let i = 0; i < 20 && !granted.getFlag("vaarn", "bakedEffects"); i++) await new Promise(r => setTimeout(r, 50));
+    // Live since Stats as Sentences chunk 2d-ii: the slots count from the
+    // moment the Item exists, so the ceiling is read straight after it.
     const after = Number(actor.system.inventorySlots?.max ?? before);
     this._postWoundMsg(actor,
       `drinks <b>${item.name}</b> — permanently gains <b>${spec.slotBonus}</b> hypergeometric Item Slots inside their chest `
@@ -4055,10 +4022,9 @@ export class KnaveActorSheet extends ActorSheet
    * Grant-a-Roll on Another Table's rolled form, with a generator where the
    * exotica have a table.
    */
-  async _useGeneratorElixir(item)
+  async _useGeneratorElixir(item, spec = {})
   {
     const actor = this.actor;
-    const spec = ELIXIRS.find(e => e.name === item.name)?.grantsRoll ?? {};
     if(spec.generator !== "monster")
     {
       ui.notifications.warn(`"${item.name}" names a generator this system does not know (${spec.generator}). It has NOT been drunk.`);
@@ -4097,10 +4063,9 @@ export class KnaveActorSheet extends ActorSheet
    * character who already has the type, the flag and both Items keeps the
    * vial rather than losing it for nothing.
    */
-  async _usePermanentChangeElixir(item)
+  async _usePermanentChangeElixir(item, spec = {})
   {
     const actor = this.actor;
-    const spec = ELIXIRS.find(e => e.name === item.name)?.permanentChange ?? {};
 
     const known    = actor.system.creatureTypes ?? {};
     const newTypes = (spec.creatureTypes ?? []).filter(t => t in known && !known[t]);
@@ -4173,10 +4138,9 @@ export class KnaveActorSheet extends ActorSheet
    * header of permanent-ability.js for why that is the correctness argument
    * for this whole mechanism rather than a detail of it.
    */
-  async _usePermanentAbilityElixir(item)
+  async _usePermanentAbilityElixir(item, spec = {})
   {
     const actor = this.actor;
-    const spec = permanentAbilitySpecFor(item.name);
     const delta = spec.choose ?? 1;
 
     if(!eligibleForGain(actor).length)
@@ -4226,7 +4190,9 @@ export class KnaveActorSheet extends ActorSheet
    * formula onto the ACTOR, so the effect outlives the elixir that caused it.
    * The old item-flag storage could not express this at all.
    */
-  async _useDurationElixir(item)
+  // `opts` is the stateful sentence's do (Consumables chunk 3a): its bundle, and
+  // asText / act for a drink the table adjudicates.
+  async _useDurationElixir(item, opts = {})
   {
     const actor = this.actor;
     const text = item.system?.description || item.system?.effect || "";
@@ -4237,13 +4203,14 @@ export class KnaveActorSheet extends ActorSheet
     // actor as it stands at the moment of drinking. What gets stored is the
     // flat number that produced, so the reversal is independent of anything
     // that happens during the span.
-    const spec = statefulSpecFor(item.name);
+    const { verb, handler, asText = false, act = "drinks", ...bundle } = opts;
+    const spec = Object.keys(bundle).length ? bundle : null;
     const applied = spec ? resolveStatefulDeltas(actor, spec) : null;
-    const drinkAsText = !!ELIXIRS.find(e => e.name === item.name)?.drinkAsText;
+    const drinkAsText = !!asText;
     // Elixir-Granted Ability Item (2026-09-23): a span elixir that grants an
     // ability (Windsong) creates the Item first, so the entry can carry its
     // id and take it back when the span ends.
-    const granting = ELIXIRS.find(e => e.name === item.name && e.grants) ?? null;
+    const granting = elixirGranting(item.name);
     let granted = null;
 
     const stateful = applied && !isEmptyStatefulDeltas(applied);
@@ -4288,7 +4255,7 @@ export class KnaveActorSheet extends ActorSheet
         // Regeneration Serum's d6 a round (Direct HP Adjustment, 2026-09-23):
         // the round card's GM button applies it. From the roster row, since a
         // chargen-built elixir carries no flags of its own.
-        hpTick: ELIXIRS.find(e => e.name === item.name)?.hpTick ?? null
+        hpTick: elixirHpTick(item.name)
       });
       // The HP write follows the entry, never precedes it. If this threw
       // first, the actor would carry a doubled maximum with nothing on the
@@ -4305,7 +4272,7 @@ export class KnaveActorSheet extends ActorSheet
     // A drinkAsText elixir says so on its card instead of warning: the
     // absence of tracking is the ruling, not a gap the Referee should hear
     // about every time.
-    this._postWoundMsg(actor, `drinks <b>${item.name}</b> — ${text}${this._statefulLine(applied)}`
+    this._postWoundMsg(actor, `${act} <b>${item.name}</b> — ${text}${this._statefulLine(applied)}`
       + (drinkAsText ? ` <i>(adjudicated by hand — nothing is tracked)</i>` : "")
       + (granted?.length ? ` <i>(grants <b>${granted.map(g => g.name).join("</b> and <b>")}</b> on the sheet for the span)</i>` : ""));
     await item.delete();
@@ -4356,37 +4323,16 @@ export class KnaveActorSheet extends ActorSheet
   }
 
   /**
-   * Use a fixed-charge Exotica item ("x6 uses" etc.) — work-queue item
-   * 10.3.3 (2026-08-27). Decrements usesRemaining by exactly 1 (Matt's
-   * call — a flat countable resource, not a randomly-depleting die like
-   * UdN entries); deletes and announces the same way _deleteUsedUpExotica
-   * does once the count hits 0. No refresh action exists for either
-   * shape — Exotica items never recharge.
+   * An Exotica's use - Effect Engine: Implants, Exotica and Figments chunk 3b
+   * (2026-10-06). Its use sentence through the interpreter, the attunement
+   * question already asked by the control: the usage-die roll or the charge,
+   * the use's line, the save cards, the lasting effect or the named one-off.
    */
-  async _onExoticaChargeUse(item)
+  _onExoticaSentenceUse(item, event)
   {
-    // Post the item's own extra flavor text, if it has one — work-queue
-    // item 10.3.4. Fires before the decrement so it still posts on the
-    // final (depleting) use.
-    this._postUsageDieFlavorText(item);
-
-    // Work-queue item 10.3.5 (2026-08-27): some x1-use Exotica entries
-    // actually GRANT something (a Mystic Gift, an Advanced Implant, a real
-    // weapon) rather than just describing an effect. Returns true only
-    // when the grant was BLOCKED (an ability-slot conflict) — in that
-    // case the item and its charge are left completely untouched so the
-    // roll isn't wasted, matching Matt's ruling.
-    if(await this._onExoticaGrantRoll(item)) return;
-    const holding = ADVANCED_EXOTICA.find(e => e.name === item.name && e.hold);
-    if(holding) await this._holdTargets(item.name, holding.hold);
-
-    const remaining = item.system.usesRemaining - 1;
-    if(remaining <= 0)
-    {
-      this._deleteUsedUpExotica(item);
-      return;
-    }
-    item.update({ "system.usesRemaining": remaining });
+    const uses = useSentences(item).filter(({ s }) => !s.baked);
+    if(!uses.length) return ui.notifications.warn(`${item.name} has no use the system resolves.`);
+    return runUse(this.actor, item, uses[0].s, { event, attunementChecked: true });
   }
 
   /**
@@ -4417,7 +4363,7 @@ export class KnaveActorSheet extends ActorSheet
    */
   async _onConsumableUse(item)
   {
-    const healDice = item.flags?.vaarn?.useHeal;
+    const healDice = remainingItemFlagsOf(item).useHeal;
     if(healDice)
     {
       const roll = await new Roll(healDice).evaluate({ async: true });
@@ -4443,27 +4389,50 @@ export class KnaveActorSheet extends ActorSheet
   }
 
   /**
-   * Performs the actual grant for "roll on another table" Exotica entries
-   * — work-queue item 10.3.5 (2026-08-27). Creates the result DIRECTLY in
-   * this actor's own inventory (the bearer used their own item — unlike
-   * the GM-facing "Generate X" macros, which deliberately create unowned
-   * sidebar items for a GM to hand out by hand). Returns `true` only to
-   * signal "blocked, don't consume the source item" — every other case
-   * (a real grant happened, or this item isn't one of these 5 at all)
-   * returns falsy so `_onExoticaChargeUse`'s normal consume/delete logic
-   * proceeds unchanged.
+   * The Exotica one-offs a use sentence names by handler (Implants, Exotica and
+   * Figments chunk 3b, 2026-10-06) - each its own behaviour, kept as it was,
+   * its figures from the sentence rather than the roster. Returns { keep: true }
+   * when the use did not happen, so the charge stays (a refused drink).
    */
-  async _onExoticaGrantRoll(item)
+  async _exoticaOneOff(handler, item, params, event)
   {
     const actor = this.actor;
+    const targets = () => Array.from(game.user?.targets ?? []);
 
-    // Autarch's Nectar (Permanent Ability Score Change, 2026-09-26). Not a
-    // grant from another table, but it is the one x1-use hook that can refuse
-    // and keep the item, which a refused drink needs.
-    const permanent = exoticaPermanentAbilitySpecFor(item.name);
-    if(permanent) return !(await this._useExoticaPermanentAbility(item, permanent));
+    // Autarch's Nectar: three different Abilities, refused to a drinker without the type.
+    if(handler === "permanent-ability")
+      return { keep: !(await this._useExoticaPermanentAbility(item, params)) };
+    if(handler === "field-generator") return useFieldGenerator(actor, item.name, params, params.span);
+    if(handler === "blue-rust")
+    {
+      for(const t of targets()) postCorrosionCard(actor, item, t, "rust");
+      if(!targets().length)
+        return this._postWoundMsg(actor, `<b>${item.name}</b>: no target is selected, so nothing was started.`);
+      return this._startAbilityTicks([{ ability: params.ability, dice: params.dice, targets: params.targets, source: item.name }], targets());
+    }
+    if(handler === "body-change") return this._applyBodyChange(item, params);
+    if(handler === "metal-pull") return postMetalReachCard(actor, item.name, params);
+    // A Bloomboon's hold (Vampiric Roots, Consumables chunk 3b) is titled by its variant.
+    if(handler === "hold") return this._holdTargets(item.type === "ancestry" ? (item.system?.variant || item.name) : item.name, params);
+    if(handler === "save-gated") return this._onSaveGatedUse(item, event);
+    if(handler === "combat-av") return this._activateCombatAv(item, params);
+    if(handler === "combat-auto-hit") return this._activateCombatAutoHit(item, params);
+    if(handler === "universal-ration")
+    {
+      if(blocksHealing(actor, "the Universal Ration"))
+      {
+        this._postWoundMsg(actor, `eats the <b>Universal Ration</b> — consumed, but no HP is restored.`);
+        return item.delete();
+      }
+      const { gained, after, note } = await heal(actor, actor.system.health.max, { gate: false });
+      if(!note)
+        this._postWoundMsg(actor, `eats the <b>Universal Ration</b> — HP restored to maximum. This does NOT remove any Wounds; heal those separately from the Wounds tab.`);
+      else
+        this._postWoundMsg(actor, `eats the <b>Universal Ration</b> — restores <b>${gained}</b> HP${gmHP(actor, ` (now ${after}/${actor.system.health.max})`)}.${note} This does NOT remove any Wounds; heal those separately from the Wounds tab.`);
+      return item.delete();
+    }
 
-    if(item.name === "Amaranthine Sugar")
+    if(handler === "amaranthine-sugar")
     {
       const gift = await this._createRandomGift(actor);
       this._postWoundMsg(actor, `eats the <b>Amaranthine Sugar</b> — a random Mystic Gift, <b>${gift.name}</b>, is granted!`);
@@ -4488,7 +4457,7 @@ export class KnaveActorSheet extends ActorSheet
     // consumed with NO capsule. Found by the fifth regression run,
     // 2026-09-18 — the Hardcoded Effect Text Drift shape, on a name rather
     // than a sentence.
-    if(/^Cybernetics? (Cocoon|Pack)$/.test(item.name))
+    if(handler === "cybernetics-capsule")
     {
       const entry = ADVANCED_IMPLANTS[d(20) - 1];
       const sealedName = `${item.name} (${entry.name})`;
@@ -4511,10 +4480,10 @@ export class KnaveActorSheet extends ActorSheet
       return;
     }
 
-    if(item.name === "Belligerent Paste")
+    if(handler === "belligerent-paste")
     {
-      const { name, type, system, altForm } = await rollWeapon("Exotic");
-      const [created] = await actor.createEmbeddedDocuments("Item", [{ name, type, system: { ...system, attuned: true } }]);
+      const { name, type, system, flags, altForm } = await rollWeapon("Exotic");
+      const [created] = await actor.createEmbeddedDocuments("Item", [{ name, type, system: { ...system, attuned: true }, flags }]);
       // Polymorphic (work-queue item 4.7, 2026-08-27): unlike the 2
       // GM-facing macros (which create both halves as unowned sidebar
       // Items a GM then drags over), this path already creates directly
@@ -4658,8 +4627,8 @@ export class KnaveActorSheet extends ActorSheet
    */
   async _postCompelledSave(item)
   {
-    const saves = item.flags?.vaarn?.save ?? [];
-    const applies = item.flags?.vaarn?.applies ?? [];
+    const saves = creatureFlagsOf(item).save ?? [];
+    const applies = creatureFlagsOf(item).applies ?? [];
     if(!saves.length && !applies.length) return;
     // ROLLED FROM THE CARD since 2026-09-16 (Save-Modifier Effects on the
     // Forgettable Tab). The sentence is the same one saveSentence writes; what
@@ -4852,113 +4821,6 @@ export class KnaveActorSheet extends ActorSheet
    * `targetSave` spec off the figment's own row, so the sheet control, the
    * tooltip and this card all fall out of one piece of data.
    */
-  _onFigmentTargetSave(item)
-  {
-    const figment = findFigment(item?.name);
-    const spec = figment?.targetSave;
-    if(!spec) return;
-    const ability = String(spec.ability ?? "").toUpperCase();
-    this._postWoundMsg(this.actor, spec.note ?? `uses <b>${item.name}</b>.`);
-    // A save card since 2026-09-24 (RULED, Matt), where the line named the
-    // save and an apply card followed: a failed roll puts the effect on.
-    postSaveCard(this.actor, item.name, [{ ability: String(spec.ability).toLowerCase(), mode: "resist", vs: spec.vs }], [],
-      { applies: figment.applies ? [figment.applies] : [] });
-  }
-
-  /**
-   * An Advanced Exotica that deals HP damage to whatever it is pointed at, with
-   * no attack roll - the Wand of Annihilation's orbital beam (RULED 2026-09-22,
-   * Matt: "you point it at a thing and a beam comes down from the heavens").
-   * One roll, applied to every targeted token through _doDamage, so a target's
-   * damage-type rules still read it - Argent Robes are immune to beam.
-   */
-  /**
-   * The Entropy Wight's touch - "Targets struck by the Wight lose d3 maximum
-   * HP ... Hit points lost in this way are never regained." RULED 2026-09-23
-   * (Matt): a GM control on the targeted tokens, and permanent - it is a
-   * write to max HP, which nothing restores. Current HP follows it down.
-   * Rolled per target, since each was struck separately. A max reaching 0 is
-   * announced by zero-max-hp.js, which hangs on the write.
-   */
-  async _cutTargetsMaxHP(item)
-  {
-    if(!game.user.isGM) return ui.notifications.warn("Only the Referee applies this.");
-    const spec = item.flags?.vaarn?.maxHPLoss;
-    if(!spec) return;
-    const targets = Array.from(game.user?.targets ?? []).map(t => t.actor).filter(Boolean);
-    if(!targets.length)
-      return this._postWoundMsg(this.actor, `<b>${item.name}</b>: no target is selected, so no maximum HP was lost.`);
-    for(const target of targets)
-    {
-      const roll = await new Roll(spec.dice).evaluate();
-      const newMax = Math.max(0, Number(target.system.health.max) - roll.total);
-      await this._postWoundMsg(target, `loses <b>${roll.total}</b> maximum HP to <b>${item.name}</b>${spec.permanent ? ", never to be regained" : ""}${gmHP(target, ` — now ${newMax}`)}.`);
-      await target.update({ "system.health.max": newMax,
-                            "system.health.value": Math.min(Number(target.system.health.value), newMax) },
-                          { [MAX_HP_CAUSE]: item.name });
-    }
-  }
-
-  /**
-   * Temporary HP (foundry-system-index.csv "Temporary HP", RULED 2026-09-26 by
-   * Matt): the Zenithlight Negatick's Infusion. Rolled per target, since each
-   * is held separately, and added to that target's pool - the book's "+d8
-   * temporary HP per round".
-   *
-   * THE DEATH is the book's: "If temporary HP is more than double the
-   * character's maximum HP, they explode into flurries of zenithlight and
-   * die." A death here is a message, as every death in this system is (see
-   * fatality.js), and the Immortality Injector suppresses it like any other.
-   * A creature victim goes to 0 HP through the funnel as a set-to-zero death,
-   * which clears the pool and posts the ordinary creature death.
-   */
-  async _addTempHpToTargets(item)
-  {
-    if(!game.user.isGM) return ui.notifications.warn("Only the Referee applies this.");
-    const spec = item.flags?.vaarn?.tempHp;
-    if(!spec) return;
-    const targets = Array.from(game.user?.targets ?? []).map(t => t.actor).filter(Boolean);
-    if(!targets.length)
-      return this._postWoundMsg(this.actor, `<b>${item.name}</b>: no target is selected, so no temporary HP was added.`);
-    for(const target of targets)
-    {
-      const roll = await new Roll(spec.dice).evaluate();
-      const pool = tempHpOf(target) + roll.total;
-      const max = Number(target.system.health.max) || 0;
-      await target.update({ [TEMP_HP_FIELD]: pool });
-      await this._postWoundMsg(target, `gains <b>${roll.total}</b> temporary HP from <b>${item.name}</b>${gmHP(target, ` — now ${pool}, against ${max} maximum HP`)}.`);
-      if(!spec.burstAt || !burstsAt(pool, max, spec.burstAt)) continue;
-
-      const cause = `explodes into flurries of zenithlight (temporary HP more than ${spec.burstAt} times maximum HP)`;
-      if(suppressesDeath(target))
-        await this._postWoundMsg(target, suppressionMsg(cause));
-      else if(target.type === "character")
-        await this._postWoundMsg(target, `${cause} and <b>dies</b>.`);
-      else
-      {
-        await this._postWoundMsg(target, `${cause}.`);
-        this._resolveHPChange(target, Number(target.system.health.value) || 0, 0, { toZero: true });
-      }
-    }
-  }
-
-  async _exoticaStrike(item, strike)
-  {
-    const targets = Array.from(game.user?.targets ?? []);
-    if(!targets.length)
-    {
-      this._postWoundMsg(this.actor, `<b>${item.name}</b>: no target is selected, so nothing was struck.`);
-      return;
-    }
-    const roll = await new Roll(strike.damageDice).evaluate();
-    const min = (await new Roll(strike.damageDice).evaluate({ minimize: true })).total;
-    const types = strike.damageTypes ?? [];
-    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-      flavor: `${item.name} damage${types.length ? ` (${types.join(", ")})` : ""}` });
-    for(const token of targets)
-      this._doDamage(token, roll.total, false, item, 1, [{ amount: roll.total, min, name: item.name, types }]);
-  }
-
   /**
    * An Exotica whose use grants AV until the combat ends - the Active
    * Camouflage Ring's +10 (Live AV Computation wiring, RULED 2026-09-25 by
@@ -4980,9 +4842,9 @@ export class KnaveActorSheet extends ActorSheet
    * "Lithified" Item grows by the rolled loss and the AV. Targets outside the
    * declared types are passed over silently.
    */
-  async _applyBodyChange(item)
+  async _applyBodyChange(item, spec)
   {
-    const spec = ADVANCED_EXOTICA.find(e => e.name === item?.name && e.bodyChange)?.bodyChange;
+    // The sentence's figures since Implants, Exotica and Figments chunk 3b.
     if(!spec) return;
     const targets = Array.from(game.user?.targets ?? []).map(t => t.actor).filter(Boolean)
       .filter(a => !spec.targets?.length || hasAnyCreatureType(a, spec.targets));
@@ -4994,8 +4856,8 @@ export class KnaveActorSheet extends ActorSheet
       const roll = await new Roll(spec.dice).evaluate({ async: true });
       await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: this.actor }), flavor: `<b>${item.name}</b> — ${label} lost by ${victim.name}` });
       const name = `${spec.itemName} (${item.name})`;
-      const held = victim.items.find(i => i.flags?.vaarn?.bodyChange?.source === item.name);
-      const before = held?.flags?.vaarn?.bodyChange ?? { source: item.name, av: 0, abilities: {} };
+      const held = victim.items.find(i => remainingItemFlagsOf(i).bodyChange?.source === item.name);
+      const before = (held ? remainingItemFlagsOf(held).bodyChange : null) ?? { source: item.name, av: 0, abilities: {} };
       const next = { source: item.name, av: Number(before.av || 0) + Number(spec.av || 0),
         abilities: { ...before.abilities, [spec.ability]: Number(before.abilities?.[spec.ability] || 0) - roll.total } };
       const description = `<p>Permanent, from the <b>${item.name}</b>: ${next.abilities[spec.ability]} ${label}, +${next.av} AV. Delete this Item only if the change is undone.</p>`;
@@ -5010,182 +4872,32 @@ export class KnaveActorSheet extends ActorSheet
     }
   }
 
-  async _activateCombatAv(item)
+  async _activateCombatAv(item, spec)
   {
-    const entry = ADVANCED_EXOTICA.find(e => e.name === item?.name && e.combatAv);
-    if(!entry) return;
-    if(!game.combat)
-      return this._postWoundMsg(this.actor, `uses the <b>${item.name}</b>, but no combat is running, `
-        + `so no AV is granted - it lasts until a combat ends.`);
-    await this.actor.setFlag("vaarn", "combatAv", { source: item.name, av: Number(entry.combatAv) });
-    this._postWoundMsg(this.actor, `activates the <b>${item.name}</b> — <b>+${entry.combatAv} AV</b> until combat ends. `
-      + `<i>${entry.combatAvNote ?? ""}</i>`);
-  }
-
-  _postUsageDieFlavorText(item)
-  {
-    const actor = this.actor;
-    const text =
-    {
-      "C-Foam Puddings": `throws a <b>C-Foam Pudding</b>! Human-sized creatures must DEX save or be entrapped in quick-setting adhesive foam for roughly 8 hours (faster in salt water).`,
-      "Empathy Bomb": `detonates an <b>Empathy Bomb</b>! Biological creatures in range must EGO save or be overcome with compassion for others for d4 hours.`,
-      "Singularity Bomb": `releases a <b>Singularity Bomb</b>! Creatures caught in the blast must DEX save vs instant death as they're drawn into the singularity.`,
-      "Pacifying Glove": `touches a target with the <b>Pacifying Glove</b>! Biological creatures must EGO save or fall asleep for d6 hours.`,
-      "Anti-Gravity Field Generator": `activates the <b>Anti-Gravity Field Generator</b>! Creatures not adapted to zero gravity must DEX save to move or float helplessly.`,
-      "Titancreed Fragment: KILL": `reads the <b>Titancreed Fragment: KILL</b> aloud! Synthetic creatures in hearing range must EGO save or fly into a killing frenzy.`,
-      "Titancreed Fragment: OBEY": `reads the <b>Titancreed Fragment: OBEY</b> aloud! Synthetic creatures in hearing range must EGO save or obey one verbal command from the reader.`,
-      "Titancreed Fragment: SLEEP": `reads the <b>Titancreed Fragment: SLEEP</b> aloud! Synthetic creatures in hearing range must EGO save or fall into a resting state.`,
-      // Matt's ruling 2026-09-03: the book says "when struck", which reads
-      // as a weapon attack, but the entry carries no weapon stats at all —
-      // no damage die, and "does not damage other creature types" leaves it
-      // with no normal damage output to roll. Rather than invent a weapon,
-      // it stays a flavor `exotica` and the USAGE-DIE ROLL STANDS IN FOR THE
-      // TO-HIT ROLL. That keeps it on this method's existing hook instead of
-      // needing an attack-resolution path that does not exist here.
-      // The Ud8 rolls on every use, per the general Exotica rule (10.3.3).
-      // SUPERSEDED 2026-09-22 (Ability Damage wiring): the creature-type gate
-      // and the d20 EGO damage are no longer by hand. The roster entry
-      // declares the save, and the card below leaves a non-synthetic target
-      // unaffected and writes the loss on a failed roll.
-      "Bluescreen Dagger": `strikes with the <b>Bluescreen Dagger</b>! Synthetic creatures must EGO save or take d20 EGO damage. Does not damage other creature types.`,
-      // Interactive Chat-Card wiring, RULED 2026-09-26 (Matt): honour system.
-      // The card declares it; the Referee reverses what that failure did.
-      "Fortuitous Polyhedron": `turns the <b>Fortuitous Polyhedron</b> and steps into a reality where they passed rather than failed — their last failed Save is a success instead. <i>Referee: undo whatever that failure did.</i> The Polyhedron vanishes.`,
-      "Bedazzling Blade": `flashes the <b>Bedazzling Blade</b> blindingly bright! Opponents must DEX save vs d4 rounds of Blindness.`,
-      "Fascinator Helm": `activates the <b>Fascinator Helm</b>! Biological creatures in visual range must EGO save or be transfixed — unable to move until damaged or the helm leaves view.`,
-      "Horror Helm": `activates the <b>Horror Helm</b>! Biological foes in earshot must make a Morale save or flee.`,
-      // Work-queue item 10.3.7 (2026-08-27) — Matt's ask: make it explicit
-      // this removes a WOUND, not HP, so it isn't confused with Universal
-      // Ration's opposite HP-only healing below.
-      "Sprayflesh": `sprays healing pseudoflesh from the <b>Sprayflesh</b> canister onto a Biological target — removes 1 Wound (resolve by hand from the Wounds tab). This does NOT restore lost HP.`,
-    }[item.name];
-    if(text) this._postWoundMsg(actor, text);
-    // An Advanced Exotica entry that declares a Combat Condition - Bedazzling
-    // Blade's d4 rounds of Blind - posts its apply card after the flavour
-    // line (2026-09-16), from the roster entry rather than a second table.
-    const exotica = ADVANCED_EXOTICA.find(e => e.name === item.name);
-    const exoticaApplies = exotica?.applies;
-    // An entry whose effect a save decides (Bedazzling Blade, Empathy Bomb,
-    // Pacifying Glove) posts a save card per target instead, since 2026-09-24:
-    // a failed roll puts it on. The save-only entry below is Bluescreen Dagger.
-    if(exoticaApplies && exotica.save)
-      postSaveCardsToTargets(actor, item.name, [exotica.save], [], [exoticaApplies]);
-    else if(exoticaApplies) this._postConditionCards([exoticaApplies], item.name);
-    // Ability Damage wiring, 2026-09-22 (RULED by Matt). An entry declaring a
-    // save - Bluescreen Dagger - posts the save card, which applies its loss
-    // on a failed roll. One declaring abilityDamage with no save (the Dirk,
-    // the Spike) is built as a WEAPON and never reaches this method; see
-    // advancedExoticaData.
-    // One card per targeted creature (2026-09-24): Singularity Bomb's blast
-    // reaches the whole room. A single target posts one card, as before.
-    if(exotica?.save && !exoticaApplies) postSaveCardsToTargets(actor, item.name, [exotica.save]);
-    // Wand of Annihilation (RULED 2026-09-22, Matt): not a weapon. Pointed at
-    // a target, the beam comes down and deals its damage - no to-hit roll, the
-    // usage-die roll standing in for one as it does for Bluescreen Dagger.
-    if(exotica?.strike) this._exoticaStrike(item, exotica.strike);
-    // Biotic Field Generator (RULED 2026-09-22): each use sets down a field,
-    // an actor of its own, so the heal button outlives the generator.
-    if(exotica?.targetHeal?.field)
-      useFieldGenerator(actor, item.name, exotica.targetHeal, exotica.targetHeal.span);
-    // Blue Rust (pass 3, RULED 2026-09-22): a per-round loss started on use,
-    // against the targeted token - its synthetic-only limit is honoured by
-    // _startAbilityTicks like any other.
-    // Metal Item Property Part B (RULED 2026-09-27, Matt). Blue Rust opens the
-    // corrosion picker against each targeted token, in its rust mode; the
-    // Magnetic Orb posts the metal in reach. Neither moves anything itself.
-    if(exotica?.corrodesMetal)
-      for(const t of Array.from(game.user?.targets ?? [])) postCorrosionCard(actor, item, t, "rust");
-    if(exotica?.metalPull) postMetalReachCard(actor, item.name, exotica.metalPull);
-    if(exotica?.abilityTick)
-    {
-      const targets = Array.from(game.user?.targets ?? []);
-      if(!targets.length)
-        this._postWoundMsg(actor, `<b>${item.name}</b>: no target is selected, so nothing was started.`);
-      else
-        this._startAbilityTicks([{ ...exotica.abilityTick, source: item.name }], targets);
-    }
+    // The sentence's figure since Implants, Exotica and Figments chunk 3b; the
+    // interpreter's in-combat gate has already refused a use outside a combat.
+    const av = Number(spec?.av ?? 0);
+    if(!av) return;
+    await this.actor.setFlag("vaarn", "combatAv", { source: item.name, av });
+    await addEntry(this.actor, { name: `${item.name}: +${av} AV`, text: spec.note ?? "",
+      note: `from the ${item.name}`, endsWithCombat: true, clearFlag: "vaarn.combatAv" });
+    this._postWoundMsg(this.actor, `activates the <b>${item.name}</b> — <b>+${av} AV</b> until combat ends. `
+      + `<i>${spec.note ?? ""}</i>`);
   }
 
   /**
-   * Use a no-pool "Unlimited"-use Exotica item with a real activated
-   * effect — work-queue item 10.3.4 (2026-08-27). Name-keyed dispatcher,
-   * same shape as _onMutationUse/_onImplantUse/_onGenericItemUse. The
-   * first two entries compel a TARGET to save, same descriptive-only
-   * reasoning _postUsageDieFlavorText documents above — kept as a
-   * separate method rather than folded into it since these have no
-   * usageDie/usesRemaining pool to gate a shared click handler on.
-   * Universal Ration (item 10.3.7, 2026-08-27) was added here too — it's
-   * a single flat consumable with no existing pool, same "no-pool use
-   * icon" shape, but unlike the other two it DOES get consumed (deleted)
-   * on use, same as a real one-time ration.
+   * The Ultravisor's 'when the visor is activated, any attack the wearer makes
+   * with a ranged weapon automatically hits' - Implants, Exotica and Figments
+   * ruling C 10 (RULED 2026-10-06): until the combat ends, as the Active
+   * Camouflage Ring's AV. A flag the attack reads (_attackQuestions), cleared
+   * with its board entry.
    */
-  _onExoticaUse(item)
+  async _activateCombatAutoHit(item, spec)
   {
-    const actor = this.actor;
-
-    if(item.name === "The Crimson Cantos")
-    {
-      this._postWoundMsg(actor, `opens <b>The Crimson Cantos</b> and reads aloud — whoever reads it must EGO save or fly into a murderous rage and attack the nearest living creature.`);
-      return;
-    }
-
-    if(item.name === "Spirit Prison (Empty)")
-    {
-      this._postWoundMsg(actor, `hurls the empty <b>Spirit Prison</b> at a target! Hypergeometric or outsider creatures must EGO save or be trapped inside forever, to be released at the bearer's pleasure.`);
-      return;
-    }
-
-    // Work-queue item 10.3.7 (2026-08-27). Matt's ask: state clearly this
-    // is HP only, so a player isn't dismayed to find their Wounds still
-    // there — Core Rules/Healing.md treats HP restoration and Wound
-    // removal as separate effects, and "full heal" text like this maps
-    // onto HP only (nothing else in this codebase ties reaching max HP to
-    // auto-clearing a Wound; that's Sprayflesh's/Trauma-Response Rig's own
-    // separate, explicit effect).
-    if(item.name === "Universal Ration")
-    {
-      // Deprived State. THE RATION IS STILL EATEN AND STILL CONSUMED — they ate
-      // it; only the HP is refused. Deleting it either way is the harsher and
-      // the more honest reading, and it leaves the Referee holding exactly the
-      // question the book declines to answer: a Deprived character has just
-      // eaten, and whether that ends the deprivation is theirs to rule.
-      if(blocksHealing(actor, "the Universal Ration"))
-      {
-        this._postWoundMsg(actor, `eats the <b>Universal Ration</b> — consumed, but no HP is restored.`);
-        item.delete();
-        return;
-      }
-      // Healing Received Multiplier. "Restored to maximum" is a heal of every
-      // lost point, so that gain is what Deathblight halves. No healFloor
-      // here, and none added: this path never had one, and a full heal from
-      // below 0 lands on max either way until something scales it.
-      const before = actor.system.health.value;
-      const { gained, note } = scaleHealing(actor, actor.system.health.max - before);
-      if(!note)
-      {
-        actor.update({ "system.health.value": actor.system.health.max });
-        this._postWoundMsg(actor, `eats the <b>Universal Ration</b> — HP restored to maximum. This does NOT remove any Wounds; heal those separately from the Wounds tab.`);
-      }
-      else
-      {
-        const after = before + gained;
-        if(gained > 0) actor.update({ "system.health.value": after });
-        this._postWoundMsg(actor, `eats the <b>Universal Ration</b> — restores <b>${gained}</b> HP${gmHP(actor, ` (now ${after}/${actor.system.health.max})`)}.${note} This does NOT remove any Wounds; heal those separately from the Wounds tab.`);
-      }
-      item.delete();
-      return;
-    }
-
-    // Mord-Red's Grail (Compel-a-Target Save, 2026-09-22): whoever drinks from
-    // it saves against the declared toxin die on the TOX card, which raises
-    // their Toxin Die on a failure. Target the drinker; nothing targeted posts
-    // one open card.
-    const entry = ADVANCED_EXOTICA.find(e => e.name === item.name);
-    if(entry?.toxSave)
-    {
-      this._postWoundMsg(actor, `pours from <b>${item.name}</b> — ${entry.description}`);
-      postToxSaves(actor, item.name, entry.toxSave);
-    }
+    await this.actor.setFlag("vaarn", "autoHitAttacks", spec?.attackKind ?? "ranged");
+    await addEntry(this.actor, { name: `${item.name}: ${spec?.attackKind ?? "ranged"} attacks auto-hit`,
+      text: "Skip the to-hit roll and roll damage.", note: `from the ${item.name}`, endsWithCombat: true, clearFlag: "vaarn.autoHitAttacks" });
+    this._postWoundMsg(this.actor, `activates the <b>${item.name}</b> — every ${spec?.attackKind ?? "ranged"} attack auto-hits until combat ends.`);
   }
 
   /**
@@ -5234,7 +4946,7 @@ export class KnaveActorSheet extends ActorSheet
    */
   async _startDeclaredActivity(item)
   {
-    const spec = item.flags?.vaarn?.activity;
+    const spec = creatureFlagsOf(item).activity;
     const options = spec?.options ?? [];
     if(!options.length) return;
 
@@ -5360,9 +5072,15 @@ export class KnaveActorSheet extends ActorSheet
       // GM-adjudicated, same as this tag's other narrative-only clauses
       // (double rations, no reload needed — no ration/reload tracking
       // exists in this codebase to hook either into).
-      if((item.system.tags || []).includes("Parasitic"))
+      // From the sentences since Weapon Tags chunk 5a: a weapon that forbids its own unequipping.
+      if(itemForbids(item, "unequip"))
       {
-        ui.notifications.warn(`${item.name} is Parasitic and fused to ${actor.name} — it cannot be unequipped without surgery.`);
+        // Moonbeast Carapace refuses too since Implants, Exotica and Figments
+        // ruling C 4 (2026-10-06): its own words, not the Parasitic tag's.
+        if(item.type === "weaponMelee" || item.type === "weaponRanged")
+          ui.notifications.warn(`${item.name} is Parasitic and fused to ${actor.name} — it cannot be unequipped without surgery.`);
+        else
+          ui.notifications.warn(`${item.name} cannot be unequipped — ${sentencesOf(item).find(s => s.do?.verb === "forbid" && s.do.what === "unequip")?.text ?? "it cannot be removed"}`);
         return;
       }
       item.update({"system.equipped": false});
@@ -5381,14 +5099,16 @@ export class KnaveActorSheet extends ActorSheet
     // check runs, or swapping into a form that needs the hands the
     // sibling currently occupies would be wrongly blocked as "not
     // enough free hands."
-    const polymorphicPairName = item.getFlag("vaarn", "polymorphicPairName");
+    const polymorphicPairName = remainingItemFlagsOf(item).polymorphicPairName;
     if(polymorphicPairName)
     {
       const sibling = actor.items.find(i => i.id !== item.id && i.name === polymorphicPairName);
       if(sibling?.system.equipped) await sibling.update({"system.equipped": false});
     }
 
-    const hasMutation = (field) => actor.items.some(i => i.type === "mutation" && MUTATION_TABLE.find(m => m.name === i.name)?.[field]);
+    // From the body's sentences since Mutations and Ancestry Rules chunk 2a
+    // (2026-10-05): a suppressed mutation no longer forbids (ruling D).
+    const forbidden = (what) => bodyForbids(actor, what)[0] ?? null;
 
     if(item.type === "weaponMelee" || item.type === "weaponRanged")
     {
@@ -5396,10 +5116,10 @@ export class KnaveActorSheet extends ActorSheet
       // there. This is the CHECK side of the same rule and has to agree with
       // the accounting side: with `|| 1` here the gate would demand a free
       // hand to equip a body part that the budget then charges nothing for.
-      const needed = Number(item.system.hands ?? 1);
-      if(needed >= 2 && hasMutation("blocksTwoHanded"))
+      const needed = Number(statOf(item, "hands") ?? 1);
+      if(needed >= 2 && forbidden("wield-two-handed"))
       {
-        ui.notifications.warn(`${actor.name} cannot use two-handed weapons.`);
+        ui.notifications.warn(`${actor.name} cannot use two-handed weapons - ${forbidden("wield-two-handed").source}.`);
         return;
       }
       const free = actor.system.hands.max - actor.system.hands.used;
@@ -5414,22 +5134,35 @@ export class KnaveActorSheet extends ActorSheet
       // Matt's ruling reuses item 11's equip system for this rather than
       // a separate mechanism: a character can CARRY one of these (if
       // they have the item slots) but can only EQUIP it with enough STR.
-      const weaponTags = item.system.tags || [];
-      const strEffective = Number(actor.system.abilities.str.effective);
-      if(weaponTags.includes("Colossal") && strEffective < 6)
+      // From the sentences since Weapon Tags chunk 5a: an equip forbidden
+      // while an ability is below a threshold. The highest threshold names
+      // the refusal, as Colossal's +6 was checked before Heavy's +3.
+      const blocked = equipForbids(item)
+        .filter(s => (s.if ?? []).every(g => computeGate(g, { actor }) === true))
+        .sort((x, y) => (y.if?.[0]?.is?.below ?? 0) - (x.if?.[0]?.is?.below ?? 0))[0];
+      if(blocked)
       {
-        ui.notifications.warn(`${actor.name} needs +6 STR to wield ${item.name} (has ${strEffective}).`);
+        const t = blocked.if?.[0]?.is ?? {};
+        const ability = String(t.ability ?? "str");
+        ui.notifications.warn(`${actor.name} needs +${t.below} ${ability.toUpperCase()} to wield ${item.name} (has ${Number(actor.system.abilities[ability]?.effective)}).`);
         return;
       }
-      if(weaponTags.includes("Heavy") && strEffective < 3)
+    }
+    // A carried Item made equippable (Stats as Sentences chunk 2e-ii): the hands its
+    // effect says must be free; wield-two-handed is about weapons and stays theirs.
+    else if(item.type !== "armor")
+    {
+      const needed = Number(statOf(item, "hands") ?? 0);
+      const free = actor.system.hands.max - actor.system.hands.used;
+      if(needed > free)
       {
-        ui.notifications.warn(`${actor.name} needs +3 STR to wield ${item.name} (has ${strEffective}).`);
+        ui.notifications.warn(`${actor.name} doesn't have enough free hands to equip ${item.name} (needs ${needed}, has ${free} free).`);
         return;
       }
     }
     else if(item.type === "armor")
     {
-      const slot = item.system.armorSlot || "body";
+      const slot = armourSlotOf(item);
       if(slot === "shield")
       {
         const free = actor.system.hands.max - actor.system.hands.used;
@@ -5441,16 +5174,12 @@ export class KnaveActorSheet extends ActorSheet
       }
       else if(slot === "helm")
       {
-        if(hasMutation("blocksHelmet"))
+        // The one helmet rule (body.js helmRefusal, ruling D 2026-10-05).
+        const equippedCount = actor.items.filter(i => i.type === "armor" && armourSlotOf(i) === "helm" && i.system.equipped).length;
+        const refusal = helmRefusal(actor, equippedCount);
+        if(refusal)
         {
-          ui.notifications.warn(`${actor.name} cannot wear helmets.`);
-          return;
-        }
-        const equippedCount = actor.items.filter(i => i.type === "armor" && (i.system.armorSlot || "body") === "helm" && i.system.equipped).length;
-        const helmCap = actor.items.some(i => i.type === "mutation" && i.name === "Extra Head") ? 2 : 1;
-        if(equippedCount >= helmCap)
-        {
-          ui.notifications.warn(`${actor.name} already has ${helmCap === 1 ? "a" : helmCap} helm${helmCap === 1 ? "" : "s"} equipped — unequip one first.`);
+          ui.notifications.warn(refusal);
           return;
         }
       }
@@ -5459,7 +5188,7 @@ export class KnaveActorSheet extends ActorSheet
       // hats for Headless, Huge Brain and the crests, and never names a mask.
       else if(slot === "face")
       {
-        const worn = actor.items.find(i => i.type === "armor" && i.system.armorSlot === "face" && i.system.equipped);
+        const worn = actor.items.find(i => i.type === "armor" && armourSlotOf(i) === "face" && i.system.equipped);
         if(worn)
         {
           ui.notifications.warn(`${actor.name} is already wearing ${worn.name} — unequip it first.`);
@@ -5468,12 +5197,12 @@ export class KnaveActorSheet extends ActorSheet
       }
       else // "body"
       {
-        if(hasMutation("blocksBodyArmour"))
+        if(forbidden("wear-body-armour"))
         {
-          ui.notifications.warn(`${actor.name} cannot wear other armour.`);
+          ui.notifications.warn(`${actor.name} cannot wear other armour - ${forbidden("wear-body-armour").source}.`);
           return;
         }
-        const equippedCount = actor.items.filter(i => i.type === "armor" && (i.system.armorSlot || "body") === "body" && i.system.equipped).length;
+        const equippedCount = actor.items.filter(i => i.type === "armor" && armourSlotOf(i) === "body" && i.system.equipped).length;
         if(equippedCount >= 1)
         {
           ui.notifications.warn(`${actor.name} already has body armor equipped — unequip it first.`);
@@ -5482,16 +5211,16 @@ export class KnaveActorSheet extends ActorSheet
       }
     }
 
-    // Psybernetic Helm — work-queue item 10.3.5 (2026-08-27): "When worn
-    // for the first time, unlocks a random Mystic Gift." A Foundry item
-    // flag (not a system field) tracks whether this specific Helm has
-    // already unlocked its Gift, so re-equipping later (after an
-    // unequip) doesn't grant a second one.
-    if(item.name === "Psybernetic Helm" && !item.getFlag("vaarn", "giftUnlocked"))
+    // A Gift on first wear - the Psybernetic Helm's "When worn for the first
+    // time, unlocks a random Mystic Gift" (work-queue item 10.3.5). Its on-draw
+    // sentence since Implants, Exotica and Figments chunk 3b-ii (2026-10-06); the
+    // giftUnlocked flag keeps a 'once' sentence from granting twice.
+    const firstWear = sentencesOf(item).find(s => (s.when?.trigger ?? s.when) === "on-draw" && s.do?.verb === "add-gift");
+    if(firstWear && !(firstWear.do.once && item.getFlag("vaarn", "giftUnlocked")))
     {
       item.setFlag("vaarn", "giftUnlocked", true);
       this._createRandomGift(actor).then(gift =>
-        this._postWoundMsg(actor, `wears the <b>Psybernetic Helm</b> for the first time — it unlocks a random Mystic Gift, <b>${gift.name}</b>!`));
+        this._postWoundMsg(actor, `wears the <b>${item.name}</b> for the first time — it unlocks a random Mystic Gift, <b>${gift.name}</b>!`));
     }
 
     // Annihilating weapon tag (2026-09-03): "Wielder loses 1 max HP each
@@ -5505,9 +5234,11 @@ export class KnaveActorSheet extends ActorSheet
     // it touches only the wielder's own actor, so there is nothing for a
     // GM to resolve against a target by hand.
     // Placed after every validation above, so a blocked equip costs nothing.
-    if((item.system.tags || []).includes("Annihilating"))
+    // From the sentences since Weapon Tags chunk 5a: what drawing it costs the wielder.
+    const drawCost = drawSentences(item).find(s => s.do?.verb === "max-hp");
+    if(drawCost)
     {
-      const newMax = actor.system.health.max - 1;
+      const newMax = actor.system.health.max + (Number(drawCost.do.amount) || 0);
 
       // Matt's ruling 2026-09-03: max HP reaching 0 is instant death. The
       // book does not say so; this is the ruling. It used to be checked here,
@@ -5546,19 +5277,133 @@ export class KnaveActorSheet extends ActorSheet
    * change — every other reader of armor.value is either display or a write
    * that sets the base, and both still want the undamaged number.
    */
-  _effectiveTargetAV(targetActor, attackerItem)
+  /**
+   * The questions an attack asks BEFORE its roll - Effect Engine: Weapon Tags
+   * chunk 4, RULED 2026-10-05 (Matt). Flaming: is the wielder underwater (yes
+   * stops the attack, at no cost), and is each target submerged (yes leaves
+   * it out). Heat-Seeking: is each target warm-blooded (a standing question,
+   * remembered per creature; default the Biological checkbox). Answers and
+   * named defaults come through gates.js. Returns { stop, skip, autoHit }.
+   */
+  async _attackQuestions(item)
   {
-    if(!(attackerItem.system.tags || []).includes("Vibroactive"))
-      return targetActor.system.armor.effective ?? targetActor.system.armor.value;
-
-    const hasAegisBearing = targetActor.items.some(i =>
-      (i.type === "weaponMelee" || i.type === "weaponRanged") &&
-      i.system.equipped &&
-      (i.system.tags || []).includes("Aegis-Bearing"));
-    return 10 + (hasAegisBearing ? 5 : 0);
+    // autoHit maps each target to WHY it is hit (Remaining Sources chunk 3, 2026-10-07): the
+    // hit card names the reason, so the Ultravisor no longer reads as Heat-Seeking.
+    const out = { stop: false, skip: new Set(), autoHit: new Map(), bodyAdv: [], bodyDis: [] };
+    // The BODY's ADV and DIS on its own attack rolls (Mutations and Ancestry Rules
+    // chunk 3, 2026-10-05): Blind's DIS on ranged attacks, and ADV fighting in the
+    // dark for Blind and Echolocation (ruling C 8) - the roller asked each roll.
+    const body = await this._bodyAttackMods(item);
+    out.bodyAdv = body.adv; out.bodyDis = body.dis;
+    for(const line of body.lines) this._postWoundMsg(this.actor, `<i>${line}</i>`);
+    const forbids = attackForbids(item), autos = autoHitSentences(item);
+    // The Ultravisor's activated auto-hit, until the combat ends (Implants,
+    // Exotica and Figments ruling C 10): every target of an attack of that kind.
+    const kindAuto = remainingActorFlagsOf(this.actor).autoHitAttacks;
+    if(kindAuto && kindAuto === (item?.type === "weaponRanged" ? "ranged" : "melee"))
+    {
+      // The Item that switched it on, from its board entry ("Ultravisor: ranged attacks auto-hit").
+      const entry = entriesOf(this.actor).find(e => e.clearFlag === "vaarn.autoHitAttacks");
+      const source = entry?.name ? String(entry.name).split(":")[0] : null;
+      const reason = { text: `${source ? `the ${source}` : "its activation"} makes every ${kindAuto} attack hit until the combat ends` };
+      for(const t of Array.from(game.user?.targets ?? [])) out.autoHit.set(t, reason);
+    }
+    if(!forbids.length && !autos.length) return out;
+    const lines = [];
+    const ctx = t => ({ actor: this.actor, target: t, title: item.name });
+    for(const s of forbids.filter(x => !(x.if ?? []).some(g => isTargetGate(g))))
+    {
+      const r = await settleGates(s.if, ctx(null));
+      lines.push(...r.lines);
+      if(r.pass)
+      {
+        this._postWoundMsg(this.actor, `cannot use <b>${item.name}</b> — ${s.text ?? "its conditions forbid it"}`);
+        out.stop = true;
+        break;
+      }
+    }
+    if(!out.stop)
+      for(const t of Array.from(game.user?.targets ?? []))
+      {
+        for(const s of forbids.filter(x => (x.if ?? []).some(g => isTargetGate(g))))
+        {
+          const r = await settleGates(s.if, ctx(t));
+          lines.push(...r.lines);
+          if(r.pass) { out.skip.add(t); this._postWoundMsg(this.actor, `cannot use <b>${item.name}</b> against <b>${t.name}</b> — ${s.text ?? "its conditions forbid it"}`); }
+        }
+        if(out.skip.has(t)) continue;
+        for(const s of autos)
+        {
+          const r = await settleGates(s.if, ctx(t));
+          lines.push(...r.lines);
+          if(r.pass && !out.autoHit.has(t)) out.autoHit.set(t, { tag: s.tag ?? null, text: s.text ?? null });
+        }
+      }
+    for(const line of lines) this._postWoundMsg(this.actor, `<i>${line}</i>`);
+    return out;
   }
 
-  _checkToHitTargets(roll, item)
+  /**
+   * The body's ADV and DIS on this attack roll - Mutations and Ancestry Rules
+   * chunk 3. Each attack-roll sentence of the attacker's mutations and ancestry
+   * rules: its attack-kind gate checked against this weapon, anything else
+   * ("in darkness") settled by gates.js, the roller asked. { adv, dis, lines }.
+   */
+  async _bodyAttackMods(item)
+  {
+    const out = { adv: [], dis: [], lines: [] };
+    const kind = item?.type === "weaponRanged" ? "ranged" : "melee";
+    for(const { sentence: s, source } of bodySentences(this.actor, "attack-roll"))
+    {
+      if(!["adv", "dis"].includes(s.do?.verb) || s.do.on !== "attack") continue;
+      const gates = s.if ?? [];
+      if(gates.some(g => g.gate === "attack-kind" && !attackKindHolds(g, kind))) continue;
+      const rest = gates.filter(g => g.gate !== "attack-kind");
+      // A gate about the TARGET (Hushboots' Blind target, Tactical Flaw
+      // Analysis' armoured one - Implants, Exotica and Figments chunk 2,
+      // 2026-10-06) is settled against the first creature targeted; with none
+      // targeted it cannot hold.
+      const target = Array.from(game.user?.targets ?? [])[0] ?? null;
+      if(rest.some(g => isTargetGate(g)) && !target) continue;
+      if(rest.length)
+      {
+        const r = await settleGates(rest, { actor: this.actor, target, title: `${this.actor.name}: ${source}` });
+        out.lines.push(...r.lines);
+        if(!r.pass) continue;
+      }
+      if(!out[s.do.verb].includes(source)) out[s.do.verb].push(source);
+    }
+    return out;
+  }
+
+  /** The chat notes naming the body's ADV and DIS on an attack. */
+  _bodyAttackNotes(asked)
+  {
+    return [...(asked?.bodyAdv ?? []).map(n => `<b>${n}</b> — ADV on this attack (applied).`),
+            ...(asked?.bodyDis ?? []).map(n => `<b>${n}</b> — DIS on this attack (applied).`)];
+  }
+
+  _effectiveTargetAV(targetActor, attackerItem)
+  {
+    if(!ignoresArmour(attackerItem))
+      return targetActor.system.armor.effective ?? targetActor.system.armor.value;
+
+    // A warding field is not armour: a held weapon's passive AV (Aegis-
+    // Bearing's +5) still counts, from the sentences in force (Weapon Tags chunk 4).
+    // Any Item but armour since GM Effect Builder chunk 1 (2026-10-05): a
+    // field a GM writes on an Exotica wards like Aegis-Bearing; armour's AV
+    // is armour, which this attack ignores.
+    // Not a body's AV either (mutations, ancestry rules - natural armour, ignored as
+    // it was before they were sentences; Mutations and Ancestry Rules chunk 2a).
+    const field = activePassives(targetActor, { verb: "modify" })
+      // Nor an implant's or a figment's (Implants, Exotica and Figments chunk 2,
+      // 2026-10-06) - body plating, ignored as it was before they were sentences.
+      .filter(p => p.sentence.do.stat === "av" && !["armor", "mutation", "ancestry", "implant", "figment"].includes(p.item.type))
+      .reduce((n, p) => n + (Number(String(p.sentence.do.amount).replace("+", "")) || 0), 0);
+    return 10 + field;
+  }
+
+  _checkToHitTargets(roll, item, asked = null)
   {
     this.#_hitTargets.clear();
     // BUG FIX 2026-08-25 (found live-testing Group 36): this method is
@@ -5585,17 +5430,21 @@ export class KnaveActorSheet extends ActorSheet
     // disputes about natural 1s"). The Exemplar's Perfect Strike, the Sentry
     // Turret's gun and the rest reach here with no roll, and every target takes
     // the hit branch below, so each hit's cards and notes still fire.
-    const declaredAutoHit = !roll && !!item.flags?.vaarn?.autoHit;
+    const declaredAutoHit = !roll && !!creatureAttackOf(item).autoHit;
     if(!roll && !declaredAutoHit) return;
     const natural20 = roll?.dice?.[0]?.total === 20;
 
     // "Hits as if target has -5 AV" - the Titan Acolyte's Vibro-Dagger (Live
     // AV Computation wiring, 2026-09-25). The HIT TEST only, never the target's
     // sheet, and not Mauling's or Piercing's AV band: the book speaks of hitting.
-    const avAsIf = Number(item?.flags?.vaarn?.avAsIf) || 0;
+    const avAsIf = Number(creatureAttackOf(item).avAsIf) || 0;
 
     game.users.current.targets.forEach((x)=>
     {
+      // A target this weapon cannot be used against - Flaming against the
+      // submerged, answered before the roll (_attackQuestions, Weapon Tags
+      // chunk 4) - is neither hit nor missed.
+      if(asked?.skip?.has(x)) return;
       const naturalHit = declaredAutoHit || roll.total > this._effectiveTargetAV(x.actor, item) + avAsIf;
       // Heat-Seeking weapon tag (work-queue item 4.9->4.11, 2026-08-28):
       // "Always hits when targeting warm-blooded creatures." (JADE IBIS; CRIMSON read
@@ -5606,9 +5455,11 @@ export class KnaveActorSheet extends ActorSheet
       // qualify too, but no finer distinction exists to check against).
       // Only overrides an otherwise-missed roll — a roll that already hits
       // needs no special narration.
-      const heatSeekingSave = !naturalHit
-        && (item.system.tags || []).includes("Heat-Seeking")
-        && !!x.actor.system.creatureTypes?.biological;
+      // From the sentences since Weapon Tags chunk 4: the auto-hit gate
+      // (warm-blooded, a STANDING question, defaulting to the Biological
+      // checkbox - rulings B and 3) answered before the roll.
+      const askedAuto = !naturalHit ? asked?.autoHit?.get?.(x) ?? null : null;
+      const heatSeekingSave = !!askedAuto;
 
       // A 20 that already clears the AV is an ordinary hit and says so; the
       // override only has to rescue one the AV would otherwise refuse, exactly
@@ -5619,14 +5470,15 @@ export class KnaveActorSheet extends ActorSheet
       // Creation from Roll Table, 2026-09-18: the Mercenaries' Tesla Cannon,
       // "auto-hit synth targets"). Heat-Seeking's shape exactly, but declared
       // as a flag naming the creature type, because it is not a tag.
-      const autoHitVs = item.flags?.vaarn?.autoHitVs;
+      // From its sentence since Remaining Sources chunk 2c-ii (2026-10-07).
+      const autoHitVs = remainingItemFlagsOf(item).autoHitVs;
       const typeAutoHit = !naturalHit && !critAutoHit && !heatSeekingSave
         && !!autoHitVs && !!x.actor.system.creatureTypes?.[autoHitVs];
 
       if(naturalHit || critAutoHit || heatSeekingSave || typeAutoHit)
       {
         if(critAutoHit) this._createCritAutoHitMsg(x.actor, item);
-        else if(heatSeekingSave) this._createHeatSeekingHitMsg(x.actor, item);
+        else if(heatSeekingSave) this._createAskedAutoHitMsg(x.actor, item, askedAuto);
         else if(typeAutoHit) this._createTypeAutoHitMsg(x.actor, item, autoHitVs);
         else if(declaredAutoHit) this._createDeclaredAutoHitMsg(x.actor, item);
         else this._createHitMsg(x.actor, false, item);
@@ -5635,7 +5487,7 @@ export class KnaveActorSheet extends ActorSheet
         // with a d100 button, once per target hit, because the book ties it
         // to each throw that lands. The Referee clicks it, so a GM who rolls
         // it some other way is not overruled.
-        const fail = item.flags?.vaarn?.failChance;
+        const fail = remainingItemFlagsOf(item).failChance;
         if(fail) this._createFailChanceCard(item, fail);
         // Compel-a-Target Save's TOX route (2026-09-19, RULED by Matt). "TOX.
         // Biological creatures hit by this weapon must CON Save vs a toxin die":
@@ -5647,7 +5499,8 @@ export class KnaveActorSheet extends ActorSheet
         {
           // A declared die wins - the Avern Bloom prints d12 TOX and no damage
           // die at all (Toxin Die wiring, 2026-09-26).
-          const die = item.flags?.vaarn?.toxDie ?? toxDieOfFormula(item.system.damageDice);
+          // The bloom's die is its sentence's since Consumables chunk 3c (ruling B).
+          const die = floraToxDieOf(item) ?? toxDieOfFormula(statOf(item, "damage-dice"));
           if(die) postToxSave(this.actor, item, x, die);
         }
         // HIT_NOTES (2026-09-03): reminder notes for tags whose effect
@@ -5667,43 +5520,45 @@ export class KnaveActorSheet extends ActorSheet
         // Item Corrosion on a Hit (RULED 2026-09-24, Matt): a Rustacean's claw
         // corrodes an item the target carries. One card per target hit, the
         // coin folded in; the Referee picks the item from it.
-        if(this.actor.flags?.vaarn?.corrodesOnHit) postCorrosionCard(this.actor, item, x);
+        if(creatureActorFlagsOf(this.actor).corrodesOnHit) postCorrosionCard(this.actor, item, x);
         // Metal Item Property Part B (RULED 2026-09-27, Matt): the Yurling's
         // bite may devour a metal item INSTEAD of damage - the same card, its
         // devour mode; it says not to roll this hit's damage.
-        if(this.actor.flags?.vaarn?.devoursMetal) postCorrosionCard(this.actor, item, x, "devour");
+        if(creatureActorFlagsOf(this.actor).devoursMetal) postCorrosionCard(this.actor, item, x, "devour");
         // A NAMED WOUND ON A HIGH HIT - the Scythesliver's "rolls a 20 or
         // higher while attacking, it inflicts a Wound: Severed Limb"
         // (Wound-Table Resolution wiring, RULED 2026-09-25 by Matt: the attack
         // TOTAL). An auto-hit rolls nothing, so it never reaches the figure.
-        const woundOnHit = item.flags?.vaarn?.woundOnHit;
+        const woundOnHit = creatureAttackOf(item).woundOnHit;
         // No atTotal: every hit - the Flabmonger's Lipoinduction (2026-09-25).
         if(woundOnHit && roll && (woundOnHit.atTotal == null || roll.total >= woundOnHit.atTotal))
           applyNamedWound(x.actor, woundOnHit.wound, { source: woundOnHit.atTotal == null ? `${this.actor.name}'s ${item.name}` : `${this.actor.name}'s ${item.name} (${roll.total})` });
         // The Sawbone Drone's Surgical Array, resolved per target hit.
-        if(item.flags?.vaarn?.surgicalArray) resolveSurgicalArray(this.actor, x.actor);
+        if(creatureAttackOf(item).surgicalArray) resolveSurgicalArray(this.actor, x.actor);
         // CAUSE WOUND (RULED 2026-10-04, Matt): a roll on the Wounds table for a
         // character hit - the total is the negative-HP row, as the Surgical Array's.
-        if(item.flags?.vaarn?.woundRoll) this._rollWoundOnHit(item, x.actor);
+        if(creatureAttackOf(item).woundRoll) this._rollWoundOnHit(item, x.actor);
         // DESTROY ITEM (RULED 2026-10-04, Matt: adjudicated only): the d20 names
         // the item in that slot for the Referee; nothing is deleted.
-        if(item.flags?.vaarn?.destroyItemRoll) this._rollDestroyItemOnHit(item, x.actor);
+        if(creatureAttackOf(item).destroyItemRoll) this._rollDestroyItemOnHit(item, x.actor);
         // Hit-Count Progression (RULED 2026-09-27, Matt): the Desiccator's
         // Desiccate - the stage for this target's hit count, applied now.
-        if(item.flags?.vaarn?.hitProgression)
+        if(creatureAttackOf(item).hitProgression)
           applyHitProgression(this.actor, item, x, { applyAbilityDamage: (specs, t) => this._applyAbilityDamage(specs, t) });
         for(const t of tagSaveSpecsOf(item))
         {
           const saves = t.saves.filter(s => !s.actorTypes || s.actorTypes.includes(x.actor.type));
-          if(saves.length) postSaveCard(this.actor, `${item.name} (${t.source})`, saves, [], { token: x, applies: tagApplies([t.source]) });
+          // The condition a failure applies comes with the save, from the
+          // sentence (Weapon Tags chunk 3); tagApplies stays for anything else.
+          if(saves.length) postSaveCard(this.actor, `${item.name} (${t.source})`, saves, [], { token: x, applies: t.applies ?? tagApplies([t.source]) });
         }
         this.#_hitTargets.add(x);
-        if(isMelee) this._checkRetaliationMutations(x.actor, true);
+        if(isMelee) this._checkRetaliationMutations(x.actor, true, item);
       }
       else
       {
         this._createHitMsg(x.actor, true, item);
-        if(isMelee) this._checkRetaliationMutations(x.actor, false);
+        if(isMelee) this._checkRetaliationMutations(x.actor, false, item);
         // Reflecting weapon tag (item 4.6.2, 2026-08-27): "Missed attacks
         // against the wielder damage the attacker instead." Matt's ruling
         // — applies to ALL attacks, not melee-only (unlike the retaliation
@@ -5779,14 +5634,18 @@ export class KnaveActorSheet extends ActorSheet
     });
   }
 
-  _createHeatSeekingHitMsg(targetActor, item)
+  /**
+   * An asked auto-hit's card, saying why (Remaining Sources chunk 3, 2026-10-07):
+   * Heat-Seeking in its own words; any other source - the Ultravisor's activation,
+   * a GM's auto-hit sentence - its reason. Every asked auto-hit used to read as
+   * Heat-Seeking.
+   */
+  _createAskedAutoHitMsg(targetActor, item, reason = null)
   {
-    ChatMessage.create({
-      user: game.user._id,
-      speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-      content: `<b>${item.name}</b> arcs around and strikes ${targetActor.name} anyway — Heat-Seeking never misses a warm-blooded target. Roll damage!`
-    });
+    ChatMessage.create({ user: game.user._id, speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+      content: askedAutoHitLine(item.name, targetActor.name, reason) });
   }
+
 
   /**
    * A STAGED ATTACK - Hiveyhump's swarm (2026-09-25). Refused before the
@@ -5798,7 +5657,8 @@ export class KnaveActorSheet extends ActorSheet
   _stageOf(item)
   {
     const key = item.flags.vaarn.stagedBy;
-    const entry = afflictionByKey(key);
+    // Its stages from its sentences since Wounds and Afflictions chunk 4 (2026-10-06).
+    const entry = afflictionByKey(key) ? afflictionOverTimeOf(this.actor, key) : null;
     const board = (this.actor.getFlag("vaarn", "effects") ?? []).find(e => e.afflictionKey === key);
     const stage = entry && board ? stageReached(entry, board) : null;
     if(!stage)
@@ -5875,7 +5735,7 @@ export class KnaveActorSheet extends ActorSheet
    */
   _checkBoundToHost(limb, attackerItem)
   {
-    if(!limb?.getFlag?.("vaarn", "boundToHost")) return;
+    if(!creatureActorFlagsOf(limb).boundToHost) return;
     const host = game.actors.get(limb.getFlag("vaarn", "hostActorId") ?? "");
     if(!host) return;
     ChatMessage.create({
@@ -5896,10 +5756,10 @@ export class KnaveActorSheet extends ActorSheet
     // other is the kind of split that reads as a bug later.
     if(this._isIncorporeal(defenderActor)) return;
 
+    // A held weapon whose sentences strike a miss back (Weapon Tags chunk 4).
     const hasReflecting = defenderActor.items.some(i =>
       (i.type === "weaponMelee" || i.type === "weaponRanged") &&
-      i.system.equipped &&
-      (i.system.tags || []).includes("Reflecting"));
+      i.system.equipped && reflectsMisses(i));
     if(!hasReflecting) return;
 
     const attackerActor = this.actor;
@@ -5908,15 +5768,15 @@ export class KnaveActorSheet extends ActorSheet
     // knave.js rolls the string with no roll data, and "@lvl" there would not
     // roll. The defender is the one the attack was aimed at, so it is the
     // target a target-reading formula reads.
-    const valueRead = actorValueRollData(attackerItem.system.damageDice, attackerActor, [defenderActor], attackerItem.name);
+    const valueRead = actorValueRollData(statOf(attackerItem, "damage-dice"), attackerActor, [defenderActor], attackerItem.name);
     const reflectDice = valueRead.data
-      ? Roll.replaceFormulaData(attackerItem.system.damageDice, valueRead.data)
-      : attackerItem.system.damageDice;
+      ? Roll.replaceFormulaData(statOf(attackerItem, "damage-dice"), valueRead.data)
+      : statOf(attackerItem, "damage-dice");
 
     ChatMessage.create({
       speaker: ChatMessage.getSpeaker({ actor: defenderActor }),
       content: `<p><b>${defenderActor.name}</b>'s Reflecting weapon punishes <b>${attackerActor.name}</b>'s missed attack — click to deal the reflected damage!</p>
-        <button type="button" class="vaarn-reflect-damage" data-attacker-id="${attackerActor.id}" data-damage-dice="${reflectDice}" data-weapon-name="${attackerItem.name}">Roll Reflected Damage</button>`
+        <button type="button" class="vaarn-reflect-damage" data-attacker-id="${attackerActor.id}" data-defender-id="${defenderActor.id}" data-item-uuid="${attackerItem.uuid ?? ""}" data-damage-dice="${reflectDice}" data-weapon-name="${attackerItem.name}">Roll Reflected Damage</button>`
     });
   }
 
@@ -5928,7 +5788,7 @@ export class KnaveActorSheet extends ActorSheet
    * "melee attacks against you" restriction all three share is already
    * structurally guaranteed — no extra gating needed here.
    */
-  _checkRetaliationMutations(targetActor, hit)
+  _checkRetaliationMutations(targetActor, hit, item = null)
   {
     // Retaliation is the mutation-bearer DEALING damage, so an incorporeal one
     // deals none (2026-09-11). Acid Blood on a hit and Body Barbs/Quills on a
@@ -5941,17 +5801,29 @@ export class KnaveActorSheet extends ActorSheet
     // punishing missed attacks. Filtered at the SOURCE of the name list rather
     // than at each of the two clauses below — one gate cannot drift from the
     // other, and a third retaliation clause added later inherits it.
-    const mutationNames = targetActor.items
-      .filter(i => i.type === "mutation" && !isSuppressed(i))
-      .map(i => i.name);
+    // THE BODY'S RETALIATION SENTENCES since Mutations and Ancestry Rules chunk 3
+    // (2026-10-05): the target's when-hit and when-missed damage on its attacker,
+    // not suppressed (bodySentences). Gates: melee (every caller is melee), and a
+    // bite (Toxic Flesh, ruling C 10 - the Ickbulb's BITE_WORDS on the weapon).
+    const level = Number(targetActor.system.level?.value ?? 0);
+    const retaliations = bodySentences(targetActor, hit ? "when-hit" : "when-missed")
+      .filter(({ sentence: s }) => s.do?.verb === "damage" && (s.target?.who ?? s.target) === "attacker")
+      .filter(({ sentence: s }) => (s.if ?? []).every(g =>
+        g.gate === "attack-kind" ? attackKindHolds(g, "melee")
+        : g.gate === "attack-is-bite" ? BITE_WORDS.some(w => String(item?.name ?? "").toLowerCase().includes(w))
+        : false));
 
-    if(hit && mutationNames.includes("Acid Blood"))
-    {
-      let r = new Roll("d4");
-      r.evaluate({async: false});
-      r.toMessage({speaker: ChatMessage.getSpeaker({ actor: targetActor }), flavor: `<b>Acid Blood</b> burns ${this.actor.name}`});
-      this._resolveHPChange(this.actor, this.actor.system.health.value, this.actor.system.health.value - r.total);
-    }
+    // On a hit, each rolls its own dice (Acid Blood's d4 corrosive, Toxic Flesh's
+    // d8 TOX). THROUGH THE WHOLE PIPELINE (Shared Pipelines chunk 2), from the
+    // retaliating creature onto the attacker, so its immunities and temp HP apply.
+    if(hit)
+      for(const { sentence: s, source } of retaliations)
+      {
+        const r = new Roll(String(s.do.dice).replace(/@level/g, String(level)));
+        r.evaluate({async: false});
+        r.toMessage({speaker: ChatMessage.getSpeaker({ actor: targetActor }), flavor: `<b>${source}</b> strikes back at ${this.actor.name}`});
+        dealDamage(this.actor, r.total, { source: targetActor, types: [s.do.type ?? "kinetic"], min: 1, name: source });
+      }
 
     if(!hit)
     {
@@ -5965,25 +5837,23 @@ export class KnaveActorSheet extends ActorSheet
       // Level"), and a creature whose rules do (vaarn.retaliation, the Quill
       // Spider's 2 and the Thornthrower's 4). Suppression filters the boon the
       // way it filters the mutations.
-      const level = Number(targetActor.system.level?.value ?? 0);
       const amountOf = d => d === "level" ? level : Number(d) || 0;
-      const sources = ["Body Barbs", "Quills"].filter(name => mutationNames.includes(name))
-        .map(name => ({ name, dmg: level }));
-      for(const i of targetActor.items)
-      {
-        if(i.type !== "ancestry" || i.system?.rule !== "Bloomboons" || isSuppressed(i)) continue;
-        const spec = (SPARK_TABLES["Neobloom"]?.bloomboon_table ?? []).find(b => b.name === i.system.variant)?.retaliation;
-        if(spec?.on === "miss") sources.push({ name: i.system.variant, dmg: amountOf(spec.damage) });
-      }
-      for(const r of targetActor.flags?.vaarn?.retaliation ?? [])
+      // The body's when-missed sentences (Body Barbs, Quills: damage equal to Level).
+      const sources = retaliations.map(({ sentence: s, source }) =>
+        ({ name: source, dmg: Number(new Roll(String(s.do.dice).replace(/@level/g, String(level))).evaluate({ async: false }).total) || 0 }));
+      // Barbed Bark is among the body's when-missed sentences above since Effect
+      // Engine: Consumables chunk 2 (2026-10-06): its rule Item carries its variant's.
+      for(const r of creatureActorFlagsOf(targetActor).retaliation ?? [])
         if(r.on === "miss") sources.push({ name: r.rule, dmg: amountOf(r.damage) });
       if(sources.length)
       {
         const dmg = sources.reduce((s, x) => s + x.dmg, 0);
         // "Barbed Bark punishes", "Quills punish", "Body Barbs and Spines punish".
         const verb = sources.length === 1 && !/s$/.test(sources[0].name) ? "punishes" : "punish";
-        this._postWoundMsg(targetActor, `'s <b>${sources.map(x => x.name).join(" and ")}</b> ${verb} the missed attack — ${this.actor.name} takes ${dmg} damage!`);
-        this._resolveHPChange(this.actor, this.actor.system.health.value, this.actor.system.health.value - dmg);
+        this._postWoundMsg(targetActor, `'s <b>${sources.map(x => x.name).join(" and ")}</b> ${verb} the missed attack — ${dmg} damage to ${this.actor.name}.`);
+        // Through the whole pipeline since chunk 2 (see Acid Blood above):
+        // kinetic, the barbs, quills and spines being physical.
+        dealDamage(this.actor, dmg, { source: targetActor, types: ["kinetic"], name: sources.map(x => x.name).join(" and ") });
       }
     }
 
@@ -5994,14 +5864,18 @@ export class KnaveActorSheet extends ActorSheet
     // read rest.js makes for the Metallovore. A fixed die, rolled and posted
     // like Acid Blood's, not the Level-scaled barbs above. `on` says which
     // branch; the incorporeal guard at the top already covers this.
+    // Its when-missed sentence since Effect Engine: Consumables chunk 2 (2026-10-06).
     for(const entry of entriesOf(targetActor))
     {
-      const spec = ELIXIRS.find(e => e.name === entry.name && e.retaliation)?.retaliation;
-      if(!spec || (spec.on === "miss") === hit) continue;
+      const spec = elixirSentencesByName(entry.name).find(s => s.when?.trigger === (hit ? "when-hit" : "when-missed")
+        && s.do?.verb === "damage" && (s.if ?? []).every(g => g.gate !== "attack-kind" || attackKindHolds(g, "melee")))?.do;
+      if(!spec) continue;
       const r = new Roll(spec.dice);
       r.evaluate({async: false});
       r.toMessage({speaker: ChatMessage.getSpeaker({ actor: targetActor }), flavor: `<b>${entry.name}</b> punishes ${this.actor.name}'s ${hit ? "hit" : "missed attack"}`});
-      this._resolveHPChange(this.actor, this.actor.system.health.value, this.actor.system.health.value - r.total);
+      // Through the whole pipeline since chunk 2 (see Acid Blood above); the
+      // elixir's declared type if it gives one, else kinetic.
+      dealDamage(this.actor, r.total, { source: targetActor, types: spec.damageTypes ?? [spec.type ?? "kinetic"], name: entry.name });
     }
   }
 
@@ -6029,7 +5903,10 @@ export class KnaveActorSheet extends ActorSheet
     // A creature weapon's own to-hit reminder - the Voltworm's metal-armour
     // half, the Referee's call until Metal Item Property exists (2026-09-25).
     const own = notesMap === TO_HIT_NOTES && item.flags?.vaarn?.toHitNote ? [item.flags.vaarn.toHitNote] : [];
-    return [...tags.filter(t => notesMap[t]).map(t => notesMap[t]), ...own];
+    // A weapon's hit reminders come from its sentences since Weapon Tags chunk
+    // 5a (Flaming's "ignites flammable objects"), after the attack roll.
+    const fromSentences = notesMap === TO_HIT_NOTES ? hitReminders(item) : [];
+    return [...tags.filter(t => notesMap[t]).map(t => notesMap[t]), ...fromSentences, ...own];
   }
 
   /**
@@ -6151,14 +6028,22 @@ export class KnaveActorSheet extends ActorSheet
    * of them and applies to the ability just clicked (or applies to all
    * abilities, via abilities: null).
    */
+  /**
+   * [forceDis, forceAdv] from the character's own unconditional rules for a
+   * SAVE - Extra Head, Small Stature (save-notes.js, Shared Pipelines chunk 7).
+   * Every sheet save passes these; an attack roll never does, which is why
+   * they are not inside _onAbility_Clicked.
+   */
+  _ownSaveMods(abilityKey)
+  {
+    const own = saveModifierSources(this.actor, abilityKey);
+    return [own.dis.length > 0, own.adv.length > 0];
+  }
+
   _saveNotesFor(actor, abilityKey)
   {
-    const mutationNames = actor.items.filter(i => i.type === "mutation").map(i => i.name);
-    const ancestry = actor.system?.ancestry ?? null;
-    return SAVE_NOTES
-      .filter(entry => entry.ancestryName ? entry.ancestryName === ancestry : mutationNames.includes(entry.mutationName))
-      .filter(entry => !entry.abilities || entry.abilities.includes(abilityKey))
-      .map(entry => entry.note);
+    // One lookup for the sheet and every card (save-notes.js, chunk 7).
+    return saveNotesFor(actor, abilityKey);
   }
 
   /**
@@ -6177,7 +6062,7 @@ export class KnaveActorSheet extends ActorSheet
    */
   _followUpNotes(item)
   {
-    return (item.flags?.vaarn?.followUp ?? []).map(f =>
+    return (creatureAttackOf(item).followUp ?? []).map(f =>
       `<b>Also: ${f.name}${f.dice ? ` (${f.dice})` : ""}</b> ${f.condition}.`);
   }
 
@@ -6195,16 +6080,16 @@ export class KnaveActorSheet extends ActorSheet
     const targets = Array.from(game.user?.targets ?? []).map(t => t.actor);
     // A weapon can declare its own (Tesla Bloom's ADV to hit synthetics,
     // Bloomboon Growth 2026-09-24), read beside the actor's.
-    const own = item?.flags?.vaarn?.advantageVs ?? [];
+    const own = creatureAttackOf(item).advantageVs ?? [];
     const attacker = own.length
-      ? { flags: { vaarn: { advantageVs: [...(this.actor.flags?.vaarn?.advantageVs ?? []), ...own] } } }
+      ? { flags: { vaarn: { advantageVs: [...(creatureActorFlagsOf(this.actor).advantageVs ?? []), ...own] } } }
       : this.actor;
     // ADV against a Combat Condition (2026-09-24, the Chernobog's Cave
     // Fighter): every target must carry it on its board. hasStatefulCondition
     // reads the board after immunity, so a Blind-mutation character or a Blind
     // Crab never counts - RULED by Matt: the CONDITION, not being blind.
     const byCondition = targets.length
-      ? (this.actor.flags?.vaarn?.advantageVsCondition ?? [])
+      ? (creatureActorFlagsOf(this.actor).advantageVsCondition ?? [])
         .filter(d => targets.every(t => t && d.conditions.some(c => hasStatefulCondition(t, c))))
         .map(d => `<b>${d.rule}</b> grants ADV — the target is ${d.conditions.map(c => conditionByKey(c)?.label ?? c).join(" or ")}.`)
       : [];
@@ -6220,7 +6105,7 @@ export class KnaveActorSheet extends ActorSheet
    */
   _attackNotes()
   {
-    return (this.actor.flags?.vaarn?.attackNotes ?? []).map(n => n.text);
+    return (creatureActorFlagsOf(this.actor).attackNotes ?? []).map(n => n.text);
   }
 
   /**
@@ -6237,11 +6122,11 @@ export class KnaveActorSheet extends ActorSheet
     if(item?.type !== "weaponMelee" || item.system?.intrinsic) return;
     const hot = Array.from(game.user?.targets ?? []).map(t => t.actor).find(a =>
     {
-      const d = a?.flags?.vaarn?.dropsMeleeWeapons;
+      const d = creatureActorFlagsOf(a).dropsMeleeWeapons;
       return d && Number(a.system?.armor?.value) === Number(d.av);
     });
     if(!hot) return;
-    const rule = hot.flags.vaarn.dropsMeleeWeapons.rule;
+    const rule = creatureActorFlagsOf(hot).dropsMeleeWeapons.rule;
     await item.update({ "system.equipped": false });
     ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: this.actor }),
       content: `<div class="vaarn-chat-card"><h3>Too hot to hold</h3><p><b>${this.actor.name}</b>'s <b>${item.name}</b> was swung at ${hot.name} in its <b>${rule}</b>, hit or miss, `
@@ -6257,7 +6142,7 @@ export class KnaveActorSheet extends ActorSheet
    */
   async _rollAuraAbilityDamage(item)
   {
-    const spec = item.flags?.vaarn?.auraAbilityDamage;
+    const spec = creatureFlagsOf(item).auraAbilityDamage;
     if(!spec) return;
     const targets = Array.from(game.user?.targets ?? []);
     if(!targets.length) return ui.notifications.warn(`Target the tokens ${item.name} reaches first.`);
@@ -6279,7 +6164,7 @@ export class KnaveActorSheet extends ActorSheet
    */
   async _useEncounterEffect(item)
   {
-    const spec = item.flags?.vaarn?.encounterEffect;
+    const spec = creatureFlagsOf(item).encounterEffect;
     if(!spec) return;
     const combat = game.combat;
     if(!combat) return ui.notifications.warn(`${item.name} reaches everyone in the encounter - start a combat first.`);
@@ -6365,542 +6250,12 @@ export class KnaveActorSheet extends ActorSheet
   }
 
   /**
-   * `isMelee` (item 10.8, 2026-08-27) — whether the incoming hit was from a
-   * melee source, so Berserker StimRig/Brew's "take double melee damage"
-   * can be checked against the TARGET's own flag, independent of whatever
-   * the attacker's own berserker state was (that's _onItemRoll's damage
-   * branch's concern, on the dealing end).
-   *
-   * `components` (2026-09-10) — the damage figure split into the parts that can
-   * interact with the target DIFFERENTLY, as [{ amount, name, types }].
-   *
-   * Optional, and defaulting to today's behaviour exactly: with none supplied
-   * the whole figure is one component carrying the parent Item's own attack
-   * properties, which is what every caller but the folded damage roll wants.
-   *
-   * It exists because folding Bioelectricity's +d6 ELECTRICAL into a kinetic
-   * weapon's roll makes a single number wrong in both directions — an
-   * electrical-immune target would still take that d6, and an
-   * electrical-vulnerable one would not have it doubled. `types: null` on a
-   * component means "resolve as the parent Item", so the five add-ons that carry
-   * no type of their own cost nothing here.
+   * The damage stage of the HP pipeline. Moved to module/effects/hp-pipeline.js
+   * (doDamage) on 2026-10-05; this wrapper keeps every caller unchanged.
    */
-  _doDamage(token, dmg, isMelee, item, rollMultiplier = 1, components = null, { graftSplit = true, skipProtect = false, rebounded = false } = {})
+  _doDamage(...args)
   {
-    const actor = token.actor;
-    // The attack as it arrived, before this target's own rules - what a held
-    // blow (Look Out Sire, below) re-runs when the Referee lets it land.
-    const arrived = { dmg, components };
-
-    // INCORPOREAL, DEALING SIDE (2026-09-11). RULED (Matt): a character phased
-    // out of reality "can neither take (invincible) nor deal (incorporeal)
-    // damage". The taking half is a target property and lives in the damage
-    // table; this is the other half, and it is here because this is the first
-    // point at which both attacker and target are known.
-    //
-    // BEFORE EVERYTHING, deliberately. Mauling still rolls its extra die and
-    // Vampiric still reads the figure if this sits lower down, and a phased
-    // character would heal from damage they did not deal.
-    //
-    // A HYPERGEOMETRIC WEAPON DOES NOT HELP, and that was asked rather than
-    // assumed. Matt agreed 2026-09-11: the exception on the taking side exists
-    // because such weapons reach into where the phased character is, not
-    // because the phased character can reach out. They are the one out of
-    // reality and the weapon is out there with them.
-    if(this._isIncorporeal(this.actor))
-    {
-      this._postWoundMsg(actor, `is untouched — <b>${this.actor.name}</b> is <b>Incorporeal</b> and can deal no damage while phased out of reality.`);
-      return { vampiricHeal: 0, bloodRapturousHeal: 0, killed: false };
-    }
-
-    // One component unless told otherwise, so every existing caller keeps its
-    // exact behaviour: the whole figure, resolved against the parent Item.
-    // `min` defaults to the amount itself for a caller that supplied no
-    // components: without the Roll there is no way to know what the dice could
-    // have rolled, and a floor equal to the amount is a floor that does
-    // nothing. Wrong in the safe direction — it under-applies Glassflesh
-    // rather than inventing a reduction.
-    const parts = (components?.length ? components : [{ amount: dmg, min: dmg, name: item?.name ?? "damage", types: null }])
-      .map(c => ({ min: c.amount, ...c }));
-
-    // A TARGET THAT THROWS THE BLOW BACK - the Extradimensional Mystic Hunter's
-    // Psychic Mirror, against any part of a hit carrying a property it
-    // `rebounds` (gift, hypergeometry). Built 2026-09-26 for Hypergeometric
-    // weapons ("weapon tag counts"); that was REVERSED the same day - the tag is
-    // anti-hypergeometric and no longer rebounds - and this stays as the general
-    // path for whatever does carry one. PER COMPONENT, as immunity is: the parts carrying a
-    // rebounded property go to the attacker, and the rest still land here.
-    // `rebounded` stops a Hunter hitting a Hunter from bouncing for ever.
-    if(!rebounded && item && token.actor)
-    {
-      const propsOf = c => c.types?.length ? c.types : attackPropertiesOrKinetic(item);
-      const back = parts.filter(c => propsOf(c).some(p => reboundsAttack(token.actor, p)));
-      if(back.length)
-      {
-        const mirror = reboundsAttack(token.actor, propsOf(back[0]).find(p => reboundsAttack(token.actor, p)));
-        const total = back.reduce((a, c) => a + c.amount, 0);
-        this._postWoundMsg(token.actor, `is untouched — <b>${mirror.rule}</b>: <b>${back[0].name ?? item.name}</b> rebounds on <b>${this.actor.name}</b>.`);
-        this._doDamage({ actor: this.actor }, total, isMelee, item, rollMultiplier, back, { graftSplit, skipProtect, rebounded: true });
-        const kept = parts.filter(c => !back.includes(c));
-        if(!kept.length) return { vampiricHeal: 0, bloodRapturousHeal: 0, killed: false, dealt: 0 };
-        return this._doDamage(token, kept.reduce((a, c) => a + c.amount, 0), isMelee, item, rollMultiplier, kept, { graftSplit, skipProtect, rebounded: true });
-      }
-    }
-
-    // A GRAFTED LIMB SHARES ITS DAMAGE with its host - the Fleshwarp's Grafted
-    // Arm, RULED 2026-09-26 (Matt). The RAW figure is split here, before any
-    // of the target's own rules: the limb takes the rounded-up half, the host
-    // the rounded-down half, and each half then runs this whole method against
-    // its own actor - the host's WITH the attacking weapon, so its own
-    // resistances and immunities decide it, as Bound to the Host was tested.
-    // Automatic, not a Referee button. The healing each half earns the
-    // attacker is summed, so a Vampiric weapon drains from both.
-    const graftHost = graftSplit ? graftHostOf(actor) : null;
-    if(graftHost)
-    {
-      const split = splitForHost(parts);
-      this._postWoundMsg(actor, `shares the blow with <b>${graftHost.name}</b> — <b>${split.limbTotal}</b> to the limb, <b>${split.hostTotal}</b> to its host.`);
-      const hostRes = split.hostTotal > 0
-        ? this._doDamage({ actor: graftHost }, split.hostTotal, isMelee, item, rollMultiplier, split.host, { graftSplit: false })
-        : { vampiricHeal: 0, bloodRapturousHeal: 0, killed: false };
-      const limbRes = this._doDamage(token, split.limbTotal, isMelee, item, rollMultiplier, split.limb, { graftSplit: false });
-      return { ...limbRes,
-        vampiricHeal: (limbRes.vampiricHeal ?? 0) + (hostRes.vampiricHeal ?? 0),
-        bloodRapturousHeal: (limbRes.bloodRapturousHeal ?? 0) + (hostRes.bloodRapturousHeal ?? 0),
-        drainHeal: (limbRes.drainHeal ?? 0) + (hostRes.drainHeal ?? 0) };
-    }
-
-    // Mauling and Piercing weapon tags (2026-09-03). The vault states they
-    // "are mirror opposites", and they are exactly that — same two AV
-    // thresholds, swapped:
-    //   Mauling  — extra die at AV <= 13, halved at AV >= 16
-    //   Piercing — extra die at AV >= 16, halved at AV <= 13
-    // So they share one block with the band lookup inverted, rather than
-    // two near-identical copies that could drift apart.
-    // AV 14-15 is a deliberate dead band in the book, not a gap.
-    //
-    // Per target, like everything else in this method, because the damage
-    // roll upstream is one number shared by every target the attack hit.
-    // The extra die must be ROLLED here for the same reason.
-    //
-    // Matt's rulings 2026-09-03:
-    //  - halved ROUNDS DOWN, so a rolled 1 becomes 0. First halving rule in
-    //    the codebase; the Core Rules state no general rounding convention.
-    //  - AV is read through _effectiveTargetAV, NOT the raw armor.value. That
-    //    means a Vibroactive weapon ("hits as though the target was
-    //    unarmoured", AV 10) permanently enables Mauling's bonus die and can
-    //    never be halved. Raised as a probable accident; Matt overruled —
-    //    Vibroactive enabling Mauling is a fun interaction and this game is
-    //    not balanced for.
-    //  - the extra die is doubled by a critical hit. Extended here to the
-    //    attacker's berserk doubling as well, via rollMultiplier, on the same
-    //    reasoning: the extra die is part of the weapon's damage, so it takes
-    //    whatever multiplier the base dice already took upstream.
-    //
-    // Runs BEFORE the two "target takes double" multipliers below so the
-    // extra die participates in them exactly as the base dice do.
-    const avTags = item ? (item.system.tags || []) : [];
-    const mauling = avTags.includes("Mauling");
-    const piercing = avTags.includes("Piercing");
-    // Heavy and Strong are NOT here, and that is the whole point of this note.
-    // They briefly were, on 2026-09-15, and it was wrong: this block runs once
-    // per HIT TARGET, so an attack rolled with nothing targeted never reaches
-    // it. Mauling and Piercing can live with that because they cannot know
-    // their band without a target; an unconditional tag cannot. RULED (Matt)
-    // 2026-09-16: "damage rolls on heavy/strong should always get the extra
-    // die, even without a target." They are back in applyDamageTagModifiers,
-    // which puts their die in the damageDice the roll is built from.
-    if(mauling || piercing)
-    {
-      const av = this._effectiveTargetAV(actor, item);
-      const light = av <= 13, heavyBand = av >= 16;
-      // A weapon carrying BOTH tags is not reachable from the generators
-      // (Mauling and Piercing are both ADVANCED_TAGS and a weapon rolls one),
-      // but a hand-edited item can hold both. Left to resolve naturally
-      // rather than special-cased: each tag reads the band independently, so
-      // in either band one adds a die and the other halves, and they roughly
-      // cancel. That is a sane answer to a nonsense weapon.
-      const boostBy = (mauling && light) ? "Mauling" : (piercing && heavyBand) ? "Piercing" : null;
-      const halveBy = (mauling && heavyBand) ? "Mauling" : (piercing && light) ? "Piercing" : null;
-      const size = String(item.system.damageDice || "").match(/^\d+(d\d+)$/)?.[1];
-
-      // The extra die is the PARENT weapon's, sized from its own damageDice, so
-      // it joins the parent component rather than standing on its own — it is
-      // that weapon's damage and takes that weapon's damage type.
-      if(boostBy && size)
-      {
-        const extra = new Roll(`1${size}`);
-        extra.evaluate({async: false});
-        const added = extra.total * rollMultiplier;
-        parts[0].amount += added;
-        // The floor moves with it: one more die is one more guaranteed point.
-        parts[0].min += rollMultiplier;
-        this._postWoundMsg(actor, `— Effective AV ${av}: <b>${item.name}</b>'s ${boostBy} adds an extra ${size}: <b>+${added}</b>.`);
-      }
-      // Halving applies to the whole blow, every component included: the tag
-      // describes how this weapon fares against that armour, and a folded add-on
-      // die is part of the same swing. Identical to the old behaviour whenever
-      // there is only one component, which is every caller but the folded roll.
-      if(halveBy)
-      {
-        parts.forEach(c => { c.amount = Math.floor(c.amount / 2); c.min = Math.floor(c.min / 2); });
-        const halvedTotal = parts.reduce((a, c) => a + c.amount, 0);
-        this._postWoundMsg(actor, `— Effective AV ${av}: <b>${item.name}</b>'s ${halveBy} halves the damage to <b>${halvedTotal}</b>.`);
-      }
-    }
-
-    // The receiving half of the same frenzy, and it reads the same scope as
-    // the dealing half above — a Brew drinker takes double from a bow too.
-    if(berserkApplies(actor, isMelee))
-      parts.forEach(c => { c.amount *= 2; c.min *= 2; });
-
-    // "Suffer double damage for d6 days" — Vaarnish Poison row 19, wired
-    // 2026-09-19. A property of the TARGET's live state, so it sits with the
-    // berserker line above rather than in the attack-property table below:
-    // that table asks what the weapon is, and this doubles everything alike.
-    //
-    // `min` moves with `amount`, exactly as the berserker line does, so a
-    // Glassflesh floor stays a floor instead of becoming a damage bonus on a
-    // low roll — the trap the floor clamp further down exists to catch.
-    //
-    // ANNOUNCED, unlike the berserker multiplier. The chat card has already
-    // posted the undoubled figure, so a silent doubling means the card says 8
-    // while the target lost 16. The Psyche-Suppressant note below called the
-    // silent one a pre-existing wart rather than the pattern to copy.
-    //
-    // THE LINE IS POSTED LATER, once the final figure is known — see below.
-    // Announcing it here said "deals 16" and was then followed by Incorporeal
-    // saying the attack does nothing, which is chat contradicting itself
-    // within two lines. Group 226 found that; the multiplication stays here
-    // because the floor logic downstream needs `min` already scaled.
-    //
-    // Multiplicative with everything else, per Matt's standing crit-and-
-    // berserk ruling, and harmless against immunity, which short-circuits to
-    // zero before any of this is added in.
-    const takenMult = incomingDamageMultiplier(actor);
-    if(takenMult !== 1)
-      parts.forEach(c => { c.amount *= takenMult; c.min *= takenMult; });
-
-    // Psyche-Suppressant weapon tag (2026-09-03): "Double damage to Psychic
-    // creatures." Applied HERE, per target, rather than to the damage roll,
-    // because the roll is one number shared by every target an attack hit —
-    // doubling it would wrongly double against a non-Psychic caught in the
-    // same swing. This is the same per-target shape as the berserker check
-    // directly above, which is the existing precedent for a multiplier that
-    // depends on who is being hit rather than on the roll.
-    //
-    // Announced, unlike the berserker multiplier, which is silent: the chat
-    // card already posted the undoubled number, so a silent doubling means
-    // the card says 8 while the target quietly lost 16. Treating the silent
-    // one as a pre-existing wart rather than the pattern to copy.
-    //
-    // Note this stacks MULTIPLICATIVELY with the two doublings above it, per
-    // Matt's standing crit-and-berserk ruling: a berserk critical hit on a
-    // Psychic target is 8x base damage.
-    // ---- attack property x creature type, one table ----------------------
-    //
-    // Psyche-Suppressant and Electrical were each written here as their own
-    // hand-rolled if-block, two days apart. Anti-Paradoxical, Eroding and
-    // Hypergeometric are the same shape again, and Bestiary.md states the
-    // same matrix a THIRD time as creature-type resistances. Five more
-    // near-identical blocks is the duplication-drift failure that has bitten
-    // this codebase repeatedly, so all of it now resolves from one table in
-    // module/item/attack-properties.js.
-    //
-    // Matt's rulings 2026-09-05: "attack property" is the attacker-side
-    // concept for all these interactions, and immunity "is immunity, like
-    // multiplying by zero" — absolute, and it short-circuits, so no other
-    // multiplier can bring the damage back above zero.
-    //
-    // Still per target, and still announced, for the reasons the removed
-    // Psyche-Suppressant block gave: the roll is one number shared by every
-    // target, and the chat card has already posted the undoubled figure, so a
-    // silent multiplier means the card says 8 while the target lost 16.
-    if(item)
-    {
-      // PER COMPONENT, because immunity and vulnerability are properties of a
-      // damage TYPE, not of an attack. A component with its own `types` is
-      // resolved on those; one with none is resolved as the parent Item, which
-      // is the single-component case and therefore every pre-existing caller.
-      //
-      // The probe is a bare `{ damageTypes }` object rather than the Item:
-      // attackPropertiesOf already accepts a system-shaped object, so a typed
-      // component reads through the same table as a real weapon and cannot
-      // drift from it.
-      dmg = 0;
-      for(const c of parts)
-      {
-        const probe = c.types?.length ? { damageTypes: c.types } : item;
-        // A component's own name, not the weapon's, or a folded add-on's
-        // immunity would be reported against the parent weapon and read as the
-        // whole attack doing nothing.
-        const label = c.name ?? item.name;
-
-        // A creature rule OR a live condition that overrides the type table
-        // entirely — Incorporeal, from the Spectre's own nature or from a
-        // Phasing Potion. One call since 2026-09-11; see attack-properties.js
-        // for why the drinker gets exactly the creature's rule.
-        const override = damageOverride(probe, actor);
-        // Incorporeal against a Gift is the Referee's call (RULED 2026-09-26,
-        // Matt): nothing is applied, and the line carries the figure.
-        if(override?.gmCall)
-        {
-          this._postWoundMsg(actor, `is <b>${override.rule}</b> — whether <b>${label}</b>'s ${c.amount} damage harms it is the Referee's call. Adjust its HP by hand if it does.`);
-          continue;
-        }
-        if(override?.immune)
-        {
-          this._postWoundMsg(actor, `is <b>${override.rule}</b> — <b>${label}</b> does nothing. Only ${override.needs.join(" or ")} weapons can harm it.`);
-          continue;
-        }
-
-        // Hollow Maiden's Unreal Flesh: an even total does nothing. Read on
-        // the amount as it stands here, after any critical or berserk
-        // doubling upstream.
-        const unreal = ignoresEvenDamage(actor);
-        if(unreal && c.amount % 2 === 0)
-        {
-          this._postWoundMsg(actor, `is <b>${unreal.rule}</b> — <b>${label}</b> rolled an even ${c.amount} and does nothing.`);
-          continue;
-        }
-
-        const { mult, immune, floor, applied } = resolveDamageInteractions(probe, actor);
-        // The floor is taken before the multiplier — see the ordering note on
-        // resolveDamageInteractions. Clamped against the rolled amount so a
-        // floor can only ever reduce: halving rounds down and could otherwise
-        // leave `min` above `amount` on a low roll, which would turn Glassflesh
-        // Paste into a damage BONUS.
-        const base = floor ? Math.min(c.amount, c.min) : c.amount;
-        // An immune hit names only the rule that made it immune. Every row
-        // checked before it is in `applied` too, and printed as "immune" it read
-        // "immune to kinetic damage (Fungal takes half from kinetic)" (Group 419).
-        for(const rule of immune ? applied.filter(r => r.mult === 0) : applied)
-        {
-          // A creature rule may bite on every attack ("*"); it then names no
-          // damage kind. A condition key reads badly in chat, so a row may
-          // carry a `label` to show instead.
-          const kind = rule.attack === "*" ? "" : `${rule.attack} `;
-          const who = rule.label ?? rule.target;
-          if(immune)
-            this._postWoundMsg(actor, `is <b>immune</b> to <b>${kind}</b>damage — <b>${label}</b> does nothing. (${rule.note})`);
-          else if(rule.floor)
-            this._postWoundMsg(actor, `takes <b>minimum</b> ${kind}damage — <b>${label}</b> deals ${base} instead of ${c.amount}. (${rule.note})`);
-          else if(rule.mult > 1)
-            this._postWoundMsg(actor, `is <b>${who}</b> — <b>${label}</b>'s ${kind}damage x${rule.mult}. (${rule.note})`);
-          else
-            this._postWoundMsg(actor, `is <b>${who}</b> — <b>${label}</b>'s ${kind}damage is halved. (${rule.note})`);
-        }
-        dmg += immune ? 0 : Math.floor(base * mult);
-
-        // Regeneration Serum: taking fire or acid ENDS the effect outright
-        // (Matt's reading, 2026-09-11). Asked per COMPONENT and of the
-        // component's own types, so a flaming add-on on an otherwise kinetic
-        // weapon ends it and a kinetic add-on on a flaming weapon does not.
-        //
-        // Fired even when the damage came to nothing: an immune target was
-        // still "damaged by fire" in the book's sense, and the alternative
-        // reads as an effect surviving because it worked.
-        this._endEffectsOnDamage(actor, attackPropertiesOrKinetic(probe), label);
-      }
-
-      // Electrical's submerged clause has no state to read and stays with the
-      // GM, named rather than silently dropped. Asked of the COMPONENTS, so a
-      // folded Bioelectricity die raises it on an otherwise kinetic weapon. The
-      // metal-armour clause is the interaction table's since 2026-09-27.
-      const anyElectrical = parts.some(c => c.types?.length
-        ? c.types.includes("electrical")
-        : hasAttackProperty(item, "electrical"));
-      if(dmg > 0 && anyElectrical)
-        this._postWoundMsg(actor, `<i>Electrical also doubles vs a submerged target — resolve by hand.</i>`);
-      // Eroding's static-structures clause, the same way (Matt, 2026-09-23):
-      // no state for a wall or a door, so it is named for the GM. Its mineral
-      // and vehicle clauses are rows of DAMAGE_INTERACTIONS.
-      const anyEroding = parts.some(c => c.types?.length
-        ? c.types.includes("eroding")
-        : hasAttackProperty(item, "eroding"));
-      if(dmg > 0 && anyEroding)
-        this._postWoundMsg(actor, `<i>Eroding also doubles vs static structures — resolve by hand.</i>`);
-    }
-    else
-      dmg = parts.reduce((a, c) => a + c.amount, 0);
-
-    // Lethal Blow Redirection (2026-09-19) — the Synthhound's Watchdog
-    // Protocol: "If a kinetic attack would kill the synthhound's owner, it
-    // kills the synthhound instead."
-    //
-    // HERE, AND NOT LOWER DOWN, because `dmg` is final at this line and
-    // nothing below it has spoken yet. Every sentence further down is about a
-    // blow that landed on THIS actor — the doubling line, Vampiric's heal,
-    // Blood-Rapturous's — and a redirected blow landed on nobody here. The
-    // owner would otherwise be told they suffered double damage in the same
-    // breath as being told they were untouched.
-    //
-    // THE OWNER TAKES NO DAMAGE AT ALL (Matt, 2026-09-19). The book says the
-    // attack kills the synthhound instead, and the alternative reading —
-    // owner takes the damage but not the death — leaves a character sitting
-    // at -20 with the Fatality row suppressed, a state the Wounds table has
-    // no row for. So `_resolveHPChange` is never called for the owner and the
-    // early return below is the protection.
-    //
-    // VAMPIRIC HEALS NOTHING on a redirect, which follows from that rather
-    // than being decided separately: its clause is "regains HP equal to half
-    // the damage inflicted", and no damage was inflicted on anyone. The
-    // synthhound is killed BY THE RULE, not by the figure.
-    //
-    // THE KILL IS STILL THE ATTACKER'S (Matt, 2026-09-19), so it goes
-    // through `_resolveHPChange` exactly as any other death does and
-    // Kill/Death-Detection attributes it with no second copy of that logic.
-    // Blood-Rapturous is read against the SUBSTITUTE, since it is the
-    // creature that died; the Synthhound being Synthetic, it pays nothing
-    // today, and a future biological watchdog would pay correctly.
-    // LOOK OUT SIRE (Lethal Blow Redirection, RULED 2026-09-26 by Matt): a
-    // lethal blow on a token a living protector guards is HELD, and a GM card
-    // offers each protector's death in its place or lets it land. Before the
-    // Watchdog, since this is a choice; a blow let through comes back with
-    // skipProtect and meets the Watchdog then. See combat/protector.js.
-    if(!skipProtect)
-    {
-      const tokenDoc = token.document ?? (token.documentName === "Token" ? token : null);
-      const guards = protectorsOf(tokenDoc, actor, { worldActors: game.actors?.contents ?? [], sceneTokens: canvas?.scene?.tokens?.contents ?? [] });
-      if(guards.length && wouldKill(actor, dmg))
-      {
-        this._holdBlowForProtectors(tokenDoc, actor, guards, dmg, arrived, isMelee, item, rollMultiplier);
-        return { vampiricHeal: 0, bloodRapturousHeal: 0, killed: false };
-      }
-    }
-
-    const watchdog = watchdogRedirect(actor, dmg, item);
-    if(watchdog)
-    {
-      this._postWoundMsg(actor, `is <b>saved by ${watchdog.name}</b> — <b>Watchdog`
-        + ` Protocol</b>. The blow would have been lethal, so it takes the hound`
-        + ` instead and ${actor.name} suffers no damage.`);
-
-      // GUARDED ON PERMISSION, not on who rolled. The Referee attacking from
-      // an NPC sheet is the ordinary case and writes straight through; a
-      // player rolling their own attack gets the button.
-      if(!watchdog.isOwner)
-      {
-        this._postWoundMsg(watchdog, `<b>Watchdog Protocol</b> — ${watchdog.name}`
-          + ` dies in ${actor.name}'s place. ${watchdogKillButton(watchdog)}`);
-        return { vampiricHeal: 0, bloodRapturousHeal: 0, killed: false };
-      }
-
-      const dogHP = watchdog.system.health.value;
-      const dogOutcome = this._resolveHPChange(watchdog, dogHP, 0, { toZero: true });
-      const dogHeal = (dogOutcome === "killed" && item
-        && (item.system.tags || []).includes("Blood-Rapturous")
-        && watchdog.system.creatureTypes?.biological)
-          ? watchdog.system.health.max : 0;
-      return { vampiricHeal: 0, bloodRapturousHeal: dogHeal, killed: dogOutcome === "killed" };
-    }
-
-
-    // The doubling's line, posted here because this is the first point at
-    // which the figure is true. `dmg > 0` is the guard that matters: an
-    // Incorporeal or otherwise immune target now gets only the sentence
-    // saying the attack did nothing, instead of that sentence underneath a
-    // claim that it dealt 16.
-    //
-    // IT NAMES THE FACTOR NOW, rather than saying "double" (2026-09-22).
-    // Deathblight scales PER SLOT, so two slots quadruple and three are x8,
-    // and the old wording would have called every one of those "double" while
-    // the figure beside it disagreed. The affliction is named for the same
-    // reason the halved-healing line names it: a number that changed without
-    // saying who changed it is the fault this line exists to fix.
-    if(takenMult !== 1 && dmg > 0)
-    {
-      const by = woundDamageMultiplier(actor).named;
-      const cause = by.length ? ` from ${by.join(" and ")}` : "";
-      this._postWoundMsg(actor, `<b>takes x${takenMult} damage</b>${cause} — <b>${item?.name ?? "the attack"}</b> deals <b>${dmg}</b>.`);
-    }
-
-    // Vampiric weapon tag (2026-09-03): "When this weapon damages Biological
-    // creatures, the wielder regains HP equal to half the damage inflicted."
-    //
-    // LAST in this method on purpose. "Damage inflicted" is read as the final
-    // per-target figure, so everything above — Mauling's extra die, the
-    // berserk doubling, Psyche-Suppressant — is already folded in and a
-    // Vampiric weapon that also crits heals from the bigger number.
-    //
-    // Halved ROUNDS DOWN, following the convention Mauling set earlier today.
-    // A damage figure of 0 or 1 therefore heals nothing and says nothing.
-    //
-    // "Damage inflicted" is also read as the damage DEALT, not the HP
-    // actually removed: hitting a 3 HP target for 10 heals 5, not 1. The
-    // book says inflicted, and overkill is still inflicted.
-    //
-    // Clamped to the wielder's own max HP explicitly. _resolveHPChange writes
-    // any increase straight through without a cap, and actor.js only clamps
-    // in prepareData — so an unclamped overheal would sit above max in the
-    // database while displaying correctly, which is worth not creating.
-    // BUG FOUND IN TESTING 2026-09-03 (item 76.8): this used to write the
-    // wielder's HP here, per target. Two Biological targets in one swing then
-    // healed 3 total instead of 6 — the second read this.actor's HP before the
-    // first update had landed, and both chat lines claimed the same new total.
-    // Exactly the race _checkRetaliationMutations already warns about for Body
-    // Barbs/Quills ("summed into one HP update ... rather than two sequential
-    // updates racing against the same stale currentHP").
-    //
-    // So this method now only REPORTS what Vampiric would restore, and the
-    // caller sums across every target hit and applies it once.
-    let vampiricHeal = 0;
-    if(item && (item.system.tags || []).includes("Vampiric")
-       && actor.system.creatureTypes?.biological)
-      vampiricHeal = Math.floor(dmg / 2);
-
-    // A creature's DRAIN - Moonbeast (Nymph)'s Vampiric Tendrils, "heals HP
-    // equal to damage". RULED 2026-09-23 (Matt): the attacker heals by what
-    // the target lost AFTER immunities, which is `dmg` here, the final
-    // per-target figure. The whole of it, and on any creature type: this is
-    // the creature's own rule, not the weapon tag above. Reported, not
-    // applied, for the tag's reason - the caller sums across targets.
-    // A TYPE-LIMITED drain (the Hagfluke's Siphon, RULED 2026-09-27) heals
-    // nothing off any other target, and says nothing about it.
-    const drain = item?.flags?.vaarn?.drain;
-    const drainHeal = drain && (drain === true || !drain.targets?.length || hasAnyCreatureType(actor, drain.targets))
-      ? Math.max(0, dmg) : 0;
-
-    const currentHP = actor.system.health.value;
-    const outcome = this._resolveHPChange(actor, currentHP, currentHP - dmg);
-
-    // A creature that SPLITS when damaged - the Fractalisk, the Glittersludge
-    // (Actor Spawning wiring, RULED 2026-09-25 by Matt: a card, not an
-    // automatic split). Only when damage actually landed and it survived.
-    if(dmg > 0 && outcome !== "killed")
-    {
-      const causes = [...new Set(parts.flatMap(c =>
-        attackPropertiesOrKinetic(c.types?.length ? { damageTypes: c.types } : (item ?? {}))))];
-      offerSplit(actor, causes, Math.max(0, currentHP - dmg));
-      // A flammable target set alight (Neobloom, 2026-09-25).
-      if(causes.includes("flame") && isFlammable(actor))
-        startBurning(actor, FLAMMABLE_BURN).then(() =>
-          this._postWoundMsg(actor, `catches fire - <b>${FLAMMABLE_BURN.dice}</b> burning damage each round until extinguished.`));
-    }
-
-    // Blood-Rapturous weapon tag (2026-09-10): "When a Biological creature is
-    // killed with this weapon, the user heals for the victim's maximum HP."
-    //
-    // Read as an AMOUNT, not a level to heal up to — the book says "heals FOR
-    // the victim's maximum HP". Matt's ruling 2026-09-10 is "like vampiric",
-    // so two kills in one swing contribute two amounts and the caller sums
-    // them. The atom-index note said "heals TO victim's max HP", which is a
-    // different rule; the ruling settles it against that reading.
-    //
-    // REPORTED, not applied, for exactly the reason Vampiric is (item 76.8):
-    // writing the wielder's HP per target races itself across a multi-target
-    // swing. A weapon can carry BOTH tags, so the two heals also have to reach
-    // the wielder as one update — see _applyAttackHeals.
-    //
-    // "Biological" is tested on the victim the same way Vampiric tests it, so
-    // a Synthetic kill heals nothing and says nothing.
-    let bloodRapturousHeal = 0;
-    if(outcome === "killed" && item
-       && (item.system.tags || []).includes("Blood-Rapturous")
-       && actor.system.creatureTypes?.biological)
-      bloodRapturousHeal = actor.system.health.max;
-
-    return { vampiricHeal, bloodRapturousHeal, drainHeal, killed: outcome === "killed", dealt: dmg };
+    return doDamage(this, ...args);
   }
 
   /**
@@ -6989,7 +6344,7 @@ export class KnaveActorSheet extends ActorSheet
     return res;
   }
 
-  _applyAttackHeals(sources, itemName)
+  async _applyAttackHeals(sources, itemName)
   {
     const live = sources.filter(s => s.amount > 0);
     if(!live.length) return;
@@ -7023,15 +6378,13 @@ export class KnaveActorSheet extends ActorSheet
       }
       return hp;
     };
-    let hp = apportion(max);
-
-    // Healing Received Multiplier — Deathblight halves the TOTAL gain, per
-    // slot, and the sources are then re-apportioned under that lower ceiling,
-    // so each line still reports only what its own source restored.
-    const { gained: allowed, note } = scaleHealing(wielder, hp - before);
-    if(note) hp = apportion(before + allowed);
-
-    if(hp > before) wielder.update({ "system.health.value": hp });
+    // ONE HEAL of the sources' total, through the one heal path (Shared
+    // Pipelines chunk 3), ungated: gated above with the weapon's name. It
+    // floors, clamps and lets Deathblight halve the TOTAL gain, per slot; the
+    // sources are then apportioned under what actually landed, so each line
+    // still reports only what its own source restored.
+    const { after, note } = await heal(wielder, live.reduce((n, s) => n + s.amount, 0), { gate: false });
+    const hp = apportion(after);
 
     live.forEach((s, i) =>
     {
@@ -7063,10 +6416,22 @@ export class KnaveActorSheet extends ActorSheet
    * "when you kill a foe", and a stack of three identical cards would read as
    * three extra attacks.
    */
+  /**
+   * The body's kill reaction - Overkill's on-kill sentence (Mutations and Ancestry
+   * Rules chunk 3, 2026-10-05), from its Item or the ancestry text (ruling B), in
+   * the shape ANCESTRY_KILL_REACTIONS gave: { rule, text, melee }.
+   */
+  _killReaction()
+  {
+    const hit = bodySentences(this.actor, "on-kill").find(({ sentence: s }) => s.do?.verb === "reminder");
+    if(!hit) return null;
+    return { rule: hit.source, text: hit.sentence.text ?? "", melee: (hit.sentence.if ?? []).some(g => g.gate === "attack-kind" && g.is === "melee") };
+  }
+
   _postKillReactionReminder(meleeKills)
   {
     if(meleeKills <= 0) return;
-    const reaction = ANCESTRY_KILL_REACTIONS[this.actor.system?.ancestry];
+    const reaction = this._killReaction();
     if(!reaction || !reaction.melee) return;
 
     const what = meleeKills === 1 ? "a foe" : `${meleeKills} foes`;
@@ -7111,10 +6476,10 @@ export class KnaveActorSheet extends ActorSheet
       : "target a token before rolling damage.";
 
     const notes = [];
-    if(item && (item.system.tags || []).includes("Blood-Rapturous"))
+    if(item && healsOnKill(item))
       notes.push(`<b>Blood-Rapturous</b> cannot tell whether anything died — ${why}`);
 
-    const reaction = ANCESTRY_KILL_REACTIONS[this.actor.system?.ancestry];
+    const reaction = this._killReaction();
     if(reaction && (!reaction.melee || item?.type === "weaponMelee"))
       notes.push(`<b>${reaction.rule}</b> cannot tell whether anything died — ${why}`);
 
@@ -7122,209 +6487,28 @@ export class KnaveActorSheet extends ActorSheet
   }
 
   /**
-   * Shared entry point for any HP decrease, whether from a weapon-roll or a
-   * manual edit to the HP field on the sheet.
-   *
-   * RETURNS the outcome as a string — "killed" or null — which
-   * is the Kill/Death-Detection Hook (foundry-system-index.csv). Matt's ruling
-   * 2026-09-10: fold the detection in here rather than build a subsystem.
-   *
-   * It is a RETURN VALUE and not an event on purpose. This method knows that a
-   * creature died; it does not know who killed it, with what, or whether the
-   * blow was melee, and it has ~10 callers that have no attacker to offer — a
-   * manual HP edit on the sheet, a gift's HP cost, a usage-die explosion.
-   * Threading attacker context through all of them to reach the two callers
-   * that have it is the cost that made this row look expensive. So the
-   * ATTRIBUTION lives one level out in _doDamage, which already holds the
-   * attacker, the weapon and isMelee, and the only thing that has to cross the
-   * boundary is what happened.
-   *
-   * SCOPED TO THE NPC BRANCH (Matt's ruling 2026-09-10). Both consumers fire on
-   * killing a FOE, and a character's death is resolved by the Wounds table
-   * inside _applyWound, which is async and called without await — so the
-   * character branches below cannot report an outcome synchronously and
-   * deliberately return nothing rather than half-answer.
+   * The HP funnel: temp HP, Wounds and death. Moved to module/effects/hp-pipeline.js
+   * (resolveHPChange) on 2026-10-05; this wrapper keeps every caller unchanged.
    */
-  _resolveHPChange(actor, currentHP, newHP, { manual = false, toZero = false } = {})
+  _resolveHPChange(...args)
   {
-    // Vehicle Stat Block Import (2026-09-18). A vehicle's HP field IS its Hull
-    // (Matt: "Hull is to vehicles as HP is to other actors"), and the one
-    // difference is the ratio: "Hull points are reduced by damage at a ratio
-    // of 1 to 10. Damage incurred in amounts less than 10 does not reduce a
-    // Vehicle's hull points."
-    //
-    // CONVERTED HERE rather than in _doDamage because this is the funnel every
-    // damage path passes through, the chat-card buttons included. Each call is
-    // one attack, which is what makes "multiple sources of damage do not
-    // stack" hold: 6 and 8 from separate attacks are two calls, each under 10.
-    //
-    // Nothing happens at 0 Hull beyond reaching it. The book gives a vehicle
-    // no unconscious, killed or wrecked state, so none is invented; the kill
-    // hooks below never see a vehicle.
-    if(actor.type === "vehicle")
-    {
-      if(newHP < currentHP)
-      {
-        const dmg  = currentHP - newHP;
-        const loss = Math.floor(dmg / 10);
-        newHP = Math.max(0, currentHP - loss);
-        this._postWoundMsg(actor, loss
-          ? `takes ${dmg} damage and loses <b>${loss}</b> Hull (1 per 10) — Hull ${newHP}.`
-          : `takes ${dmg} damage — under 10, so no Hull is lost.`);
-      }
-      actor.update({'system.health.value': newHP});
-      return null;
-    }
+    return resolveHPChange(this, ...args);
+  }
 
-    // TEMPORARY HP (2026-09-26, RULED by Matt) - see combat/temp-hp.js. Damage
-    // spends the pool before HP; `manual` (an HP value the GM typed) spends
-    // nothing; `toZero` (a death that SETS HP to 0) clears the pool with it.
-    if(toZero)
-    {
-      if(tempHpOf(actor) > 0) actor.update({ [TEMP_HP_FIELD]: 0 });
-    }
-    else if(!manual && newHP < currentHP && tempHpOf(actor) > 0)
-    {
-      const soak = soakDamage(tempHpOf(actor), currentHP - newHP);
-      actor.update({ [TEMP_HP_FIELD]: soak.tempLeft });
-      this._postWoundMsg(actor, soakLine(soak, t => gmHP(actor, t)));
-      if(!soak.dmgLeft) return null;
-      newHP = currentHP - soak.dmgLeft;
-    }
+  /**
+   * The pipeline's damage entry (hp-pipeline.js dealDamage), for modules that
+   * reach it through effects/deal.js rather than importing the pipeline.
+   */
+  _kill(target, opts = {})
+  {
+    // The one kill route (hp-pipeline.js kill, Shared Pipelines chunk 4), for
+    // modules that reach it through effects/deal.js.
+    return kill(this, target, opts);
+  }
 
-    // Monsters/NPCs die at 0 HP. JADE IBIS p.30: "NPCs and monsters do not
-    // suffer Wounds, instead dying at 0 HP." This replaced the Knave fork's
-    // unconscious-at-0/dead-on-next-hit model (row Second-Hit Creature Death,
-    // REMOVED 2026-09-18), so the kill hooks now fire on the killing blow.
-    if(actor.type !== "character")
-    {
-      let outcome = null;
-
-      // Only a hit that actually took HP resolves anything. An immune hit
-      // (0 damage) on an injected creature sitting at 0 once posted a death
-      // message for a blow that did nothing — found in Group 196.
-      if(newHP < currentHP && newHP <= 0)
-      {
-        newHP = 0;
-
-        // Fatality Suppression surface 1. The book says "a CREATURE injected
-        // ... cannot die", so an injected monster is alive at 0 HP, and each
-        // further damaging hit is another death it survives.
-        //
-        // OUTCOME STAYS NULL, and that is a ruling rather than a side effect
-        // (Matt 2026-09-11): Blood-Rapturous and the Cacklemaw Exile's More!
-        // both read "when you kill", and nothing died. Kill/Death-Detection
-        // Hook is the row that consumes this return value.
-        if(suppressesDeath(actor))
-          this._postWoundMsg(actor, suppressionMsg(currentHP > 0
-            ? "reduced to 0 HP"
-            : "hit again at 0 HP"));
-
-        // Spirit Form (2026-09-27): a PC's spirit at 0 HP fades into the
-        // aether until sunrise. Nothing died, so the outcome stays null and
-        // no kill reaction fires.
-        else if(currentHP > 0 && isSpirit(actor))
-          this._postWoundMsg(actor, fadeMessage());
-
-        // Already dead at 0: nothing is posted and nothing counts as a kill
-        // (Matt 2026-09-18), so a corpse cannot feed Blood-Rapturous.
-        else if(currentHP > 0)
-        {
-          this._postWoundMsg(actor, "is killed");
-          outcome = "killed";
-        }
-      }
-
-      actor.update({'system.health.value': newHP});
-
-      // Creature-Driven Level Drain — "Slaying the monster restores all lost
-      // time to those it fed upon."
-      //
-      // HUNG OFF THE SAME "killed" OUTCOME the two kill-triggered mutations
-      // use, rather than a second death detector. Note it fires for a drainer
-      // killed ANY way, not only by an attack, because this is the one place
-      // every HP decrease passes through.
-      //
-      // POSTS A CARD; IT DOES NOT RESTORE. This method runs on the client of
-      // whoever dealt the damage, and that client is usually not allowed to
-      // write to the victims — restoring hands Levels back to other people's
-      // characters. So it follows the shipped `.vaarn-recur-apply` route that
-      // apply-to-target.js documents: the card posts from here and the
-      // Referee's CLICK carries the permission.
-      //
-      // IT WAS AN `activeGM` GUARD FOR ONE DAY (2026-09-14) and that was
-      // wrong in the direction that fails silently. activeGM resolves to ONE
-      // user, and this call site already runs on one client, so the guard
-      // subtracted instead of selecting: every kill by anyone other than that
-      // single user restored nothing at all, with a dead monster and no
-      // message to say why. The `activeGM` guards elsewhere in this system sit
-      // on Hooks that fire on EVERY client, which is what makes them correct
-      // there. Found in Group 158.
-      if(outcome === "killed") this._postDrainRestoreCard(actor);
-
-      return outcome;
-    }
-
-    // Characters use the Vaarn Wounds table once HP drops to/below 0.
-    if(newHP > 0)
-    {
-      actor.update({'system.health.value': newHP});
-      return;
-    }
-
-    // INEVITABLE (Lithling): "When your HP reaches zero, you crumble into
-    // iridescent dust, leaving behind a pebble-sized lithling seed." No wound
-    // is rolled. RULED 2026-09-25 (Matt): the seed is an Item named after the
-    // character, left in their inventory. Keyed on the rule the character
-    // carries, as the healing gate is. Fatality Suppression holds here too:
-    // the character stays at 0 and nothing crumbles.
-    // A CRUMBLE IS A KILL (Matt, 2026-09-26): it returns "killed" like a
-    // creature's death, so kill reactions and kill-triggered tags see it.
-    // Decided here, before the async crumble, because this method returns
-    // synchronously; a suppressed death is not a kill.
-    if(noHealRule(actor) === "Inevitable")
-    {
-      if(currentHP <= 0) return;
-      const killed = !suppressesDeath(actor);
-      this._crumbleInevitable(actor);
-      return killed ? "killed" : undefined;
-    }
-
-    if(newHP === 0 && currentHP > 0)
-    {
-      const row = getWound(this._woundsTableFor(actor), 0);
-      this._postWoundMsg(actor, `is <b>${row.name}</b> — ${row.effect}`);
-      actor.update({'system.health.value': 0});
-      // THE hp-0 ROW'S OWN SAVE (Matt, 2026-09-22). "CON Save vs unconscious
-      // for d6 rounds" was chat text and nothing else: the row is slots: 0, so
-      // it reaches no Item, and the declared d6 rounds reached nothing that
-      // could count them. The card asks the character - not a target, which is
-      // why postSaveCard takes an explicit saver - and a failure puts the
-      // rolled span on their board. The auto-hit half of the rule stays the
-      // Referee's, named in the entry's text.
-      if(row.save)
-        postSaveCard(actor, row.name, [{ ...row.save, span: row.declaredSpan }], [], { saver: actor });
-      return;
-    }
-
-    if(this._hasActiveDeathsDoor(actor))
-    {
-      // Fatality Suppression surface 2. THE WOUND STAYS SKIPPED (Matt
-      // 2026-09-11): this branch never applied one, and suppression changes
-      // only the message. Falling through to _applyWound here would roll the
-      // row for the new HP, which at -20 is Fatality — the death this just
-      // suppressed, arriving by another door.
-      //
-      // HP is still written either way, which is "all other effects (hp loss,
-      // wounds etc) happen" doing its work.
-      this._postWoundMsg(actor, suppressesDeath(actor)
-        ? suppressionMsg("further damage while on Death's Door")
-        : "is <b>dead</b> — further damage is lethal while on Death's Door.");
-      actor.update({'system.health.value': Math.max(newHP, -20)});
-      return;
-    }
-
-    this._applyWound(actor, newHP);
+  _dealDamage(...args)
+  {
+    return dealDamage(...args);
   }
 
   /**
@@ -7400,179 +6584,11 @@ export class KnaveActorSheet extends ActorSheet
     });
   }
 
-  /**
-   * Apply the Wounds-table row matching newHP to actor: rolls and applies any
-   * numeric effects, records the wound (for item-slot tracking), posts a chat
-   * message, and recurses for Bloody Mess's 3 sub-wound rolls.
-   */
-  async _applyWound(actor, newHP, depth = 0, { setHP = true } = {})
-  {
-    // `setHP` is false only for a Referee-chosen wound (the Wounds tab picker,
-    // 2026-09-17): the row is looked up by its HP value as always, but the
-    // character did not fall to that HP and must not be written there.
-    const table = this._woundsTableFor(actor);
-    const clampedHP = Math.max(newHP, -20);
-    const row = getWound(table, clampedHP);
+  /** Moved to effects/hp-pipeline.js applyWound (Shared Pipelines chunk 4); kept so every caller is unchanged. */
+  _applyWound(actor, newHP, depth = 0, opts = {}) { return applyWound(this, actor, newHP, depth, opts); }
 
-    if(row.instantDeath)
-    {
-      // Fatality Suppression surface 3 — Fatality, General Systems Failure,
-      // Ego-Engine Destroyed. THE WOUND STAYS SKIPPED (Matt 2026-09-11), and
-      // here the reason is sharpest: Fatality is slots: 0 with no numeric
-      // fields, so death IS its entire content. Suppress it and there is
-      // nothing left to apply — recording a 0-slot wound named "Fatality"
-      // whose text reads "You are dead." on a living character would be worse
-      // than recording nothing. NARROWED 2026-09-27 (Matt): that reason holds
-      // only for a SUPPRESSED death, so the skip now applies only there - see
-      // below.
-      const suppressed = suppressesDeath(actor);
-      this._postWoundMsg(actor, suppressed
-        ? suppressionMsg(`<b>${row.name}</b> on the Wounds table`)
-        : `is <b>dead</b> — <b>${row.name}</b>. ${row.effect}`);
-      // A DEATH THAT HAPPENS IS RECORDED (RULED 2026-09-27, Matt, narrowing
-      // the skip above to the suppressed case): the row goes on the Wounds
-      // list like any 0-slot wound, so the sheet shows how the character died
-      // and the Ego-Engine Transplant's refusal (resurrection.js) can read an
-      // Ego-Engine Destroyed death. A suppressed death still records nothing.
-      const update = setHP ? {'system.health.value': clampedHP} : {};
-      if(!suppressed)
-        update['system.wounds'] = [...duplicate(actor.system.wounds ?? []),
-          { hp: row.hp, name: row.name, slots: 0, effect: row.effect, deathsDoor: false, itemId: null }];
-      if(Object.keys(update).length) await actor.update(update);
-      return;
-    }
-
-    const abilities = duplicate(actor.system.abilities);
-    const wounds = duplicate(actor.system.wounds);
-    let maxHp = actor.system.health.max;
-    // Armour DAMAGE, not the armour itself (2026-09-22). This used to
-    // decrement system.armor.value, which for a character is rebuilt from
-    // equipped items on every prepare - so "Synthskin Damaged" has been
-    // writing a figure nothing ever read. The loss now accumulates in the
-    // stored damage field the sheet shows beside DEFENSE.
-    let armorDamage = Number(actor.system.armor.damage) || 0;
-    let msgLines =[`<b>${row.name}</b>${gmHP(actor, ` (HP ${row.hp})`)} — ${row.effect}`];
-
-    if(row.maxHpDie)
-    {
-      let r = new Roll(row.maxHpDie);
-      r.evaluate({async: false});
-      maxHp -= r.total;
-      msgLines.push(`Max HP -${r.total}${gmHP(actor, ` (now ${maxHp})`)}`);
-    }
-
-    if(row.abilityDice)
-    {
-      for(let [key, formula] of Object.entries(row.abilityDice))
-      {
-        let r = new Roll(formula);
-        r.evaluate({async: false});
-        abilities[key].woundDamage += r.total;
-        msgLines.push(`${key.toUpperCase()} wound damage +${r.total} (total ${abilities[key].woundDamage}, effective bonus now ${abilities[key].value - abilities[key].woundDamage})`);
-      }
-    }
-
-    if(row.abilityFlat)
-    {
-      for(let [key, amount] of Object.entries(row.abilityFlat))
-      {
-        abilities[key].woundDamage += amount;
-        msgLines.push(`${key.toUpperCase()} wound damage +${amount} (total ${abilities[key].woundDamage}, effective bonus now ${abilities[key].value - abilities[key].woundDamage})`);
-      }
-    }
-
-    if(row.armorDie)
-    {
-      let r = new Roll(row.armorDie);
-      r.evaluate({async: false});
-      armorDamage += r.total;
-      msgLines.push(`Armour damage +${r.total} (total ${armorDamage}, AV now ${Math.max(10, Number(actor.system.armor.value) - armorDamage)})`);
-    }
-
-    // Advancement Automation owns level loss now (2026-09-13). The flat
-    // decrement this used to do is exactly the approximation Matt ruled
-    // against: it took the level away and left behind the HP and Abilities
-    // that level had granted. loseLevels replays the ledger instead, and it
-    // runs AFTER the wound's own update below so the two do not race on
-    // health.max. Terminal Memory Crystal Corruption is the only row carrying
-    // either flag, and it has no maxHpDie of its own, so nothing here
-    // double-counts.
-    if(row.levelLoss || row.xpReset)
-      msgLines.push(`Lost ${row.levelLoss ?? 0} level(s)${row.xpReset ? ", XP reset to 0" : ""} — see the level card.`);
-
-    // Wounds that occupy slots also get a paired Item so they show up in the
-    // actor's Items list and count toward the same slot total real gear uses.
-    let itemId = null;
-    if(row.slots > 0)
-    {
-      const cls = getDocumentClass("Item");
-      const created = await cls.create(
-      {
-        name: `${row.name} (Wound x${row.slots})`,
-        type: "wound",
-        system: { slots: row.slots, description: row.effect, hp: row.hp, deathsDoor: !!row.deathsDoor, ...spanFieldFrom(row) },
-        // A wound that IS a Combat Condition - Vischip Disabled is Blind -
-        // carries it as a flag that stateful-effect.js's activeDeltas reads
-        // (RULED 2026-09-16, Matt: "let the wound declare the condition").
-        ...(row.conditions?.length ? { flags: { vaarn: { conditions: [...row.conditions] } } } : {})
-      }, { parent: actor });
-      itemId = created.id;
-    }
-
-    wounds.push({ hp: row.hp, name: row.name, slots: row.slots, effect: row.effect, deathsDoor: !!row.deathsDoor, itemId });
-
-    this._postWoundMsg(actor, msgLines.join("<br>"));
-
-    // Sub-wound rolls (Bloody Mess) reuse the HP lookup purely to pick a table
-    // row — they must not overwrite the actor's real HP, which was already
-    // set by the top-level wound that triggered them.
-    const update =
-    {
-      'system.health.max': maxHp,
-      'system.abilities': abilities,
-      'system.wounds': wounds,
-      'system.armor.damage': armorDamage,
-    };
-    if(depth === 0 && setHP)
-      update['system.health.value'] = clampedHP;
-
-    await actor.update(update);
-
-    // After the update, not folded into it: loseLevels does its own reads of
-    // health.max and the abilities, and it must see the wound's damage already
-    // applied rather than compete with it.
-    if(row.levelLoss || row.xpReset)
-      await loseLevels(actor, row.levelLoss ?? 0,
-        { zeroXp: !!row.xpReset, reason: `<b>${row.name}</b> — ${row.effect}` });
-
-    if(row.rollSubWounds && depth < 3)
-    {
-      for(let i = 0; i < row.rollSubWounds; i++)
-      {
-        let r = new Roll("3d6");
-        r.evaluate({async: false});
-        await this._applyWound(actor, -r.total, depth + 1);
-      }
-    }
-
-    if(depth === 0)
-      this._checkWoundDeath(actor);
-  }
-
-  /** A Lithling at 0 HP: dust and a seed named after them (see _resolveHPChange). */
-  async _crumbleInevitable(actor)
-  {
-    await actor.update({'system.health.value': 0});
-    if(suppressesDeath(actor))
-      return this._postWoundMsg(actor, suppressionMsg("reduced to 0 HP"));
-    await getDocumentClass("Item").create({
-      name: `${actor.name}'s Lithling Seed`,
-      type: "item",
-      system: { slots: 0, quantity: 1,
-                description: `<p>A pebble-sized lithling seed, all that remains of ${actor.name}.</p>` }
-    }, { parent: actor });
-    return this._postWoundMsg(actor, `is <b>dead</b> — <b>Inevitable</b>: ${actor.name} crumbles into iridescent dust, leaving behind a pebble-sized lithling seed.`);
-  }
+  /** Moved to effects/hp-pipeline.js crumbleInevitable (Shared Pipelines chunk 4). */
+  _crumbleInevitable(actor) { return crumbleInevitable(this, actor); }
 
   /**
    * Wound-slot and ability-floor death (Fatality Suppression surfaces 4 and
@@ -7719,9 +6735,10 @@ export class KnaveActorSheet extends ActorSheet
     const food  = supplyTotal(actor, FOOD_RATION);
     const free  = rationFreeRule(actor);
 
-    // Detritivore is universal to Mycomorphs, so the ancestry is the signal —
-    // the same read toxin-die.js makes for the same rule. There is no Item.
-    const isMycomorph = actor.system.ancestry === "Mycomorph";
+    // Detritivore's rotting meal - its on-rest sentence, from the rule Item or
+    // the ancestry text (Mutations and Ancestry Rules chunk 6, RULED
+    // 2026-10-06; was the ancestry name).
+    const rotsMeal = bodySentences(actor, "on-rest").some(p => p.sentence.do?.handler === "rotting-meal");
 
     if(!free && water <= 0 && food <= 0)
     {
@@ -7746,7 +6763,7 @@ export class KnaveActorSheet extends ActorSheet
         </select>
       </div>`;
 
-    const rottingChoice = (isMycomorph && !free) ? `
+    const rottingChoice = (rotsMeal && !free) ? `
       <div class="form-group">
         <label title="Detritivore: heals double HP from Short Rests if the meal you eat is rotting.">
           <input type="checkbox" name="rotting"/> The meal is rotting (<b>Detritivore</b> — double HP)
@@ -7819,7 +6836,7 @@ export class KnaveActorSheet extends ActorSheet
    */
   async _takeRationOnHit(item)
   {
-    const which = item.flags.vaarn.takesRation === "water" ? WATER_RATION : FOOD_RATION;
+    const which = creatureAttackOf(item).takesRation === "water" ? WATER_RATION : FOOD_RATION;
     const targets = Array.from(game.user.targets ?? []).map(t => t.actor).filter(Boolean);
     const lines = [];
     if(!targets.length)
@@ -8143,9 +7160,9 @@ export class KnaveActorSheet extends ActorSheet
    */
   async _promptRoundEffect(item)
   {
-    const text = `${item.system?.description ?? ""} ${item.system?.effect ?? ""}`;
-    const formula = formulaFrom(item);
-    const ticks = PER_ROUND_WORDING.test(text);
+    // A creature rule Item's words from its sentence since Effect Engine: Creatures
+    // chunk 2c-ii (2026-10-06); any other Item's still from its text.
+    const { formula, perRound: ticks } = roundWordingOf(item);
 
     // Prefilled from the item's own wording — the ruling is that activation
     // takes one number, and the dialog opens with what the effect implies:

@@ -31,6 +31,7 @@
 import { resolveSave, SAVE_TARGET } from "./saves.js";
 import { saveDisSources } from "../time/stateful-effect.js";
 import { onSaveResolved } from "./save-consequences.js";
+import { saveNotesFor, saveModifierSources, askSaveQuestions } from "../actor/save-notes.js";
 // Quantum Daemon Debt: Jinxed. Every card save rolls through here, which makes
 // this one of the three roll creators that apply it — see curse.js.
 import { applyJinx, JINX_BANNER } from "../time/curse.js";
@@ -96,6 +97,15 @@ export async function rollCardSave(actor, {
   // The board's DIS (Doom Song on any save, the physical key on STR/DEX/CON),
   // added here so every card that rolls a save honours it - 2026-09-24.
   disSources = [...new Set([...disSources, ...saveDisSources(actor, ability)])];
+  // The character's own unconditional rules, as the sheet's buttons take them -
+  // Extra Head's ADV, Small Stature's DIS (save-notes.js, Shared Pipelines
+  // chunk 7, RULED 2026-10-05). Named in the card's source note below.
+  // Albino's "is it daylight?", asked once per scene before the roll (Mutations
+  // and Ancestry Rules chunk 2b, ruling C 7).
+  await askSaveQuestions(actor, ability);
+  const own = saveModifierSources(actor, ability);
+  advSources = [...new Set([...advSources, ...own.adv])];
+  disSources = [...new Set([...disSources, ...own.dis])];
   const mode = saveMode({ advSources, disSources });
   const roll = new Roll(saveFormula(mode, bonus));
   await roll.evaluate({ async: true });
@@ -116,6 +126,16 @@ export async function rollCardSave(actor, {
   const flagData = typeof flags === "function" ? flags(result) : flags;
   if (flagData) data.flags = { vaarn: flagData };
   await roll.toMessage(data, rollMode ? { rollMode } : {});
+
+  // SAVE NOTES REACH CARD SAVES (chunk 7): the reminders the sheet's buttons
+  // post - Albino's daylight, No Quarter - beside this roll, as private as it.
+  const notes = saveNotesFor(actor, ability);
+  if (notes.length)
+  {
+    const noteData = { speaker: ChatMessage.getSpeaker({ actor }), content: notes.map(n => `<i>${n}</i>`).join("<br>") };
+    if (rollMode) ChatMessage.applyRollMode(noteData, rollMode);
+    await ChatMessage.create(noteData);
+  }
 
   // A failed-save consequence fires on every save the actor rolls, whatever
   // it was for — save-consequences.js's header, "whenever they fail a CON

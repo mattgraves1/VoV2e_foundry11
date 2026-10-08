@@ -295,6 +295,26 @@ export const RECURRENCES = [
   },
 
   {
+    // Wounds and Afflictions chunk 2b (RULED 2026-10-06, Matt): the wound's daily
+    // loss, started when it is taken (hp-pipeline.js), ended when it is repaired.
+    key: "cascading-kinesthetics",
+    atoms: ["Synthetic: Cascading Kinesthetics Debilitation"],
+    name: "Cascading Kinesthetics Debilitation",
+    book: "Combat/Wounds - Synthetic.md",
+    period: { amount: 1, unit: "day" },
+    tick: "Lose -2 STR and DEX per day. At 0 STR or DEX, you can no longer move at all until this Wound is repaired by someone else.",
+    applies: [
+      { target: "ability", key: "str", label: "STR", amount: 2 },
+      { target: "ability", key: "dex", label: "DEX", amount: 2 }
+    ],
+    threshold: {
+      watch: "woundGone", wound: "Cascading Kinesthetics Debilitation", stops: true,
+      text: "The Wound has been repaired - the debilitation stops."
+    },
+    cure: "Repaired by someone else."
+  },
+
+  {
     key: "flab",
     atoms: ["Flabmonger"],
     name: "Flab (Lipoinduction)",

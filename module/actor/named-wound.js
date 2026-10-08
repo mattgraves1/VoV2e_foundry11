@@ -26,6 +26,8 @@
 import { NAMED_WOUNDS } from "./wounds-data.js";
 import { setDeprived, deprivedEntry } from "./deprived.js";
 import { suppressesDeath, suppressionMsg } from "../combat/fatality.js";
+import { kill } from "../effects/deal.js";
+import { namedWoundEffectsOf } from "../item/creature-effects.js";
 
 const SCOPE = "vaarn";
 export const NAMED_WOUND_FLAG = "namedWound";
@@ -40,8 +42,9 @@ export function namedWoundSpec(ref)
 {
   if (!ref) return null;
   if (typeof ref === "object") return ref;
-  const spec = NAMED_WOUNDS[ref];
-  return spec ? { key: ref, ...spec } : null;
+  // From its sentences since Effect Engine: Creatures chunk 2e (RULED 2026-10-07,
+  // Matt); an object spec (the Gitch's crystals) is the caller's own.
+  return namedWoundEffectsOf(ref);
 }
 
 /** The wound Items this actor holds under a named-wound key. */
@@ -53,7 +56,9 @@ export function heldNamedWounds(actor, key)
 /** Why rest will not heal this system.wounds entry, or null. */
 export function restProofReason(wound)
 {
-  if (wound?.restProof) return wound.restProof;
+  // The key's sentence where it resolves (chunk 2e); the stored copy for a keyless wound.
+  const fromKey = wound?.named ? namedWoundEffectsOf(wound.named) : null;
+  if (fromKey ? fromKey.restProof : wound?.restProof) return fromKey ? fromKey.restProof : wound.restProof;
   // REST-PROOF WHILE ITS LIMB EXISTS - Wound: Grafted Arm, RULED 2026-09-26
   // (Matt): healable once the arm Actor no longer exists, "a more flexible way
   // to model it" - the Referee deletes the arm when it is killed, cut off or
@@ -86,7 +91,8 @@ export async function applyNamedWound(actor, ref, { source = null, check = true 
     if (spec.zeroHp)
     {
       const hp = Number(actor.system?.health?.value ?? 0);
-      if (hp > 0) await actor.sheet?._resolveHPChange(actor, hp, 0, { toZero: true });
+      // The one kill route (Shared Pipelines chunk 4).
+      if (hp > 0) kill(actor);
       return null;
     }
     await post(actor, `would take <b>Wound: ${spec.name}</b>${from} — creatures do not suffer Wounds.`);
@@ -134,8 +140,8 @@ export async function applyNamedWound(actor, ref, { source = null, check = true 
     name: `${spec.name} (Wound x${slots})`,
     type: "wound",
     system: { slots, description: spec.effect ?? "", hp: 0, deathsDoor: false },
-    flags: { [SCOPE]: { [NAMED_WOUND_FLAG]: marker,
-                        ...(spec.conditions?.length ? { conditions: [...spec.conditions] } : {}) } }
+    // The conditions flag this once wrote is gone (chunk 2e): no spec ever declared one.
+    flags: { [SCOPE]: { [NAMED_WOUND_FLAG]: marker } }
   }, { parent: actor });
 
   const wounds = duplicate(actor.system.wounds ?? []);
@@ -146,13 +152,14 @@ export async function applyNamedWound(actor, ref, { source = null, check = true 
                 ...(spec.becomes ? { becomes: spec.becomes } : {}),
                 ...(spec.tally ? { tally: { count: spec.tally.count, label: spec.tally.label, done: 0 } } : {}) });
 
-  const update = { "system.wounds": wounds, "system.abilities": abilities };
+  await actor.update({ "system.wounds": wounds, "system.abilities": abilities });
+  // "HP set to 0 (no wound roll)" - the kill route without the Wounds roll
+  // (Shared Pipelines chunk 4, RULED C 2026-10-05), which clears temp HP too.
   if (spec.zeroHp)
   {
-    update["system.health.value"] = 0;
+    await kill(actor, { noWound: true });
     lines.push("HP set to 0.");
   }
-  await actor.update(update);
   if (spec.deprived && clearsDeprived)
   {
     await setDeprived(actor, true);

@@ -6,6 +6,7 @@ import { normalizeDamageDice } from "./chargen-app.js";
 import { findFigment } from "./figments.js";
 import { applyDrainerGain } from "./level-drain.js";
 import { xpCostFor } from "./advancement.js";
+import { maxHpChange } from "../effects/max-hp.js";
 
 // Renamed from implant-effects.js (item 10.7) -> item-effects.js (item 15,
 // 2026-08-26): mutations and Starting Implants have the exact same
@@ -18,7 +19,7 @@ function findImplantEntry(name)
   return IMPLANTS.find(m => m.name === name) || ADVANCED_IMPLANTS.find(m => m.name === name);
 }
 
-function findEntry(item)
+export function findEntry(item)
 {
   if(item.type === "mutation") return MUTATION_TABLE.find(m => m.name === item.name);
   if(item.type === "implant") return findImplantEntry(item.name);
@@ -43,6 +44,39 @@ function findEntry(item)
     return spec ? { name: spec.name, slotBonus: spec.slotBonus } : null;
   }
   return null;
+}
+
+/**
+ * THE MARKER (Stats as Sentences chunk 2d-ii, RULED 2026-10-07): the changes a
+ * bonus Item's CREATION DATA takes so it is live from its first moment (ruling
+ * 1) - null when it is no bonus Item, the bake may not touch this actor, it is
+ * chargen's (2d-iii) or a restore (which carries its own flags), or it is
+ * already live (a live Item moved keeps its marker, ruling 4).
+ *
+ * An old baked Item moved here becomes live, and its copied bakedEffects record
+ * is cleared - it described what another actor was given (ruling 4). Extra Eyes
+ * rolls its 1d3 now and stores it on the marker, the description saying the
+ * count as the bake's did (ruling 3). A Hollowheart Chest Slots Item that does
+ * not yet say its bonus is given the sentence, from the roster row the bake read.
+ */
+export function liveMarkFor(item, actor, options = {})
+{
+  if(!actor || options?.vaarnChargenBake || options?.vaarnRestore) return null;
+  if(!["mutation", "implant", "exotica", "figment", "item"].includes(item?.type)) return null;
+  if(item.flags?.vaarn?.liveStats) return null;
+  if(!bakeAllowedOn(item, actor)) return null;
+  const entry = findEntry(item);
+  if(!entry) return null;
+  const changes = { "flags.vaarn.liveStats": true, "flags.vaarn.-=bakedEffects": null };
+  if(item.type === "mutation" && item.name === "Extra Eyes")
+  {
+    const eyes = Math.ceil(Math.random() * 3);
+    changes["flags.vaarn.liveStats"] = { rolled: { psy: eyes } };
+    changes["system.description"] = `<p><b>d100 roll:</b> ${item.system?.roll ?? ""}</p><p>You have ${eyes} extra eye${eyes === 1 ? "" : "s"} on your forehead. +1 PSY for each.</p>`;
+  }
+  if(item.type === "item" && entry.slotBonus && !Array.isArray(item.flags?.vaarn?.effects))
+    changes["flags.vaarn.effects"] = [{ when: "stat", baked: true, do: { verb: "modify", stat: "inventory-slots", amount: `+${entry.slotBonus}` } }];
+  return changes;
 }
 
 /**
@@ -148,6 +182,10 @@ export async function applyBakedItemEffects(item, options, userId)
 
   const entry = findEntry(item);
   if(!entry) return;
+  // A LIVE Item (chunk 2d-ii) bakes only its max HP, its natural weapon and its
+  // level; its abilities, slots, hands and creature types are read every prepare
+  // (body.js liveBodyBonusesOf). Extra Eyes rolled on its marker at creation.
+  const live = !!item.flags?.vaarn?.liveStats;
 
   const updates = {};
 
@@ -164,7 +202,8 @@ export async function applyBakedItemEffects(item, options, userId)
   // existing wording.
   let abilityDelta = entry.abilityMod || entry.stat_mod;
   let itemDescriptionUpdate = null; // this Item's own field, NOT the actor's — applied separately below
-  if(item.type === "mutation" && item.name === "Extra Eyes")
+  if(live) abilityDelta = null;
+  if(!live && item.type === "mutation" && item.name === "Extra Eyes")
   {
     const eyeRoll = new Roll("1d3");
     eyeRoll.evaluate({ async: false });
@@ -203,8 +242,8 @@ export async function applyBakedItemEffects(item, options, userId)
   const hpBonus = entry.hpBonus || entry.hp_bonus;
   if(hpBonus)
   {
-    updates["system.health.max"] = Number(actor.system.health.max) + hpBonus;
-    updates["system.health.value"] = Number(actor.system.health.value) + hpBonus;
+    // The max HP verb (Shared Pipelines chunk 5): +N max is +N current.
+    Object.assign(updates, maxHpChange(actor, { add: hpBonus }));
     applied.hpBonus = hpBonus;
   }
 
@@ -213,13 +252,14 @@ export async function applyBakedItemEffects(item, options, userId)
   // has neither inventorySlots nor hands. No figment carries either field, so
   // this never fires today — it is here so that adding one to a figment fails
   // by doing nothing rather than by throwing on a missing path.
-  if(entry.slotBonus && actor.system.inventorySlots)
+  if(!live && entry.slotBonus && actor.system.inventorySlots)
   {
-    updates["system.inventorySlots.max"] = Number(actor.system.inventorySlots.max) + entry.slotBonus;
+    // _source since 2d-ii: the prepared max carries live slots (as hands.max below).
+    updates["system.inventorySlots.max"] = Number(actor._source.system.inventorySlots.max) + entry.slotBonus;
     applied.slotBonus = entry.slotBonus;
   }
 
-  if(entry.handsBonus && actor._source.system.hands)
+  if(!live && entry.handsBonus && actor._source.system.hands)
   {
     // `_source`, NOT actor.system. actor.js:306 adds a Save-Gated Effect's
     // temporary hand grant to hands.max on EVERY prepare, so the prepared
@@ -262,9 +302,9 @@ export async function applyBakedItemEffects(item, options, userId)
    */
   const alreadyGranted = actor.getFlag("vaarn", "figmentGrantedTypes") ?? [];
   const grantedTypes = [...alreadyGranted];
-  for(const key of (entry.creatureTypes ?? []))
+  for(const key of (live ? [] : (entry.creatureTypes ?? [])))
   {
-    if(actor.system.creatureTypes?.[key]) continue;
+    if(actor._source.system.creatureTypes?.[key]) continue;
     updates[`system.creatureTypes.${key}`] = true;
     if(!grantedTypes.includes(key)) grantedTypes.push(key);
   }
@@ -676,10 +716,9 @@ export async function reverseBakedItemEffects(item, options, userId)
 
   if(rec.hpBonus)
   {
-    const newMax = Number(actor.system.health.max) - rec.hpBonus;
-    updates["system.health.max"] = newMax;
-    // Current is left alone unless the ceiling has dropped below it.
-    if(Number(actor.system.health.value) > newMax) updates["system.health.value"] = newMax;
+    // Current is left alone unless the ceiling has dropped below it - the
+    // max HP verb's loss (Shared Pipelines chunk 5).
+    Object.assign(updates, maxHpChange(actor, { add: -rec.hpBonus }));
   }
 
   // Both of these read actor.system rather than _source: prepareData leaves
@@ -687,7 +726,7 @@ export async function reverseBakedItemEffects(item, options, userId)
   const overages = [];
   if(rec.slotBonus)
   {
-    const newMax = Number(actor.system.inventorySlots.max) - rec.slotBonus;
+    const newMax = Number(actor._source.system.inventorySlots.max) - rec.slotBonus;
     updates["system.inventorySlots.max"] = newMax;
     const used = Number(actor.system.inventorySlots.used ?? 0);
     if(used > newMax) overages.push({ what: "item slots", used, after: newMax });
@@ -838,12 +877,11 @@ export async function restoreBakedItemEffects(actor, applied)
   // gap between max and value — the lost HP — is unchanged either way.
   if(applied.hpBonus)
   {
-    updates["system.health.max"] = Number(actor.system.health.max) + applied.hpBonus;
-    updates["system.health.value"] = Number(actor.system.health.value) + applied.hpBonus;
+    Object.assign(updates, maxHpChange(actor, { add: applied.hpBonus }));
   }
 
   if(applied.slotBonus)
-    updates["system.inventorySlots.max"] = Number(actor.system.inventorySlots.max) + applied.slotBonus;
+    updates["system.inventorySlots.max"] = Number(actor._source.system.inventorySlots.max) + applied.slotBonus;
 
   if(applied.handsBonus)
     updates["system.hands.max"] = Number(actor._source.system.hands.max) + applied.handsBonus;

@@ -1,6 +1,4 @@
 import { ABILITY_KEYS, ABILITY_CAP, ABILITY_LABEL } from "./advancement.js";
-import { ELIXIRS } from "./chargen-data.js";
-import { ADVANCED_EXOTICA } from "./advanced-exotica-data.js";
 
 /**
  * PERMANENT ABILITY SCORE CHANGE
@@ -36,40 +34,15 @@ import { ADVANCED_EXOTICA } from "./advanced-exotica-data.js";
  * is how it becomes two rules.
  */
 
-/**
- * The roster's declared permanent-Ability spec for an Item, by name. Null if
- * none.
- *
- * DERIVED FROM THE ROSTER, never a hand-written name list — the same rule
- * statefulElixirNames() already follows in actor-sheet.js, and for the same
- * reason: a second list is a second thing to edit, and the four duration
- * literals it replaced had all drifted from the roster by the time anyone
- * checked. A `permanentAbility` spec IS the statement that this entry moves a
- * score for good.
- *
- * The flag names the MECHANISM it needs rather than its subject, which is the
- * form CLAUDE.md settled on when `perRound` was named for Per-Round Effect
- * Reminder.
- */
-export function permanentAbilitySpecFor(name)
-{
-  return ELIXIRS.find(e => e.name === name)?.permanentAbility ?? null;
-}
+// The Elixirs' permanent-Ability spec (Autarch's Ambrosia's { choose }) is the
+// drink's permanent-ability sentence since Effect Engine: Consumables chunk 3a
+// (2026-10-06); the roster reader that stood here was deleted then.
 
-/**
- * The Advanced Exotica roster's permanent-Ability spec for an Item, by name.
- * Null if none.
- *
- * A SEPARATE SHAPE from the Elixirs' `{ choose }`, which is the size of one
- * change. Autarch's Nectar (2026-09-26) is several changes: `{ delta, count,
- * requiresType }` - "a permanent +1 boost to three ability scores" when drunk
- * by a biological creature. RULED 2026-09-26 (Matt): the three must be
- * different Abilities, and a drinker without the type is refused.
- */
-export function exoticaPermanentAbilitySpecFor(name)
-{
-  return ADVANCED_EXOTICA.find(e => e.name === name)?.permanentAbility ?? null;
-}
+// Autarch's Nectar's spec - { delta, count, requiresType }, "a permanent +1 boost
+// to three ability scores" when drunk by a biological creature (RULED 2026-09-26,
+// Matt: three different Abilities, a drinker without the type refused) - is its
+// use sentence's since Implants, Exotica and Figments chunk 3b-i; the roster
+// reader that stood here was deleted in chunk 5 (2026-10-06), called by nothing.
 
 /**
  * The Abilities a permanent GAIN could actually move — those below the cap.

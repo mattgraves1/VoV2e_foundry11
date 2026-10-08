@@ -1,4 +1,4 @@
-import { ELIXIRS } from "../actor/chargen-data.js";
+import { isElixirItem } from "./consumable-effects.js";
 import { antidoteDieOf } from "./antidote.js";
 
 /**
@@ -78,11 +78,13 @@ export function barredIngestionTypes(actor)
  * table. Asking about Elixir-ness rather than about having a button means a
  * descriptive Elixir that later gains one is already covered.
  */
+// Whether an Item is an Elixir is the translator's answer since Effect Engine:
+// Consumables chunk 4 (RULED 2026-10-06, Matt): the same names, read from the
+// Elixirs' sentences rather than the roster.
 export function isIngestible(item)
 {
   if(item?.type !== "item") return false;
-  const name = item?.name ?? "";
-  return ELIXIRS.some(e => e.name === name) || !!antidoteDieOf(name);
+  return isElixirItem(item) || !!antidoteDieOf(item?.name ?? "");
 }
 
 /**

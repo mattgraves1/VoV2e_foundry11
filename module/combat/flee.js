@@ -49,6 +49,7 @@
  */
 import { isDroppable } from "../actor/dropped-container.js";
 import { stackSlotsOf, usedSlots, isCargo } from "../actor/item-slots.js";
+import { bodyRollMods } from "../effects/body.js";
 
 /**
  * Mutations whose book text names fleeing. Only the fleeing half of each
@@ -69,11 +70,12 @@ export function fleeTarget(actor)
  */
 export function fleeModifiers(actor)
 {
-  const names = (actor?.items ?? [])
-    .filter(i => i.type === "mutation")
-    .map(i => i.name);
-  const advSources = FLEE_ADV_MUTATIONS.filter(n => names.includes(n));
-  const disSources = FLEE_DIS_MUTATIONS.filter(n => names.includes(n));
+  // From the body's sentences since Mutations and Ancestry Rules chunk 2b
+  // (2026-10-05) - the two lists above stay as what they were; Stilt Legs
+  // joins by ruling C (9).
+  const mods = bodyRollMods(actor, "flee");
+  const advSources = mods.adv;
+  const disSources = mods.dis;
   return {
     advantage: advSources.length > 0,
     disadvantage: disSources.length > 0,

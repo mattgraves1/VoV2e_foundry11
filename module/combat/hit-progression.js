@@ -33,6 +33,9 @@ import { entriesOf, addEntry, updateEntry } from "../time/effect-board.js";
 import { setDeprived, isDeprived } from "../actor/deprived.js";
 import { hasAnyCreatureType } from "../item/attack-properties.js";
 import { suppressesDeath, suppressionMsg } from "./fatality.js";
+import { kill } from "../effects/deal.js";
+// Creature attack flags from their sentences (Effect Engine: Creatures chunk 2a).
+import { creatureAttackOf } from "../item/creature-effects.js";
 
 function post(actor, content)
 {
@@ -59,7 +62,7 @@ export function stageFor(stages, count)
  */
 export async function applyHitProgression(attacker, item, token, { applyAbilityDamage } = {})
 {
-  const spec = item?.flags?.vaarn?.hitProgression;
+  const spec = creatureAttackOf(item).hitProgression;
   const target = token?.actor;
   if (!spec?.stages?.length || !target) return;
   if (spec.targets?.length && !hasAnyCreatureType(target, spec.targets)) return;
@@ -102,7 +105,8 @@ export async function applyHitProgression(attacker, item, token, { applyAbilityD
     {
       await post(target, `${head} — lethal.`);
       const hp = Number(target.system?.health?.value ?? 0);
-      if (hp > 0) await target.sheet?._resolveHPChange(target, hp, 0, { toZero: true });
+      // The one kill route (Shared Pipelines chunk 4).
+      if (hp > 0) kill(target);
       return;
     }
     return post(target, suppressesDeath(target)

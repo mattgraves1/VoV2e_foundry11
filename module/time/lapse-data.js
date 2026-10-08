@@ -1,7 +1,7 @@
 /**
  * The book's upkeep lapses — foundry-system-index.csv "Upkeep Lapse Tracking".
  *
- * Four clauses where the book requires something on a recurring day and states
+ * The clauses where the book requires something on a recurring day and states
  * what happens after N consecutive days without it. Every `rule` below is the
  * book's own wording, quoted rather than summarised, and nothing here
  * interprets it.
@@ -35,10 +35,15 @@
  *   stretch only a Faa has; once the Referee switches Deprived on, the Deprived
  *   row counts on with its own fuse. Two spans, never the same one twice.
  *
- * THE FUSES DIFFER AND THAT IS THE POINT. Followers and Mercenaries desert at
- * three days; a Steed runs away at seven. Anything that collapsed these into
- * one "three days in a row" rule would be wrong about Steeds, which is why the
- * wording is carried per entry rather than generated from a template.
+ * The wording is carried per entry rather than generated from a template.
+ *
+ * UNFED COMPANIONS LEFT THIS FILE (Effect Engine: Shared Pipelines chunk 7,
+ * 2026-10-05). Followers, Mercenaries and Steeds had display-only rows here
+ * under the 2026-09-13 ruling above, but companion upkeep (companion-upkeep.js,
+ * 2026-09-19) has since counted their unfed days and handled desertion - three
+ * days for a follower or mercenary, seven for a pet or steed - so the two
+ * trackers disagreed. Companion upkeep is the one. An entry already running
+ * under one of the old keys keeps its name and ends when the Referee ends it.
  */
 
 export const LAPSES = [
@@ -62,30 +67,6 @@ export const LAPSES = [
     book: "Faa Nomad (Desert Metabolism)",
     atoms: ["Faa Nomad (Desert Metabolism)"]
   },
-  {
-    key: "follower-rations",
-    name: "Followers unfed",
-    rule: "Followers who are not fed for three days in a row will desert at the first opportunity.",
-    fuseDays: 3,
-    book: "Followers",
-    atoms: []
-  },
-  {
-    key: "mercenary-rations",
-    name: "Mercenaries unfed",
-    rule: "Mercenaries who are not fed for three days in a row will desert at the first opportunity.",
-    fuseDays: 3,
-    book: "Mercenaries",
-    atoms: []
-  },
-  {
-    key: "steed-rations",
-    name: "Steed unfed",
-    rule: "Steeds who are not fed for seven days will run away at the first chance they get.",
-    fuseDays: 7,
-    book: "Steeds",
-    atoms: []
-  }
 ];
 
 /** One lapse by key, or undefined. */

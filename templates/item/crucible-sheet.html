@@ -8,21 +8,25 @@
               <div class="resource">
                 <label class="resource-label">Slots</label>
                   <input type="text" name="system.slots" value="{{data.system.slots}}" data-dtype="Number"/>
+                  {{#if statNotes.slots}}<p class="resource-label-small stat-in-effect">{{statNotes.slots}}</p>{{/if}}
               </div>
               <div class="resource">
                 <label class="resource-label">{{valueLabel}}</label>
                   <input type="text" name="system.tradeValue" value="{{data.system.tradeValue}}" data-dtype="Number"/>
-                  {{#if conditionalValue}}
-                    <div class="conditional-trade-value">{{conditionalValue.value}} to {{conditionalValue.buyer}}</div>
-                  {{/if}}
+                  {{#if statNotes.tradeValue}}<p class="resource-label-small stat-in-effect">{{statNotes.tradeValue}}</p>{{/if}}
+                  {{#each buyerValues}}
+                    <div class="conditional-trade-value">{{this.value}} to {{this.buyer}}</div>
+                  {{/each}}
               </div>
             </div>
         </div>
+        {{> "systems/vaarn/templates/item/parts/usage-die.html"}}
     </header>
 
     {{!-- Sheet Tab Navigation --}}
     <nav class="sheet-tabs tabs" data-group="primary">
         <a class="item" data-tab="description">Description</a>
+        <a class="item" data-tab="effects">Effects</a>
         <a class="item" data-tab="recipes">Recipes</a>
     </nav>
 
@@ -54,5 +58,7 @@
             {{/each}}
             {{#if editable}}<button type="button" class="recipe-add"><i class="fas fa-plus"></i> Add recipe</button>{{/if}}
         </div>
+        {{!-- Effects Tab - GM Effect Builder (Effect Engine, ruled 2026-10-05) --}}
+        {{> "systems/vaarn/templates/item/parts/effects-tab.html"}}
     </section>
 </form>

@@ -25,12 +25,13 @@
 import { advance, currentTime, turnsElapsed, TIME_HOOK,
          SECONDS_PER_TURN, SECONDS_PER_HOUR, SECONDS_PER_DAY } from "./vaarn-time.js";
 import { pickRangeResult } from "../actor/rolltable-picker.js";
+import { encounterDisOf } from "../effects/body.js";
 import { applyExhaustion, clearExhaustion, exhaustionReadout,
          party as pcParty } from "../actor/exhaustion.js";
 import { suppressionMsg } from "../combat/fatality.js";
 import { inDarkness } from "./darkness.js";
 import { entriesOf } from "./effect-board.js";
-import { ELIXIRS } from "../actor/chargen-data.js";
+import { elixirSentencesByName } from "../item/consumable-effects.js";
 import { ADVANCED_EXOTICA } from "../actor/advanced-exotica-data.js";
 import { vaultCheckExtra, vaultExtra, partyLocation, vaultLevels, setPartyLocation, locationOptions, OTHER_VAULT,
          LOCATION_HOOK } from "../vault/vault-encounters.js";
@@ -155,16 +156,17 @@ export function encounterDisSources()
 {
   const party = game.actors.filter(a =>
     a.type === "character" && a.hasPlayerOwner);
-  const drunk = ELIXIRS.filter(e => e.encounterDis);
-  const held = ADVANCED_EXOTICA.filter(e => e.encounterDis);
   const out = [];
   for (const actor of party)
   {
-    const running = new Set(entriesOf(actor).map(en => en?.name));
-    for (const e of drunk)
-      if (running.has(e.name)) out.push({ actor: actor.name, reason: e.encounterDis, source: e.name });
-    for (const e of held)
-      if (actor.items.some(i => i.name === e.name)) out.push({ actor: actor.name, reason: e.encounterDis, source: e.name });
+    // A drunk elixir's DIS is its sentence since Effect Engine: Consumables
+    // chunk 2 (2026-10-06), read while its board entry runs.
+    for (const name of new Set(entriesOf(actor).map(en => en?.name).filter(Boolean)))
+      for (const s of elixirSentencesByName(name))
+        if (s.do?.verb === "dis" && s.do.on === "encounter") out.push({ actor: actor.name, reason: s.do.why, source: name });
+    // A carried Exotica's DIS (the Presence Drone) is its sentence since
+    // Implants, Exotica and Figments chunk 2 (2026-10-06).
+    for (const d of encounterDisOf(actor)) out.push({ actor: actor.name, reason: d.why, source: d.source });
   }
   return out;
 }

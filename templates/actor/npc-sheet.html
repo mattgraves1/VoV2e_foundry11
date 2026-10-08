@@ -143,6 +143,10 @@
                    title="Morale bonus (ML). The Save is d20 + ML, and it holds on 16 or more."/>
             <button type="button" class="knave-morale-button resource-label">Check</button>
           </div>
+          {{!-- Reaction Roll Button (2026-10-05): GM only, the result whispered to GMs. --}}
+          {{#if isGM}}
+          <button type="button" class="vaarn-reaction-button resource-label" title="Roll this creature's reaction to the PC doing the talking (d20 + their EGO). Only the Referee sees the result.">Reaction</button>
+          {{/if}}
           {{!-- Creatures whose book stat line is a RULE ("Never Flees", "-")
                 rather than a number. Bestiary entries arrive with this set;
                 it is editable so a hand-built NPC can say the same thing. --}}
@@ -255,10 +259,18 @@
                       {{#if (isGift item)}}
                       <div class="item-image gift-use" title="use"><img src="systems/vaarn/module/icons/d20.svg" title="use" width="24" height="24"/></div>
                       {{/if}}
+                      {{!-- GM Effect Builder chunk 1 (2026-10-05): a use effect a GM wrote on any Item but a Gift. --}}
+                      {{#if (hasEffectUse item)}}
+                      <div class="item-image effect-use" title="use an effect"><i class="fas fa-wand-sparkles"></i></div>
+                      {{/if}}
+                      {{!-- A usage die, the book's or a GM's Stats effect (Stats as Sentences chunk 2e-i, ruling D). --}}
+                      {{#if (hasUsageDie item)}}
+                      <div class="item-image usage-die-roll" title="use"><img src="systems/vaarn/module/icons/d20.svg" title="use" width="24" height="24"/></div>
+                      {{/if}}
                       {{#if (isCodex item)}}
                       <div class="item-image codex-read" title="read"><img src="systems/vaarn/module/icons/d20.svg" title="read" width="24" height="24"/></div>
                       {{/if}}
-                      {{#if item.flags.vaarn.usable}}
+                      {{#if (creatureFlag item "usable")}}
                       <div class="item-image usable-use" title="use"><img src="systems/vaarn/module/icons/d20.svg" title="use" width="24" height="24"/></div>
                       {{/if}}
                       <h4 class="item-control item-view {{#if (isItemBroken item)}}knave-encumbered{{/if}}">{{#if (isHiddenExotica item)}}{{displayName item}}{{else}}{{item.name}}{{#if (isUnidentified item)}} (unidentified){{/if}}{{/if}}</h4>
@@ -325,13 +337,13 @@
                           {{!-- Actor Spawning (2026-09-25): a one-off spawn beside the creature
                                 (the Legionary's flare, Clone Cough), and the Banisher's summon
                                 from a chosen depth. GM-only. --}}
-                          {{#if @root.isGM}}{{#if item.flags.vaarn.spawnNow}}
-                          <a class="item-control item-spawn-now" title="Spawn {{item.flags.vaarn.spawnNow.dice}} {{item.flags.vaarn.spawnNow.creature}} beside it"><i class="fas fa-people-group"></i></a>
-                          {{/if}}{{#if item.flags.vaarn.summonFromDepth}}
+                          {{#if @root.isGM}}{{#if (creatureFlag item "spawnNow")}}
+                          <a class="item-control item-spawn-now" title="Spawn {{lookup (creatureFlag item "spawnNow") "dice"}} {{lookup (creatureFlag item "spawnNow") "creature"}} beside it"><i class="fas fa-people-group"></i></a>
+                          {{/if}}{{#if (creatureFlag item "summonFromDepth")}}
                           <a class="item-control item-summon-depth" title="Roll this floor's encounter list and summon the creature beside it"><i class="fas fa-dungeon"></i></a>
-                          {{/if}}{{#if item.flags.vaarn.cloneSelf}}
-                          <a class="item-control item-clone-self" title="Place {{item.flags.vaarn.cloneSelf.dice}} copies of this creature beside it"><i class="fas fa-clone"></i></a>
-                          {{/if}}{{#if item.flags.vaarn.summonFromLocation}}
+                          {{/if}}{{#if (creatureFlag item "cloneSelf")}}
+                          <a class="item-control item-clone-self" title="Place {{lookup (creatureFlag item "cloneSelf") "dice"}} copies of this creature beside it"><i class="fas fa-clone"></i></a>
+                          {{/if}}{{#if (creatureFlag item "summonFromLocation")}}
                           <a class="item-control item-summon-location" title="Roll the party's encounter table (the Exploration Clock's vault level or region section) and summon the creature beside it"><i class="fas fa-map-location-dot"></i></a>
                           {{/if}}{{/if}}
                           {{!-- Cut an implant out as a capsule for the Dropped Items (Item
@@ -346,8 +358,8 @@
                           {{/each}}
                           {{!-- A declared AV STEP - the Gravity Tyrant's Accretion, "+1 AV" per
                                 item taken (Multi-Target wiring, 2026-09-25). GM-only. --}}
-                          {{#if @root.isGM}}{{#if item.flags.vaarn.avStep}}
-                          <a class="item-control item-av-step" data-step="{{item.flags.vaarn.avStep}}" title="Add {{item.flags.vaarn.avStep}} to AV">+{{item.flags.vaarn.avStep}} AV</a>
+                          {{#if @root.isGM}}{{#if (creatureFlag item "avStep")}}
+                          <a class="item-control item-av-step" data-step="{{creatureFlag item "avStep"}}" title="Add {{creatureFlag item "avStep"}} to AV">+{{creatureFlag item "avStep"}} AV</a>
                           {{/if}}{{/if}}
                           {{#if (hasLevelDrain item)}}
                           <a class="item-control item-level-drain" title="Drain a Level from the targeted character"><i class="fas fa-hourglass-end"></i></a>

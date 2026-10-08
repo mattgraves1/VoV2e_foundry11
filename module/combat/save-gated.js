@@ -59,10 +59,15 @@
  */
 
 import { resolveSave, SAVE_TARGET } from "./saves.js";
-import { afflictionByKey } from "../actor/affliction-data.js";
-import { ADVANCED_EXOTICA } from "../actor/advanced-exotica-data.js";
-import { SPARK_TABLES } from "../actor/chargen-data.js";
+import { sentencesOf } from "../effects/interpret.js";
+// The Exotica translators register when this loads (Implants, Exotica and Figments).
+import "../item/implant-exotica-effects.js";
+// The affliction translator too (Wounds and Afflictions chunk 3): the Usurper Arm's spec is its sentence.
+import "../item/affliction-effects.js";
 import { spawnNamedCreature } from "../actor/bestiary-spawn.js";
+import { addEntry } from "../time/effect-board.js";
+// A creature's own flags from its actor-level sentences (Effect Engine: Creatures chunk 2d).
+import { creatureActorFlagsOf } from "../item/creature-effects.js";
 
 /** The actor flag holding every live save-gated result, keyed by entry. */
 export const FLAG = "saveGated";
@@ -82,9 +87,9 @@ export function slugKey(raw)
  *
  * Afflictions carry `afflictionKey` on the Item, so they are looked up by key
  * and survive a rename — Display Name Distinct from Lookup Key's whole point.
- * Exotica have no key field in template.json, so they are name-keyed, the same
- * way EXOTICA_WITH_USE_ICON already is. That is a known limitation of that
- * roster and not a choice made here.
+ * An Exotica's spec is its save-gated use sentence's (Effect Engine: Implants,
+ * Exotica and Figments chunk 5, RULED 2026-10-06, Matt) - the translator still
+ * finds the sentence by the Item's name, which is that roster's known limitation.
  */
 export function saveGatedSpecFor(item)
 {
@@ -93,27 +98,31 @@ export function saveGatedSpecFor(item)
   const afflictionKey = item.system?.afflictionKey;
   if(afflictionKey)
   {
-    const entry = afflictionByKey(afflictionKey);
-    if(entry?.saveGated) return { key: slugKey(afflictionKey), spec: entry.saveGated };
-    return null;
+    // Its save-gated sentence since Effect Engine: Wounds and Afflictions chunk 3
+    // (2026-10-06), through the affliction translator.
+    const s = sentencesOf(item).find(x => x.do?.verb === "special" && x.do.handler === "save-gated");
+    if(!s) return null;
+    const { verb, handler, ...spec } = s.do;
+    return { key: slugKey(afflictionKey), spec };
   }
 
   // An armour-shaped Exotica is still an Exotica entry: the Mirror Shield is a
   // real shield since 2026-09-25 and keeps its reflect save.
   if(item.type === "exotica" || (item.type === "armor" && item.flags?.vaarn?.exotica))
   {
-    const entry = ADVANCED_EXOTICA.find(e => e.name === item.name);
-    if(entry?.saveGated) return { key: slugKey(item.name), spec: entry.saveGated };
+    const s = sentencesOf(item).find(x => x.do?.verb === "special" && x.do.handler === "save-gated");
+    if(s) { const { verb, handler, ...spec } = s.do; return { key: slugKey(item.name), spec }; }
   }
 
   // A Neobloom's Bloomboon, keyed by its rolled variant - Mirrored Leaves,
   // Mirror Shield's rule grown as leaves (RULED 2026-09-22, Matt). Reached
   // from the ancestry Item's own use control, so the template does not draw a
   // second one for it.
+  // Its save-gated sentence since Effect Engine: Consumables chunk 2 (2026-10-06).
   if(item.type === "ancestry" && item.system?.rule === "Bloomboons")
   {
-    const boon = (SPARK_TABLES["Neobloom"]?.bloomboon_table ?? []).find(b => b.name === item.system?.variant);
-    if(boon?.saveGated) return { key: slugKey(boon.name), spec: boon.saveGated };
+    const s = sentencesOf(item).find(x => x.do?.verb === "special" && x.do.handler === "save-gated");
+    if(s) { const { verb, handler, ...spec } = s.do; return { key: slugKey(item.system.variant), spec }; }
   }
 
   return null;
@@ -201,7 +210,7 @@ export async function applySaveGated(actor, item, verdict)
     // Bound to the Host (RULED 2026-09-24, Matt): a limb whose misses hurt its
     // host has to know whose limb it is. Recorded here, where the host is
     // known, and only on a creature whose rule needs it.
-    else if(report.spawned.getFlag?.("vaarn", "boundToHost"))
+    else if(creatureActorFlagsOf(report.spawned).boundToHost)
       await report.spawned.setFlag("vaarn", "hostActorId", actor.id);
   }
 
@@ -215,6 +224,14 @@ export async function applySaveGated(actor, item, verdict)
   const state = { ...saveGatedState(actor) };
   state[key] = { combatId: game.combat?.id ?? null, passed: verdict.passed, handsBonus };
   await actor.setFlag("vaarn", FLAG, state);
+  // A BORROWED HAND IS ON THE BOARD (Shared Pipelines chunk 6, RULED A and B
+  // 2026-10-05): the entry ends with the combat, clears this key's record and
+  // posts the over-capacity card first - by any path, a hand removal included.
+  // A failure records no hand and gets no entry; its record only gates the
+  // once-per-combat refusal, and the combat-end sweep clears it.
+  if(handsBonus > 0)
+    await addEntry(actor, { name: `${item.name}: +${handsBonus} hand${handsBonus === 1 ? "" : "s"}`, text: branch?.text ?? "",
+      note: `from ${item.name}`, endsWithCombat: true, clearFlag: `vaarn.${FLAG}.${key}`, lapseHands: handsBonus });
 
   report.content = `<b>${item.name}</b> — ${verdict.passed ? "success" : "failure"}. ${branch?.text ?? ""}`;
   return report;
@@ -252,11 +269,13 @@ export function handsGrantedBy(actor)
  * to lose. `hands.max` as read here already includes the grant — actor.js adds
  * it every render — so the post-combat maximum is that number minus the grant.
  */
-export function handsLapseCard(actor)
+export function handsLapseCard(actor, lost = handsGrantedBy(actor))
 {
   if(actor?.type !== "character") return null;
 
-  const granted = handsGrantedBy(actor);
+  // `lost`: the hands going now - one board entry's (chunk 6), or every
+  // grant at once for the legacy combat-end sweep.
+  const granted = Number(lost) || 0;
   if(!granted) return null;
 
   const used = Number(actor.system?.hands?.used ?? 0);

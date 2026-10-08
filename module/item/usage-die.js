@@ -15,6 +15,8 @@
  * refill, or jump straight to the item's own `max` for a full one.
  */
 
+import { itemForbids } from "./weapon-tags.js";
+import { usageDieOf } from "../effects/item-stats.js";
 export const USAGE_DIE_CHAIN = ["d20", "d12", "d10", "d8", "d6", "d4"];
 
 function dieSize(die)
@@ -73,7 +75,8 @@ export function upgradeDie(die, steps = 1, ceiling = "d20")
  */
 export async function rollUsageDie(item, actor)
 {
-  const die = item.system.usageDie?.die;
+  // The current die, which a die sized by a sentence starts at full (Stats as Sentences chunk 2a).
+  const die = usageDieOf(item).die;
   if(!die || die === "expended") return null;
 
   const roll = new Roll(`1${die}`);
@@ -124,7 +127,13 @@ export async function resolveCombatUsageDice(combat)
     {
       if(item.getFlag(COMBAT_FLAG_SCOPE, COMBAT_FLAG_KEY) !== combat.id) continue;
 
-      await rollUsageDie(item, actor);
+      // A weapon that never needs reloading - Parasitic, Effect Engine: Weapon
+      // Tags chunk 5c (Matt, 2026-10-05) - is not rolled down.
+      if(itemForbids(item, "deplete-ammo"))
+        await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }),
+          content: `<b>${item.name}</b> needs no reloading — its ammo die is not rolled after the fight.` });
+      else
+        await rollUsageDie(item, actor);
       await item.unsetFlag(COMBAT_FLAG_SCOPE, COMBAT_FLAG_KEY);
     }
   }

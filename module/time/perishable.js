@@ -13,6 +13,7 @@
  * SPOILED SHOWS IN THE NAME ("Medicinal Fruit (spoiled)") so a player sees it
  * on the sheet and on any card that names it, not only in a flag.
  */
+import { remainingItemFlagsOf } from "../item/remaining-effects.js";
 
 const SCOPE = "vaarn";
 export const PERISHABLE_FLAG = "perishable";
@@ -20,13 +21,13 @@ export const PERISHABLE_FLAG = "perishable";
 /** Whether this Item spoils. */
 export function isPerishable(item)
 {
-  return !!item?.flags?.[SCOPE]?.[PERISHABLE_FLAG];
+  return !!remainingItemFlagsOf(item)[PERISHABLE_FLAG];
 }
 
 /** Whether this Item has spoiled. */
 export function isSpoiled(item)
 {
-  return !!item?.flags?.[SCOPE]?.[PERISHABLE_FLAG]?.spoiled;
+  return !!remainingItemFlagsOf(item)[PERISHABLE_FLAG]?.spoiled;
 }
 
 /**

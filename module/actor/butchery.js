@@ -43,6 +43,8 @@
 
 import { RAW_MEAT, FRESH_BLOOD, THIRD_OF_A_SLOT } from "./rest.js";
 import { findContainer, ensureContainer } from "./dropped-container.js";
+// A creature's own flags from its actor-level sentences (Effect Engine: Creatures chunk 2d).
+import { creatureActorFlagsOf } from "../item/creature-effects.js";
 
 /** Flag scope and key marking a body already processed. */
 export const BUTCHERY_SCOPE = "vaarn";
@@ -73,7 +75,7 @@ export function rationYield(actor)
  */
 export function carcassOf(actor)
 {
-  const c = actor?.flags?.vaarn?.carcass;
+  const c = creatureActorFlagsOf(actor).carcass;
   return (c?.yields === "nothing" || c?.yields === "blood") ? { yields: c.yields, why: c.why ?? "" } : { yields: "any", why: "" };
 }
 

@@ -86,6 +86,44 @@
 
 import { entriesOf, hasExpired } from "./effect-board.js";
 import { immunityTo, conditionAv } from "../actor/condition-data.js";
+import { maxHpChange } from "../effects/max-hp.js";
+import { heldConditionsOf } from "../item/wound-affliction-effects.js";
+import { sentencesOf } from "../effects/interpret.js";
+
+/*
+ * AN AFFLICTION'S HELD AV AND CONDITIONS ARE ITS SENTENCES - Effect Engine:
+ * Wounds and Afflictions chunk 3 (RULED 2026-10-06, Matt, option 1). The
+ * affliction Item is the affliction: its AV reaches the actor through
+ * passiveAvOf like any Item's, its conditions through the item loop below. A
+ * creature that caught one has no Item, only the board entry, so the entry
+ * reads the book's sentences by its afflictionKey - and only when no Item
+ * carries that key, or a PC would count both. The entry's stored applied.av
+ * and applied.conditions (every entry written before chunk 3) are IGNORED,
+ * old and new alike, so nothing counts twice and nothing is migrated; what
+ * else applied holds (a manual effect's rolled abilities) is still read.
+ */
+const heldOf = list => list.filter(s => s.when?.trigger === "passive");
+const afflictionConditions = list => heldOf(list)
+  .filter(s => s.do?.verb === "special" && s.do.handler === "stateful").flatMap(s => s.do.conditions ?? []);
+
+/** The conditions an affliction Item holds, from its sentences; none for any other Item. */
+function afflictionItemConditions(item)
+{
+  return item?.system?.afflictionKey ? afflictionConditions(sentencesOf(item)) : [];
+}
+
+/** A board entry's applied payload as it is read - an affliction's AV and conditions from its sentences. */
+function appliedOf(actor, entry)
+{
+  if (entry?.kind !== "affliction" || !entry.afflictionKey) return entry?.applied ?? null;
+  const { av, conditions, ...rest } = entry.applied ?? {};
+  if ((actor?.items ?? []).some(i => i?.system?.afflictionKey === entry.afflictionKey)) return rest;
+  const list = sentencesOf({ type: "affliction", system: { afflictionKey: entry.afflictionKey } });
+  const held = heldOf(list).filter(s => s.do?.verb === "modify" && s.do.stat === "av")
+    .reduce((n, s) => n + (Number(String(s.do.amount).replace(/^\+/, "")) || 0), 0);
+  const conds = afflictionConditions(list);
+  return { ...rest, ...(held ? { av: held } : {}), ...(conds.length ? { conditions: conds } : {}) };
+}
 
 /** The ability keys a delta may name. Anything else is ignored. */
 const ABILITY_KEYS = ["str", "dex", "con", "int", "psy", "ego"];
@@ -147,6 +185,10 @@ export function resolveDeltas(actor, spec)
     if (key === "maxHp")
     {
       out.maxHp += Number(actor?.system?.health?.max ?? 0);
+      // WHICH OPERATION, beside the addend (Shared Pipelines chunk 5, RULED
+      // 2026-10-05): x2 max is x2 current, so activation has to know this
+      // addend is a doubling. Reversal still reads only the addend.
+      out.maxHpTimes = 2;
       continue;
     }
     if (!ABILITY_KEYS.includes(key)) continue;
@@ -198,7 +240,7 @@ export function activeDeltas(actor)
 
   for (const entry of entriesOf(actor))
   {
-    const applied = entry?.applied;
+    const applied = appliedOf(actor, entry);
     if (!applied) continue;
     if (hasExpired(entry, { now, round })) continue;
 
@@ -238,8 +280,12 @@ export function activeDeltas(actor)
   // onto the wound Item's flag, and it is read here so the same readers see
   // it. Permanent by construction - it ends when the wound Item goes - and
   // immunity applies exactly as for a board entry.
+  // A table wound's held condition is its sentence since Effect Engine: Wounds
+  // and Afflictions chunk 2a (2026-10-06); the flag is still read for an Item
+  // that carries one (a named wound, until Effect Engine: Creatures).
+  // An affliction Item's since chunk 3.
   for (const item of actor?.items ?? [])
-    for (const c of item?.flags?.vaarn?.conditions ?? [])
+    for (const c of [...heldConditionsOf(item), ...afflictionItemConditions(item)])
       if (!out.conditions.includes(c) && !immunityTo(actor, c)) out.conditions.push(c);
 
   // A named Combat Condition contributes its AV FROM THE DEFINITION, not
@@ -293,15 +339,12 @@ export function entriesEndedByDamage(actor, props)
 }
 
 /**
- * The activation write: raise max HP by the delta, and current HP with it.
- *
- * Current rises in the SAME PROPORTION the maximum did, so a doubling doubles
- * it and a smaller boost does not overshoot. Growth Serum is the only entry
- * that currently exercises this, and for it the proportion is exactly 2.
- *
- * A character at or below 0 HP is bleeding out, not growing: their maximum
- * still rises, but nothing is added to a current HP the wound table has
- * already resolved, because scaling a negative would deepen it.
+ * The activation write: raise max HP by the delta, and current HP with it,
+ * through the max HP verb (effects/max-hp.js, Shared Pipelines chunk 5, RULED
+ * 2026-10-05). A doubling (Growth Serum, maxHpTimes 2) doubles current; a flat
+ * +N adds N - before chunk 5 every elixir gain scaled current proportionally.
+ * A character at or below 0 HP keeps their current HP while max doubles
+ * (RULED A: a max gain never lowers current).
  *
  * Returns `{ maxAdded, hpAdded }` for the activation line in chat.
  */
@@ -315,13 +358,14 @@ export async function applyActivationHp(actor, applied)
   const current = Number(actor.system?.health?.value ?? 0);
   if (!(oldMax > 0)) return { maxAdded: 0, hpAdded: 0 };
 
-  const hpAdded = current > 0 ? Math.round(current * (gain / oldMax)) : 0;
-
-  await actor.update({
-    "system.health.max":   oldMax + gain,
-    "system.health.value": current + hpAdded
-  });
-  return { maxAdded: gain, hpAdded };
+  // The doubling was resolved from this same max a moment ago, so the addend
+  // equals it; anything else is treated as the flat addend it is.
+  const times = Number(applied?.maxHpTimes ?? 0);
+  const change = times && gain === oldMax * (times - 1)
+    ? maxHpChange(actor, { times })
+    : maxHpChange(actor, { add: gain });
+  await actor.update(change);
+  return { maxAdded: change["system.health.max"] - oldMax, hpAdded: change["system.health.value"] - current };
 }
 
 /**
@@ -349,30 +393,22 @@ export async function reverseExpiryHp(actor, applied)
   const granted = Number(applied?.maxHp ?? 0);
   if (actor?.type !== "character") return null;
 
-  // A REDUCTION GIVES BACK the max HP it took (Bifurcating Brew, 2026-09-18),
-  // and current HP is left alone - the same "otherwise unchanged" rule as the
-  // doubling below. The split's HP loss is not undone by the expiry; the
-  // table settles what the two halves went through.
+  // A REDUCTION GIVES BACK the max HP it took (Bifurcating Brew), and current
+  // rises by the same amount - the max HP verb's gain (RULED B, 2026-10-05,
+  // superseding 2026-09-18's "current HP is left alone" for the expiry).
   if (granted < 0)
   {
-    const restoredMax = Number(actor.system?.health?.max ?? 0) - granted;
-    await actor.update({ "system.health.max": restoredMax });
-    return { max: restoredMax, value: Number(actor.system?.health?.value ?? 0) };
+    const change = maxHpChange(actor, { add: -granted });
+    await actor.update(change);
+    return { max: change["system.health.max"], value: change["system.health.value"] };
   }
   if (!(granted > 0)) return null;
 
-  const oldMax = Number(actor.system?.health?.max ?? 0);
-  const restoredMax = Math.max(1, oldMax - granted);
-
-  const current = Number(actor.system?.health?.value ?? 0);
-  // Never raises HP, and never touches a character at or below 0.
-  const restoredValue = current > restoredMax ? restoredMax : current;
-
-  const update = { "system.health.max": restoredMax };
-  if (restoredValue !== current) update["system.health.value"] = restoredValue;
-
-  await actor.update(update);
-  return { max: restoredMax, value: restoredValue };
+  // The max HP verb's loss, floored at 1 so an expiry cannot kill: current is
+  // clamped to the new max, never raised, and left alone at or below 0.
+  const change = maxHpChange(actor, { add: -granted, floor: 1 });
+  await actor.update(change);
+  return { max: change["system.health.max"], value: change["system.health.value"] };
 }
 
 /**
@@ -414,9 +450,9 @@ export const DIS_SAVES = "disSaves";
 export function conditionSourceNames(actor, key)
 {
   if (!hasCondition(actor, key)) return [];
-  const names = entriesOf(actor).filter(e => (e?.applied?.conditions ?? []).includes(key)).map(e => e.name);
+  const names = entriesOf(actor).filter(e => (appliedOf(actor, e)?.conditions ?? []).includes(key)).map(e => e.name);
   for (const item of actor?.items ?? [])
-    if ((item?.flags?.vaarn?.conditions ?? []).includes(key)) names.push(item.name);
+    if ([...heldConditionsOf(item), ...afflictionItemConditions(item)].includes(key)) names.push(item.name);
   return [...new Set(names.length ? names : ["an effect on you"])];
 }
 

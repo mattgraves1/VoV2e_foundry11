@@ -20,6 +20,9 @@
  */
 import { MELEE_WEAPONS, RANGED_WEAPONS, ARMOUR_TABLE, IMPLANTS } from "../actor/chargen-data.js";
 import { ADVANCED_IMPLANTS } from "../actor/advanced-implants-data.js";
+// A creature's own flags from its actor-level sentences (Effect Engine: Creatures chunk 2d).
+import { creatureActorFlagsOf } from "./creature-effects.js";
+import { armourSlotOf, statOf } from "../effects/item-stats.js";
 
 // --- Weapons: metal by base, cleared by a tag -------------------------------
 export const NOT_METAL_WEAPON_BASES = new Set(["Whip", "Club", "Sling", "Longbow", "Spore Thrower"]);
@@ -169,7 +172,8 @@ export function metalDefault(data)
 export function isMetalItem(item)
 {
   if (!item || item.type === "implant") return false;
-  return !!item.system?.metal;
+  // Through the sentences since Stats as Sentences chunk 2c (RULED 2026-10-07).
+  return !!statOf(item, "metal");
 }
 
 /**
@@ -179,10 +183,10 @@ export function isMetalItem(item)
 export function wearsMetalArmour(actor)
 {
   if (!actor) return false;
-  if (actor.flags?.vaarn?.metalArmour) return true;
+  if (creatureActorFlagsOf(actor).metalArmour) return true;
   for (const i of actor.items ?? [])
   {
-    if (i.type === "armor" && (i.system?.armorSlot ?? "body") === "body" && i.system?.equipped && i.system?.metal) return true;
+    if (i.type === "armor" && armourSlotOf(i) === "body" && i.system?.equipped && statOf(i, "metal")) return true;
     if (i.type === "implant" && METAL_ARMOUR_IMPLANTS.has(i.name)) return true;
   }
   return false;

@@ -1,3 +1,6 @@
+// Creature flags from their sentences (Effect Engine: Creatures chunk 2c-i).
+import { creatureFlagsOf } from "../item/creature-effects.js";
+import { remainingActorFlagsOf } from "../item/remaining-effects.js";
 /**
  * Vaarn Bestiary spawn/clone helper — work-queue.txt item 1 Phase 3's
  * shared building block. Everything else in Phase 3 (NPC Generator,
@@ -239,7 +242,7 @@ export async function spawnInPlace(actor, name)
  */
 export function splitRuleOf(actor)
 {
-  return actor?.items?.find?.(i => i.flags?.vaarn?.splitOnDamage) ?? null;
+  return actor?.items?.find?.(i => creatureFlagsOf(i).splitOnDamage) ?? null;
 }
 
 /**
@@ -251,7 +254,7 @@ export function splitRuleOf(actor)
 export async function offerSplit(actor, causes, hpAfter)
 {
   const rule = splitRuleOf(actor);
-  const spec = rule?.flags?.vaarn?.splitOnDamage;
+  const spec = creatureFlagsOf(rule).splitOnDamage;
   if(!spec) return null;
   if((spec.unlessTypes ?? []).some(t => causes.includes(t))) return null;
   const what = spec.halfLevel
@@ -274,7 +277,7 @@ export async function offerSplit(actor, causes, hpAfter)
  */
 export async function performSplit(actor, causes, hpAfter)
 {
-  const spec = splitRuleOf(actor)?.flags?.vaarn?.splitOnDamage;
+  const spec = creatureFlagsOf(splitRuleOf(actor)).splitOnDamage;
   if(!spec) return null;
   const { computeHP } = await import("./hp-by-level.js");
   const data = actor.toObject();
@@ -293,7 +296,7 @@ export async function performSplit(actor, causes, hpAfter)
   else foundry.utils.setProperty(data, "system.health.value", Number(hpAfter));
   if(spec.immuneToCause)
   {
-    const had = actor.flags?.vaarn?.immuneTo ?? [];
+    const had = remainingActorFlagsOf(actor).immuneTo ?? [];
     foundry.utils.setProperty(data, "flags.vaarn.immuneTo", [...new Set([...had, ...causes])]);
     foundry.utils.setProperty(data, "flags.vaarn.immuneToRule", splitRuleOf(actor).name);
   }
@@ -334,7 +337,7 @@ export async function cloneSelfBeside(actor, count, { hp = null, dropItemId = nu
     data.name = prefix + (start + i + 1);
     // Every Item that makes copies goes, not only the one used: a clone cannot clone (Group 511
     // found a Daemon carrying two, one rolled and one added).
-    data.items = (data.items ?? []).filter(it => it._id !== dropItemId && !it.flags?.vaarn?.cloneSelf);
+    data.items = (data.items ?? []).filter(it => it._id !== dropItemId && !creatureFlagsOf(it).cloneSelf);
     if(hp != null)
     {
       foundry.utils.setProperty(data, "system.health.value", Number(hp));
@@ -361,9 +364,9 @@ export async function cloneSelfBeside(actor, count, { hp = null, dropItemId = nu
  */
 export async function announceWithering()
 {
-  const due = (game.actors ?? []).filter(a => a.getFlag?.("vaarn", "withersAtDayStart"));
+  const due = (game.actors ?? []).filter(a => remainingActorFlagsOf(a).withersAtDayStart);
   if(!due.length) return [];
-  const lines = due.map(a => { const w = a.getFlag("vaarn", "withersAtDayStart"); return `<li>${a.name} (${w.grower}'s ${w.boon})</li>`; });
+  const lines = due.map(a => { const w = remainingActorFlagsOf(a).withersAtDayStart; return `<li>${a.name} (${w.grower}'s ${w.boon})</li>`; });
   await ChatMessage.create({ whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
     content: `<p><b>Withered overnight</b> - remove them from the table:</p><ul>${lines.join("")}</ul>` });
   for(const a of due) await a.unsetFlag("vaarn", "withersAtDayStart");

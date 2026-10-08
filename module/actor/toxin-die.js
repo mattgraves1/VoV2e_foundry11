@@ -30,6 +30,9 @@
 
 import { USAGE_DIE_CHAIN } from "../item/usage-die.js";
 import { resolveSave } from "../combat/saves.js";
+import { bodyRollMods, bodyImmunities } from "../effects/body.js";
+// A creature's own flags from its actor-level sentences (Effect Engine: Creatures chunk 2d).
+import { creatureActorFlagsOf } from "../item/creature-effects.js";
 
 /**
  * Vaarn has ONE dice chain, and two subsystems ride on it: the Usage Die
@@ -135,25 +138,26 @@ export function toxinModifiers(actor)
   if(actor?.system?.creatureTypes?.mineral) immune.push("Mineral");
   // A generated creature's rolled Special Defense - Immune to Toxins or ADV vs
   // Toxins, written by monster-generator.js (RULED 2026-09-26, Matt).
-  const rolled = actor?.flags?.vaarn?.toxinDefense;
+  const rolled = creatureActorFlagsOf(actor).toxinDefense;
   if(rolled === "immune") immune.push(actor.flags.vaarn.toxinDefenseName ?? "Immune to Toxins");
   if(rolled === "adv") advantage.push(actor.flags.vaarn.toxinDefenseName ?? "ADV vs Toxins");
+  // The body's immunity to poisons - Moonbeast Carapace, worn (Implants,
+  // Exotica and Figments ruling C 3, 2026-10-06).
+  for(const p of bodyImmunities(actor, "tox")) immune.push(p.source);
 
-  if(has("mutation", "Extra Liver")) advantage.push("Extra Liver");
+  // The body's ADV on saves vs tox since Mutations and Ancestry Rules chunk 2b
+  // (2026-10-05): Extra Liver, Heightened Immune System, a Mycomorph's
+  // Detritivore (an Item, or the ancestry text - ruling B).
+  advantage.push(...bodyRollMods(actor, "save", "tox").adv);
   // Cyberliver was an immunity through CRIMSON HOUND ("You are immune to all
   // TOX damage"). JADE IBIS 15-09-26 rewrote it to "ADV on Saves against TOX
   // damage and poisons", converging it on Extra Liver - applied 2026-09-16 on
   // Jade Ibis Rule-Resolution Changes, RULED by Matt.
-  if(has("implant", "Cyberliver")) advantage.push("Cyberliver");
+  // Cyberliver's ADV is its sentence since Implants, Exotica and Figments
+  // chunk 2 (2026-10-06), read with the body's by bodyRollMods above.
   // "ADV on Saves vs diseases and poisons". RULED 2026-09-16 (Matt): poisons
   // means the TOX save, on Extra Liver's precedent, where "poisons and TOX
   // attacks" is one resolver. The diseases half is afflictionSaveModifiers.
-  if(has("mutation", "Heightened Immune System")) advantage.push("Heightened Immune System");
-
-  // Detritivore is universal to Mycomorphs, so the ancestry is the signal. It
-  // is ALSO filed to become a clickable ancestry Item; that row is about
-  // surfacing the rule, and this does not wait on it.
-  if(actor?.system?.ancestry === "Mycomorph") advantage.push("Detritivore");
 
   // Hazard Wrap must be WORN to help (Matt, 2026-09-07). Read off a structured
   // field rather than the item's description prose: the rule reaches the

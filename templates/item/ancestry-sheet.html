@@ -17,11 +17,13 @@
                 <input type="text" name="system.variant" value="{{data.system.variant}}" placeholder="Toxic Spores"/>
             </div>
         </div>
+        {{> "systems/vaarn/templates/item/parts/usage-die.html"}}
     </header>
 
     {{!-- Sheet Tab Navigation --}}
     <nav class="sheet-tabs tabs" data-group="primary">
         <a class="item" data-tab="description">Description</a>
+        <a class="item" data-tab="effects">Effects</a>
     </nav>
 
     {{!-- Sheet Body --}}
@@ -30,5 +32,7 @@
         <div class="tab" data-group="primary" data-tab="description">
             {{editor content=data.system.description target="system.description" button=true owner=owner editable=editable}}
         </div>
+        {{!-- Effects Tab - GM Effect Builder (Effect Engine, ruled 2026-10-05) --}}
+        {{> "systems/vaarn/templates/item/parts/effects-tab.html"}}
     </section>
 </form>

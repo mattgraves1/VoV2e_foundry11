@@ -157,43 +157,9 @@ export function slotsWithQuality(baseSlots, quality)
 }
 
 
-/**
- * The GM-only readout: what was rolled, and what it does to this Item.
- *
- * Returns null for an Item with no quality, so the sheet block disappears
- * entirely rather than rendering an empty heading.
- *
- * EVERY LINE SAYS WHETHER IT WAS APPLIED. A Referee reading "x3 trade value"
- * cannot otherwise tell whether the field beside it already includes it, and
- * that is the single most likely way to mis-price a good at the table.
+/*
+ * The GM-only quality readout lives in effects/item-stats.js (qualityReadout)
+ * since Stats as Sentences chunk 2c (RULED 2026-10-07): its numbers are the
+ * quality's sentences, which this file cannot import - remaining-effects-data.js
+ * builds them from TRADE_GOOD_QUALITIES above.
  */
-export function qualityReadout(item)
-{
-  const q = qualityOf(item);
-  if(!q) return null;
-
-  const baseValue = Number(item?.system?.tradeValue);
-  const value = Number.isFinite(baseValue) ? baseValue : 1;
-  const lines = [];
-
-  if(q.value !== undefined && !q.buyer)
-    lines.push(`Trade value x${q.value} — worth ${Math.round(value * q.value * 100) / 100}`
-             + `, not the ${value} shown. NOT applied to the field: the player reads the base.`);
-
-  if(q.buyer)
-    lines.push(`Trade value x${q.value} to ${q.buyer} only — worth `
-             + `${Math.round(value * q.value * 100) / 100} to them, ${value} to anyone else. NOT applied.`);
-
-  if(q.slot)
-    lines.push(`Slot weight x${q.slot} — already applied to Slots, which is the cost `
-             + `of ONE unit.`);
-
-  if(q.effect && !lines.length)
-    lines.push(`${q.effect} — nothing on this sheet changes; resolve it at the table.`);
-
-  if(!q.effect)
-    lines.push(`The table prints this one with no stated effect. It still matters: a settlement `
-             + `may prize or despise any quality.`);
-
-  return { name: q.name, effect: q.effect, lines };
-}

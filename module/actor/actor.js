@@ -1,4 +1,6 @@
 import { MUTATION_TABLE } from "./mutation-data.js";
+// The leftover flags from their sentences (Remaining Sources chunk 2d, 2026-10-07).
+import { remainingItemFlagsOf } from "../item/remaining-effects.js";
 import { IMPLANTS } from "./chargen-data.js";
 import { ADVANCED_IMPLANTS } from "./advanced-implants-data.js";
 import { findFigment } from "./figments.js";
@@ -6,10 +8,16 @@ import { activeDeltas } from "../time/stateful-effect.js";
 import { slotCostOf, stackSlotsOf, usedSlots, cargoCapacityOf, isCargo } from "./item-slots.js";
 import { isSuppressed, suppressionDeltas } from "../item/suppression.js";
 import { handsGrantedBy } from "../combat/save-gated.js";
+import { statOf, armourSlotOf } from "../effects/item-stats.js";
 import { entriesOf, hasExpired } from "../time/effect-board.js";
 import { grownPartMalus, grownPartAv } from "./bloomboon-growth.js";
 import { RECURRENCES } from "../time/recurrence-data.js";
 import { graftHostOf } from "./grafted-arm.js";
+import { passiveAvOf, WEAPON_TYPES } from "../item/weapon-tags.js";
+import { needsAttunement } from "../item/attunement.js";
+import { baseAvOf, wornArmourAvZeroed, liveAbilityBonusOf, liveBodyBonusesOf } from "../effects/body.js";
+
+const isWeaponType = i => WEAPON_TYPES.includes(i.type);
 
 /**
  * Wounds that GRANT AV, one entry per slot - The Gitch's crystals (Live AV
@@ -58,6 +66,8 @@ export function grantedCreatureTypes(actor, deltas = activeDeltas(actor))
   };
 
   for(const t of (deltas?.creatureTypes ?? [])) add(t);
+  // A live Item's creature types (Stats as Sentences chunk 2d-ii) - granted, never stored.
+  for(const t of liveBodyBonusesOf(actor).creatureTypes) add(t);
 
   // Ownership is the faithful test for Psychic, not equipping — Matt's ruling
   // 2026-09-03. The book ties Gleam to "equipped Gifts", but a Gift has no
@@ -96,6 +106,10 @@ export function grantedCreatureTypeSources(actor)
   for(const i of (actor?.items ?? []))
     if(i.type === "gift" && granted.includes("psychic"))
       (sources.psychic ??= []).push(i.name);
+  // A live Item's types, by the Item (2d-ii).
+  for(const i of (actor?.items ?? []))
+    for(const t of liveBodyBonusesOf({ items: [i] }).creatureTypes)
+      if(granted.includes(t)) (sources[t] ??= []).push(i.name);
 
   return Object.fromEntries(
     granted.map(t => [t, `Granted by ${(sources[t] ?? ["an active effect"]).join(", ")} — not stored on this actor`])
@@ -214,20 +228,15 @@ export class KnaveActor extends Actor {
       for (const i of this.items)
       {
         // A permanent body change's AV on a creature (the Lithifying Ray, 2026-09-25).
-        figmentAv += Number(i.flags?.vaarn?.bodyChange?.av || 0);
+        figmentAv += Number(remainingItemFlagsOf(i).bodyChange?.av || 0);
         // A mutation's or implant's passive AV on a creature (Item Creation
         // from Roll Table wiring, RULED 2026-09-25 by Matt) - the Cacogen's
         // rolled curse, the Titan Acolyte's implant. The character branch's
         // lookup; avReplacesArmour means nothing on a statblock AV.
-        if ((i.type === 'mutation' || i.type === 'implant') && !isSuppressed(i))
-        {
-          const entry = i.type === 'mutation' ? MUTATION_TABLE.find(m => m.name === i.name)
-            : (IMPLANTS.find(m => m.name === i.name) || ADVANCED_IMPLANTS.find(m => m.name === i.name));
-          figmentAv += entry?.avBonus || 0;
-          continue;
-        }
-        if (i.type !== 'figment' || isSuppressed(i)) continue;
-        figmentAv += findFigment(i.name)?.avBonus || 0;
+        // A mutation's AV comes from its sentences since Mutations and Ancestry
+        // Rules chunk 2a, through passiveAvOf below (heldAv), with every Item's.
+        // An implant's and a figment's AV are their sentences since Implants,
+        // Exotica and Figments chunk 2 (2026-10-06), through heldAv below too.
       }
       if (figmentAv) data.armor.value = Number(data.armor.value) + figmentAv;
 
@@ -251,6 +260,16 @@ export class KnaveActor extends Actor {
        */
       const statefulAv = Number(data.stateful?.av ?? 0);
       if (statefulAv) data.armor.value = Number(data.armor.value) + statefulAv;
+
+      // A held weapon's warding field - Aegis-Bearing's "+5 AV while held" -
+      // for ANY holder (Weapon Tags ruling F, 2026-10-05): a character has it
+      // through _prepareCharacterData; an NPC's statblock AV gets it here,
+      // live, as the stateful delta above.
+      // Any Item since GM Effect Builder chunk 1 (2026-10-05): passiveAvOf
+      // counts a sentence only while its Item is in its state.
+      const heldAv = this.items.filter(i => !isSuppressed(i) && !needsAttunement(this, i))
+        .reduce((n, i) => n + passiveAvOf(i), 0);
+      if (heldAv) data.armor.value = Number(data.armor.value) + heldAv;
 
       // A Follower's, a Pet's or a Steed's carrying capacity — Container Slot
       // Capacity, 2026-09-20, widening the Follower-only block that Actor
@@ -405,22 +424,18 @@ export class KnaveActor extends Actor {
     {
       // A PERMANENT BODY CHANGE carried on an Item - the Lithifying Ray's
       // Lithified (2026-09-25). Live, so deleting the Item is the undo.
-      for(const [key, amount] of Object.entries(i.flags?.vaarn?.bodyChange?.abilities ?? {}))
+      for(const [key, amount] of Object.entries(remainingItemFlagsOf(i).bodyChange?.abilities ?? {}))
         liveAbilityBonus[key] = (liveAbilityBonus[key] || 0) + Number(amount || 0);
-      if(isSuppressed(i)) continue;
-      if(i.type === "implant")
-      {
-        const entry = ADVANCED_IMPLANTS.find(m => m.name === i.name);
-        if(!entry?.liveAbilityBonus) continue;
-        for(const [key, amount] of Object.entries(entry.liveAbilityBonus))
-          liveAbilityBonus[key] = (liveAbilityBonus[key] || 0) + amount;
-      }
-      else if(i.type === "armor" && i.system.equipped && i.system.liveAbilityBonus)
-      {
-        for(const [key, amount] of Object.entries(i.system.liveAbilityBonus))
-          liveAbilityBonus[key] = (liveAbilityBonus[key] || 0) + amount;
-      }
     }
+    // An advanced implant's and a worn Exotica armour's live ability bonus are
+    // their passive sentences since Implants, Exotica and Figments chunk 2
+    // (2026-10-06) - in their item state, not suppressed (body.js).
+    for(const [key, amount] of Object.entries(liveAbilityBonusOf(this)))
+      liveAbilityBonus[key] = (liveAbilityBonus[key] || 0) + amount;
+    // A live Item's creation bonuses (Stats as Sentences chunk 2d-ii, RULED
+    // 2026-10-07): never written into the base, so read here, under the clamp.
+    for(const [key, amount] of Object.entries(liveBodyBonusesOf(this).abilities))
+      liveAbilityBonus[key] = (liveAbilityBonus[key] || 0) + amount;
 
     // Loop through ability scores, and add their modifiers to our sheet output.
     // "effective" nets out wound damage from the base bonus without mutating
@@ -449,6 +464,9 @@ export class KnaveActor extends Actor {
       data.health.value = data.health.max;
 
     data.inventorySlots.value = Number(data.abilities.con.effective) + Number(10);
+    // A live Item's slots (2d-ii): in memory, never stored - every bake reads _source.
+    const liveBonuses = liveBodyBonusesOf(this);
+    if(liveBonuses.slots) data.inventorySlots.max = Number(data.inventorySlots.max) + liveBonuses.slots;
     let used = 0;
     // Container Slot Capacity (2026-09-20). Accumulated in the same pass as
     // `used` and rounded the same way, so a third of a slot behaves in a pox
@@ -497,14 +515,14 @@ export class KnaveActor extends Actor {
       // Potion's and for the same reason - it is not worn armour.
       passiveAvBonus += grownPartAv(i);
       // Grafted Limb Creation: a grafted trait's AV, the GM's number (2026-09-24).
-      passiveAvBonus += Number(i.flags?.vaarn?.graft?.av || 0);
+      passiveAvBonus += Number(remainingItemFlagsOf(i).graft?.av || 0);
       // A permanent body change's AV (the Lithifying Ray, 2026-09-25).
-      passiveAvBonus += Number(i.flags?.vaarn?.bodyChange?.av || 0);
+      passiveAvBonus += Number(remainingItemFlagsOf(i).bodyChange?.av || 0);
       // Gitch Crystals: +1 AV per slot, like the grown vine's - not worn armour.
       if(i.type === "wound")
       {
         const w = AV_WOUNDS.find(w => i.name.startsWith(w.name));
-        if(w) passiveAvBonus += w.perSlot * Math.max(1, Number(i.system?.slots) || 1);
+        if(w) passiveAvBonus += w.perSlot * Math.max(1, Number(statOf(i, "slots")) || 1);
       }
       //check if actor can use spell based on level
       if(i.type === "spell")
@@ -522,7 +540,7 @@ export class KnaveActor extends Actor {
         // that is a 0-hand weapon on every character. Found 2026-09-07 when a
         // plain True-kin with nothing but its bare hands could not equip a
         // two-handed weapon.
-        handsUsed += Number(i.system.hands ?? 1);
+        handsUsed += Number(statOf(i, "hands") ?? 1);
         // Aegis-Bearing weapon tag (item 4.6.1, 2026-08-27): "Projects a
         // personal warding field. Grants +5 AV while held." A fixed
         // amount tied to one specific tag name, unlike armor's avBonus —
@@ -533,12 +551,27 @@ export class KnaveActor extends Actor {
         // (that mutation's text is specifically "cannot wear OTHER
         // ARMOUR"), so it should stack even for a Quills-type character
         // instead of being zeroed out alongside their real armor.
-        if((i.system.tags || []).includes("Aegis-Bearing")) passiveAvBonus += 5;
+        // From the sentences since Weapon Tags chunk 5a (passiveAvOf).
+        passiveAvBonus += passiveAvOf(i);
       }
+      // An equipped carried Item takes the hands its effect says, 0 otherwise (Stats as
+      // Sentences chunk 2e-ii, RULED 2026-10-07) - a worn amulet none, a held orb its one.
+      if(i.system.equipped && !isWeaponType(i) && i.type !== "armor")
+        handsUsed += Number(statOf(i, "hands") ?? 0);
       if(i.type === "armor" && i.system.equipped)
       {
-        if(i.system.armorSlot === "shield") handsUsed += 1;
-        armourBonusSum += Number(i.system.avBonus || 0);
+        // Through the sentences since Stats as Sentences chunk 2b (RULED 2026-10-07).
+        if(armourSlotOf(i) === "shield") handsUsed += 1;
+        armourBonusSum += Number(statOf(i, "av") || 0);
+      }
+      // GM Effect Builder chunk 1 (2026-10-05): a passive +AV a GM wrote on
+      // any other Item, in its state (armour equipped, the rest carried or
+      // installed), not suppressed, attuned where it must be. Worn armour's
+      // counts as armour, so Quills-type replacement zeroes it with the rest.
+      if(!isWeaponType(i) && !isSuppressed(i) && !needsAttunement(this, i))
+      {
+        if(i.type === "armor") armourBonusSum += passiveAvOf(i);
+        else passiveAvBonus += passiveAvOf(i);
       }
       // Innate Item Suppression (2026-09-13): a suppressed source contributes
       // nothing and reverses by ceasing to exist, which is the whole reason
@@ -546,39 +579,13 @@ export class KnaveActor extends Actor {
       // stored. Placed after the slot and hands accounting above deliberately —
       // a suppressed item is still carried and still part of the body, so it
       // still costs slots. Only the ongoing EFFECT stops.
-      if(i.type === "mutation" && !isSuppressed(i))
-      {
-        const entry = MUTATION_TABLE.find(m => m.name === i.name);
-        if(entry)
-        {
-          passiveAvBonus += entry.avBonus || 0;
-          if(entry.avReplacesArmour) replacesArmour = true;
-        }
-      }
-      if(i.type === "implant" && !isSuppressed(i))
-      {
-        // item 10.7 (2026-08-26): Advanced Cybernetics (ADVANCED_IMPLANTS)
-        // extend this same live lookup — no name overlap between the two
-        // tables, so checking IMPLANTS first is safe.
-        const entry = IMPLANTS.find(m => m.name === i.name) || ADVANCED_IMPLANTS.find(m => m.name === i.name);
-        if(entry)
-        {
-          passiveAvBonus += entry.avBonus || 0;
-          if(entry.avReplacesArmour) replacesArmour = true;
-        }
-      }
-      // Autarch Figment Grant (2026-09-14). Gut is "+3 AV and +1 Level", and
-      // the AV half is live rather than baked for the same reason a mutation's
-      // is: it stops the instant the Item goes, so removal needs no record.
-      // The roster is a view over rolltable-data.js — see figments.js.
-      if(i.type === "figment" && !isSuppressed(i))
-      {
-        const entry = findFigment(i.name);
-        if(entry) passiveAvBonus += entry.avBonus || 0;
-        // No figment replaces armour; the book gives none of them the "cannot
-        // wear other armour" clause Quills has, so there is no avReplacesArmour
-        // read here rather than one that is always false.
-      }
+      // A mutation's AV and Quills' armour replacement are its sentences since
+      // Mutations and Ancestry Rules chunk 2a: the AV through passiveAvOf above,
+      // the replacement through wornArmourAvZeroed below.
+      // An implant's and a figment's AV (Gut's +3) are their sentences since
+      // Implants, Exotica and Figments chunk 2 (2026-10-06), counted by the
+      // passiveAvOf read above with every other Item's. No implant or figment
+      // replaces armour, so nothing here sets replacesArmour.
     }
     // Every reader below takes this figure — the display, the Encumbered flag
     // and the Fleeing Combat save target. Each stack was already rounded up by
@@ -651,13 +658,15 @@ export class KnaveActor extends Actor {
     // instant deleteCombat drops the flag, so a temporary hand cannot outlive
     // the fight the way a baked one would. `+=` is safe on a value Foundry
     // rebuilds from _source before every prepare, so this cannot accumulate.
-    data.hands.max = Number(data.hands.max) + handsGrantedBy(actorData);
+    data.hands.max = Number(data.hands.max) + handsGrantedBy(actorData) + liveBonuses.hands;
     // Crystalline Flesh (Live AV Computation wiring, 2026-09-25, Matt): "Your
     // base AV is 10 + your Level (maximum 20)." Keyed on the ancestry, not the
     // mineral type - Lithification Syrup grants the type and not this rule.
     // It replaces the base of 10 only, so worn armour still adds on top.
-    const baseAv = data.ancestry === "Lithling"
-      ? Math.min(20, 10 + (Number(data.level?.value) || 0)) : 10;
+    // From Crystalline Flesh's sentence since Mutations and Ancestry Rules
+    // chunk 2a (an Item, or the ancestry text - ruling B); 10 for everyone else.
+    const baseAv = baseAvOf(this);
+    if (wornArmourAvZeroed(this)) replacesArmour = true;
     data.armor.value = baseAv + (replacesArmour ? 0 : armourBonusSum) + passiveAvBonus;
 
     // Gleam: equipped Gift count + PSY bonus, per Mystic Gifts.md. Purely

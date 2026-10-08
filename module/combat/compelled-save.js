@@ -50,10 +50,14 @@ import { saveDisSources } from "../time/stateful-effect.js";
 import { moraleFailRules, moraleFailCard } from "../actor/morale.js";
 import { saveSentence } from "../actor/bestiary-build.js";
 import { hasAnyCreatureType, degradeArmour, resolveDamageInteractions, damageOverride, sparedBreathing } from "../item/attack-properties.js";
+import { heal } from "../effects/heal.js";
 import { toxSaveTarget, toxinModifiers, raisedToxinDie, TOXIN_CURED } from "../actor/toxin-die.js";
 import { FOOD_RATION, WATER_RATION, rationKindsFor, rationTotal, spendRation } from "../actor/rest.js";
 import { applyNamedWound } from "../actor/named-wound.js";
 import { graftLimb } from "../actor/grafted-arm.js";
+import { dealDamage, kill } from "../effects/deal.js";
+// Creature flags from their sentences (Effect Engine: Creatures chunk 2b).
+import { creatureFlagsOf } from "../item/creature-effects.js";
 
 const SCOPE = "vaarn";
 export const CARD_FLAG = "compelledSave";
@@ -72,9 +76,9 @@ export const SAVE_FLAG = "compelledSaveRoll";
  */
 export async function postCompelledSave(actor, item)
 {
-  const saves = item?.flags?.vaarn?.save ?? [];
+  const saves = creatureFlagsOf(item).save ?? [];
   if (!saves.length) return null;
-  const applies = item.flags?.vaarn?.applies ?? [];
+  const applies = creatureFlagsOf(item).applies ?? [];
   return postSaveCardsToTargets(actor, item.name, saves, [], applies);
 }
 
@@ -436,6 +440,34 @@ export async function rollCompelledSave(message, index)
     }
     mods = { advSources: tm.advantage ? tm.sources : [], disSources: [] };
   }
+  // A POISON'S SAVE (Shared Pipelines chunk 7, RULED A-C 2026-10-05): the TOX
+  // route's modifiers for every poison kind, and an actor immune to toxins is
+  // spared the whole poison - resolved without a die, as a pass that applies
+  // nothing.
+  const poison = s.poison ?? null;
+  if (poison)
+  {
+    const tm = toxinModifiers(actor);
+    if (tm.immune)
+      return forcedSave(message, index, actor, spec, s, true, `is immune to poison (${tm.sources.join(", ")}) - it has no effect`, () => ({}), []);
+    mods = { ...mods, advSources: [...new Set([...(mods.advSources ?? []), ...(tm.advantage ? tm.sources : [])])] };
+  }
+  // A DISEASE THE SAVE GUARDS (Shared Pipelines chunk 7, RULED D 2026-10-05):
+  // the save takes that disease's modifiers - nanomachine DIS, Heightened
+  // Immune System's ADV - as the affliction card's own save does. A die table
+  // of diseases (the Maladaptor's) is read by its first entry's kind; every
+  // entry on the book's one table is a nanomachine.
+  const contracts = s.onFail?.contracts ?? null;
+  if (contracts)
+  {
+    const { afflictionByKey } = await import("../actor/affliction-data.js");
+    const { afflictionSaveModifiers } = await import("../actor/affliction.js");
+    const first = typeof contracts === "string" ? contracts : Object.values(contracts).flat()[0];
+    const am = afflictionSaveModifiers(actor, afflictionByKey(first));
+    mods = { ...mods,
+      advSources: [...new Set([...(mods.advSources ?? []), ...am.advSources])],
+      disSources: [...new Set([...(mods.disSources ?? []), ...am.disSources])] };
+  }
   mods = { ...mods, disSources: [...new Set([...(mods.disSources ?? []), ...boardDis])] };
   const held = actor.system?.toxinDie?.die ?? TOXIN_CURED;
   const next = tox ? raisedToxinDie(held, tox) : null;
@@ -526,6 +558,12 @@ export async function rollCompelledSave(message, index)
   });
 
   if (!result.verdict.passed) await applyFailure(actor, spec, s, applySpecs);
+  // The failed save contracts the disease by itself (chunk 7, RULED D). One
+  // card, where a creature's save used to need a second exposure card.
+  if (contracts && !result.verdict.passed) await contractFromSave(actor, contracts, spec.source);
+  // The poison lands with the roll, pass or fail - its bolded half whatever
+  // the save does, the rest on a failure (poison.js resolvePoison).
+  if (poison) await poisonFromSave(actor, poison, !!result.verdict.passed);
   if (hpDamage && !result.verdict.passed) await dealFailDamage(actor, hpDamage, spec, s.onFail.damage);
   if (entry && !result.verdict.passed) await startFailureEntry(actor, spec.source, s);
   // An ONGOING HOLD a failed save starts - the Snare, the Pounce, Envelop
@@ -623,16 +661,63 @@ export async function failDamageFor(actor, dmg, source, roll = null)
  * against another player's Mycomorph), so that case is announced for someone
  * who can apply it rather than attempted and refused.
  */
+/**
+ * Contract the disease a failed save names: one affliction key, or the book's
+ * die table (the Maladaptor's "roll 1d6 to determine what has been
+ * transmitted"), rolled where everyone can see it. Shared Pipelines chunk 7.
+ */
+/** Apply a poison once its card save is rolled, and post what it did. */
+async function poisonFromSave(actor, { effect, label }, passed)
+{
+  const { resolvePoison } = await import("../actor/poison.js");
+  const { target, lines, after } = await resolvePoison(actor, effect, passed, { label });
+  // Awaited, and `after` posted once it has landed: a Zero Max HP death handed
+  // back in `after` must follow the card that explains it.
+  await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }),
+    content: `<p><b>${label}</b> - <i>${effect.text}</i></p>`
+           + `<p>CON Save vs ${target}: <b>${passed ? "passed" : "failed"}</b>.</p>`
+           + `<ul>${lines.map(l => `<li>${l}</li>`).join("")}</ul>` });
+  for (const content of after ?? []) await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content });
+}
+
+async function contractFromSave(actor, contracts, source)
+{
+  let key = typeof contracts === "string" ? contracts : null;
+  if (!key)
+  {
+    const [die, keys] = Object.entries(contracts)[0] ?? [];
+    if (!keys?.length) return;
+    const roll = await new Roll(`1${die}`).evaluate();
+    key = keys[Math.min(keys.length, roll.total) - 1];
+    const { afflictionByKey } = await import("../actor/affliction-data.js");
+    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }),
+      flavor: `<b>${source}</b> - what has been transmitted: <b>${afflictionByKey(key)?.name ?? key}</b>` });
+  }
+  const { infectActor } = await import("../actor/affliction-card.js");
+  await infectActor(actor, key);
+}
+
 async function dealFailDamage(actor, hpDamage, spec, dmg)
 {
-  if (hpDamage.amount > 0)
+  // THROUGH THE WHOLE PIPELINE (Shared Pipelines chunk 2, 2026-10-05). This
+  // used to write hpDamage.amount - already type-adjusted by failDamageFor -
+  // straight to the HP funnel, which skipped multipliers and redirects: a
+  // Wrathworms character took double from a sword but single from "DEX Save
+  // vs 3d8". Now the RAW roll goes through dealDamage with its type and the
+  // poster as the source, so every stage applies once; failDamageFor's line
+  // stays on the card as the preview. The drain heals what was actually dealt.
+  const poster = spec.posterUuid ? await fromUuid(spec.posterUuid) : null;
+  const source = poster?.actor ?? poster ?? null;
+  let dealt = 0;
+  if (hpDamage.rolled > 0 && hpDamage.amount > 0)
   {
-    const hp = Number(actor.system?.health?.value ?? 0);
-    await actor.sheet?._resolveHPChange(actor, hp, hp - hpDamage.amount);
+    const min = (await new Roll(String(dmg.dice)).evaluate({ minimize: true })).total;
+    const res = dealDamage(actor, hpDamage.rolled, { source, types: [dmg.type ?? "kinetic"], min, name: spec.source });
+    dealt = Number(res?.dealt ?? 0);
   }
-  if (!dmg.drainToPoster || !(hpDamage.amount > 0) || !spec.posterUuid) return;
-  const poster = await fromUuid(spec.posterUuid);
-  const who = poster?.actor ?? poster;
+  if (!dmg.drainToPoster || !(dealt > 0) || !spec.posterUuid) return;
+  hpDamage = { ...hpDamage, amount: dealt };
+  const who = source;
   if (!who) return;
   if (!who.isOwner)
   {
@@ -640,12 +725,13 @@ async function dealFailDamage(actor, hpDamage, spec, dmg)
       content: `<b>${who.name}</b> heals <b>${hpDamage.amount} HP</b> from <b>${spec.source}</b> — apply it on their sheet.` });
     return;
   }
-  const hp = Number(who.system?.health?.value ?? 0);
-  const max = Number(who.system?.health?.max ?? hp);
-  const healed = Math.max(0, Math.min(max, hp + hpDamage.amount) - hp);
-  await who.update({ "system.health.value": hp + healed });
+  // A heal like any other (Shared Pipelines chunk 3, RULED 2026-10-05, Matt:
+  // "count this as healing too") - gated, floored, halved by Deathblight. A
+  // refused heal has posted why.
+  const { gained, note, refused } = await heal(who, hpDamage.amount, { label: `<b>${spec.source}</b>` });
+  if (refused) return;
   await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: who }),
-    content: `<b>${who.name}</b> heals <b>${healed} HP</b> from <b>${spec.source}</b>${healed < hpDamage.amount ? " (capped at their maximum)" : ""}.` });
+    content: `<b>${who.name}</b> heals <b>${gained} HP</b> from <b>${spec.source}</b>${!note && gained < hpDamage.amount ? " (capped at their maximum)" : ""}.${note}` });
 }
 
 /**
@@ -732,22 +818,21 @@ function appliedLine(actor, a)
  * is what the Referee would otherwise do by hand the moment the line posted.
  * Immortality Injector holds on both, per its ruling that nothing is fatal.
  */
-function deathLine(actor, source, s)
+export function deathLine(actor, source, s)
 {
   const cause = `failed the ${saveSentence(s)} from <b>${source}</b>`;
   if (suppressesDeath(actor)) return `<b>${actor.name}</b> ${suppressionMsg(cause)}`;
   return `<b>${actor.name}</b> is <b>dead</b> — ${cause}.`;
 }
 
-async function dealDeath(actor)
+export async function dealDeath(actor)
 {
   if (suppressesDeath(actor) || actor.type === "character") return;
-  await actor.update({ "system.health.value": 0, "system.health.temp": 0 });
-  // An unlinked token's actor is its own synthetic document, so a spawned
-  // creature is matched by its token first and only a linked one by actor id.
-  const combatant = game.combat?.combatants?.find(c => c.actor === actor
-    || (actor.isToken ? c.tokenId === actor.token?.id : c.actorId === actor.id));
-  if (combatant && !combatant.defeated) await combatant.update({ defeated: true });
+  // THE ONE KILL ROUTE (Shared Pipelines chunk 4, 2026-10-05): HP and temp HP
+  // to 0, the kill reported (a drainer's restore card), Defeated marked
+  // (effects/defeated.js, moved from here). deathLine has already announced
+  // it, so the funnel posts nothing.
+  return kill(actor, { line: "" });
 }
 
 /**

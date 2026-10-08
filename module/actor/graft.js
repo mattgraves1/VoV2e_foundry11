@@ -33,6 +33,7 @@
  */
 
 import { normalizeDamageDice } from "./chargen-app.js";
+import { remainingItemFlagsOf } from "../item/remaining-effects.js";
 import { startRecurrence, stopRecurrence } from "../time/recurrence.js";
 import { entriesOf } from "../time/effect-board.js";
 
@@ -46,13 +47,13 @@ export const GRAFT_DAMAGE_TYPES = ["Beam", "Blast", "Flame", "Electrical", "TOX"
 /** Whether this Item is a graft. */
 export function isGraft(item)
 {
-  return !!item?.flags?.[SCOPE]?.[GRAFT_FLAG];
+  return !!remainingItemFlagsOf(item)[GRAFT_FLAG];
 }
 
 /** The AV a graft adds, or 0. */
 export function graftAv(item)
 {
-  return Number(item?.flags?.[SCOPE]?.[GRAFT_FLAG]?.av || 0);
+  return Number(remainingItemFlagsOf(item)[GRAFT_FLAG]?.av || 0);
 }
 
 /** Whether this character has the Grafting Bloomboon. */

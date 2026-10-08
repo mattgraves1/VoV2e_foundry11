@@ -34,16 +34,19 @@
               <div class="resource">
                 <label class="resource-label">Slots</label>
                   <input type="text" name="system.slots" value="{{data.system.slots}}" data-dtype="Number"/>
+                  {{#if statNotes.slots}}<p class="resource-label-small stat-in-effect">{{statNotes.slots}}</p>{{/if}}
               </div>
               <div class="resource">
                 <label class="resource-label">{{valueLabel}}</label>
                   <input type="text" name="system.tradeValue" value="{{data.system.tradeValue}}" data-dtype="Number"/>
-                  {{#if conditionalValue}}
-                    <div class="conditional-trade-value">{{conditionalValue.value}} to {{conditionalValue.buyer}}</div>
-                  {{/if}}
+                  {{#if statNotes.tradeValue}}<p class="resource-label-small stat-in-effect">{{statNotes.tradeValue}}</p>{{/if}}
+                  {{#each buyerValues}}
+                    <div class="conditional-trade-value">{{this.value}} to {{this.buyer}}</div>
+                  {{/each}}
               </div>
             </div>
         </div>
+        {{> "systems/vaarn/templates/item/parts/usage-die.html"}}
     </header>
 
     {{!-- Sheet Tab Navigation --}}
@@ -59,63 +62,7 @@
             {{editor content=data.system.description target="system.description" button=true owner=owner editable=editable}}
         </div>
 
-        {{!-- Effects Tab - Mystic Gift Effect Modelling, 2026-09-29 --}}
-        <div class="tab gift-effects" data-group="primary" data-tab="effects">
-            <p class="notes">What this Gift does, once the table has agreed it. Each entry is one way to use it. With no entries the Gift works as it always has: pay the cost, roll, and the table decides.</p>
-            {{#each giftEffects as |e|}}
-            <div class="gift-effect" data-effect-index="{{e.index}}">
-                <div class="flexrow">
-                    <select class="gift-effect-field" data-field="kind" style="flex: 0 0 11em;" {{#unless ../editable}}disabled{{/unless}}>
-                        {{#each ../effectKinds as |k|}}<option value="{{k.key}}" {{#if (eq k.key e.kind)}}selected{{/if}}>{{k.label}}</option>{{/each}}
-                    </select>
-                    <input class="gift-effect-field" data-field="label" type="text" value="{{e.label}}" placeholder="Button label (optional)" {{#unless ../editable}}disabled{{/unless}}/>
-                    {{#if ../editable}}<a class="gift-effect-delete" title="Remove this effect" style="flex: 0 0 1.5em;"><i class="fas fa-trash"></i></a>{{/if}}
-                </div>
-                {{#if e.isDamage}}
-                <div class="flexrow"><label style="flex: 0 0 8em;">Damage type</label>
-                    <select class="gift-effect-field" data-field="damageType" {{#unless ../editable}}disabled{{/unless}}>
-                        {{#each ../damageTypeChoices as |t|}}<option value="{{t.key}}" {{#if (eq t.key e.damageType)}}selected{{/if}}>{{t.label}}</option>{{/each}}
-                    </select>
-                </div>
-                {{/if}}
-                {{#if e.isCondition}}
-                <div class="flexrow"><label style="flex: 0 0 8em;">Condition</label>
-                    <select class="gift-effect-field" data-field="condition" {{#unless ../editable}}disabled{{/unless}}>
-                        {{#each ../conditionChoices as |c|}}<option value="{{c.key}}" {{#if (eq c.key e.condition)}}selected{{/if}}>{{c.label}}</option>{{/each}}
-                    </select>
-                </div>
-                {{#if e.isNamed}}
-                <input class="gift-effect-field" data-field="effectName" type="text" value="{{e.effectName}}" placeholder="Effect name (e.g. Asleep)" {{#unless ../editable}}disabled{{/unless}}/>
-                <textarea class="gift-effect-field" data-field="text" rows="2" placeholder="What it does - shown on the target's Effect Board" {{#unless ../editable}}disabled{{/unless}}>{{e.text}}</textarea>
-                {{/if}}
-                {{/if}}
-                {{#if e.isProse}}
-                <textarea class="gift-effect-field" data-field="text" rows="3" placeholder="Describe what the Gift does - shown in chat when it is used" {{#unless ../editable}}disabled{{/unless}}>{{e.text}}</textarea>
-                {{/if}}
-                <p class="notes">{{e.summary}}</p>
-                <hr/>
-            </div>
-            {{else}}
-            <p class="notes"><i>No effects defined.</i></p>
-            {{/each}}
-            {{#if editable}}
-            <div class="flexrow">
-                <select class="gift-effect-add-kind" style="flex: 0 0 11em;">
-                    {{#each effectKinds as |k|}}<option value="{{k.key}}">{{k.label}}</option>{{/each}}
-                </select>
-                <button type="button" class="gift-effect-add"><i class="fas fa-plus"></i> Add effect</button>
-            </div>
-            {{#if giftSuggestions.length}}
-            <h4>Suggestions</h4>
-            <p class="notes">Not from the book - ideas to start from. Click one to add it, then change anything.</p>
-            {{#each giftSuggestions as |s|}}
-            <div class="flexrow gift-suggestion">
-                <span>{{s.summary}} <span class="notes">({{s.from}})</span></span>
-                <button type="button" class="gift-effect-suggest" data-suggestion="{{s.index}}" style="flex: 0 0 5em;">Add</button>
-            </div>
-            {{/each}}
-            {{/if}}
-            {{/if}}
-        </div>
+        {{!-- Effects Tab - GM Effect Builder (Effect Engine, ruled 2026-10-05) --}}
+        {{> "systems/vaarn/templates/item/parts/effects-tab.html"}}
     </section>
 </form>

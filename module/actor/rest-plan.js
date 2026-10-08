@@ -43,6 +43,7 @@
 import { FOOD_RATION, WATER_RATION, HALF_LONG_REST, rationKinds, rationKindsFor,
          rationDrawFor, dietRationsFor, rationFreeRule, countOf, isMealFor } from "./rest.js";
 import { isDeprived, noHealRule } from "./deprived.js";
+import { waterLapseOf } from "../effects/body.js";
 import { hasCondition } from "../time/stateful-effect.js";
 import { upkeepPlan, unfedDaysOf, companionDiet } from "./companion-upkeep.js";
 
@@ -235,7 +236,9 @@ export function planCharacter(actor, picks, onWatch = false)
   const diets = dietRationsFor(actor);
   const meal  = picks.meal  ?? { item: NONE, count: 0 };
   const water = picks.water ?? { item: NONE, count: 0 };
-  const faa = actor.system.ancestry === "Faa Nomad";
+  // Desert Metabolism's water lapse - an Item, or the ancestry text (Mutations
+  // and Ancestry Rules chunk 2c, ruling B).
+  const faa = waterLapseOf(actor)?.key === FAA_WATER_LAPSE;
   const needsWater = drinksWater(actor);
 
   const ate   = meal.item !== NONE && meal.count > 0;

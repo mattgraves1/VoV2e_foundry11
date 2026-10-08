@@ -1,0 +1,100 @@
+{{!-- GM Effect Builder (Effect Engine: GM Effect Builder, chunk 2, ruled 2026-10-05).
+      Every choice below comes from module/effects/builder-recipes.js: When, then only
+      the Do entries wired for that When on this Item type, then their fields. --}}
+<form class="vaarn-effect-builder" autocomplete="off">
+  <div class="form-group">
+    <label>When</label>
+    <select name="when">{{#each whens as |w|}}<option value="{{w.key}}" {{#if w.selected}}selected{{/if}}>{{w.label}}</option>{{/each}}</select>
+  </div>
+  <div class="form-group">
+    <label>Do</label>
+    <select name="recipe">{{#each recipes as |r|}}<option value="{{r.key}}" {{#if r.selected}}selected{{/if}}>{{r.label}}</option>{{/each}}</select>
+  </div>
+
+  {{#each fields as |f|}}
+  <div class="form-group">
+    <label>{{f.label}}</label>
+    {{#if f.isSelect}}<select name="v.{{f.key}}">{{#each f.options as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}</select>{{/if}}
+    {{#if f.isCheck}}<input type="checkbox" name="v.{{f.key}}" {{#if f.value}}checked{{/if}}/>{{/if}}
+    {{#if f.isColor}}<input type="color" name="v.{{f.key}}" value="{{#if f.value}}{{f.value}}{{else}}#cfe0ff{{/if}}"/>{{/if}}
+    {{#if f.isNumber}}<input type="number" name="v.{{f.key}}" value="{{f.value}}"/>{{/if}}
+    {{#if f.isText}}<input type="text" name="v.{{f.key}}" value="{{f.value}}"/>{{/if}}
+  </div>
+  {{/each}}
+
+  {{#if hasState}}
+  <div class="form-group">
+    <label>While it is</label>
+    <select name="c.state">{{#each states as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}</select>
+  </div>
+  {{/if}}
+
+  {{#if hasTarget}}
+  <div class="form-group">
+    <label>Target</label>
+    <select name="c.target">{{#each targets as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}</select>
+    {{#if isUpToN}}<input type="number" name="c.n" value="{{n}}" style="flex: 0 0 4em;"/>{{/if}}
+  </div>
+  {{/if}}
+
+  {{#if hasDuration}}
+  <div class="form-group">
+    <label>Lasts</label>
+    <select name="c.duration">
+      {{#if durationOptional}}<option value="">Not at all (a chat line)</option>{{/if}}
+      {{#each durations as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}
+    </select>
+    {{#if durationAmount}}<input type="number" name="c.amount" value="{{amount}}" style="flex: 0 0 4em;"/>{{/if}}
+  </div>
+  {{/if}}
+
+  {{#if hasCost}}
+  <div class="form-group">
+    <label>Cost</label>
+    <select name="c.costDie">{{#each costs as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}</select>
+  </div>
+  {{/if}}
+
+  {{#if hasGates}}
+  <h4>Only if</h4>
+  {{#each gates as |g|}}
+  <div class="form-group">
+    <select name="g.{{g.i}}.gate">{{#each g.choices as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}</select>
+    {{#if g.isCreature}}<select name="g.{{g.i}}.value">{{#each g.creatureChoices as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}</select>{{/if}}
+    {{#if g.isState}}<select name="g.{{g.i}}.value">{{#each g.stateChoices as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}</select>{{/if}}
+    {{#if g.isText}}<input type="text" name="g.{{g.i}}.value" value="{{g.value}}" placeholder="e.g. Sandstorm"/>{{/if}}
+    {{#if g.isChance}}<input type="number" name="g.{{g.i}}.in" value="{{g.in}}" style="flex: 0 0 3em;"/> in <input type="number" name="g.{{g.i}}.of" value="{{g.of}}" style="flex: 0 0 3em;"/>{{/if}}
+    {{#if g.canNot}}<label style="flex: 0 0 4em;"><input type="checkbox" name="g.{{g.i}}.not" {{#if g.not}}checked{{/if}}/> not</label>{{/if}}
+    <a class="effect-gate-remove" data-i="{{g.i}}" title="Remove this condition" style="flex: 0 0 1.5em;"><i class="fas fa-trash"></i></a>
+  </div>
+  {{/each}}
+  <a class="effect-gate-add"><i class="fas fa-plus"></i> Add a condition</a>
+  {{/if}}
+
+  {{#if hasLabel}}
+  <div class="form-group">
+    <label>Name (optional)</label>
+    <input type="text" name="c.label" value="{{label}}" placeholder="The button, or the tab entry's name"/>
+  </div>
+  {{/if}}
+
+  {{#if hasTab}}
+  <div class="form-group">
+    <label>On the Forgettable Effects tab</label>
+    <select name="c.section">{{#each sections as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}</select>
+    <select name="c.polarity">{{#each polarities as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}</select>
+  </div>
+  {{/if}}
+
+  <div class="form-group stacked">
+    <label>Its words (shown on cards, reminders and the tab)</label>
+    <textarea name="c.text" rows="3">{{text}}</textarea>
+  </div>
+
+  {{#if preview}}<p class="notes"><b>Reads:</b> {{preview}}</p>{{/if}}
+  {{#each problems as |p|}}<p class="notes" style="color: var(--vaarn-warn, #b33);">{{p}}</p>{{/each}}
+
+  <footer class="sheet-footer flexrow">
+    <button type="submit"><i class="fas fa-check"></i> Save</button>
+  </footer>
+</form>

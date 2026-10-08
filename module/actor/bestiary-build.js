@@ -27,6 +27,7 @@ import { conditionByKey } from "./condition-data.js";
 import { spanFieldFrom } from "../time/declared-span.js";
 import { rolledStatItems } from "./rolled-stat.js";
 import { NAMED_WOUNDS } from "./wounds-data.js";
+import { afflictionByKey } from "./affliction-data.js";
 import { BESTIARY } from "./bestiary-data.js";
 import { CREATURE_DAMAGE_RULES, CREATURE_TYPE_KEYS, BREATHING_PROPERTIES } from "../item/attack-properties.js";
 
@@ -286,8 +287,9 @@ function saveFlag(saves)
                            // A RANDOM MUTATION a failed save gives - Generate Monster's Cause
                            // Mutation (Generated Gear and Attacks as Items, RULED 2026-10-04 by
                            // Matt: added at once, as Resurrection adds one). compelled-save.js rolls it.
-                           ...((e.onFail?.eatsRation || e.onFail?.damage || e.onFail?.hold || e.onFail?.wound || e.onFail?.graft || e.onFail?.mutation) ? { onFail: {
+                           ...((e.onFail?.eatsRation || e.onFail?.damage || e.onFail?.hold || e.onFail?.wound || e.onFail?.graft || e.onFail?.mutation || e.onFail?.contracts) ? { onFail: {
                              ...(e.onFail.mutation ? { mutation: true } : {}),
+                             ...(e.onFail.contracts ? { contracts: checkedContracts(e.onFail.contracts, `save vs ${e.vs}`) } : {}),
                              ...(e.onFail.wound ? { wound: checkedNamedWound(e.onFail.wound, `save vs ${e.vs}`) } : {}),
                              // A LIMB GRAFTED ON - the Fleshwarp's Graft, RULED 2026-09-26 (Matt).
                              // The creature named must carry a graftedToHost rule, or the build throws.
@@ -316,6 +318,20 @@ function checkedGraftLimb(name, where)
   if(!limb || !(limb.rules || []).some(r => r.graftedToHost))
     throw new Error(`${where}: "${name}" is not a Bestiary creature with a graftedToHost rule`);
   return name;
+}
+
+/**
+ * A disease a failed save contracts (Shared Pipelines chunk 7, 2026-10-05):
+ * one affliction key, or the book's die table of them (the Maladaptor's d6).
+ * Checked at build - a misspelt key would make the save look as though it
+ * worked and contract nothing.
+ */
+function checkedContracts(spec, where)
+{
+  const keys = typeof spec === "string" ? [spec] : Object.values(spec ?? {}).flat();
+  if(!keys.length) throw new Error(`${where}: contracts names no affliction`);
+  for(const k of keys) if(!afflictionByKey(k)) throw new Error(`${where}: "${k}" is not an affliction key (affliction-data.js)`);
+  return spec;
 }
 
 function checkedNamedWound(key, where)
@@ -1270,7 +1286,34 @@ export function buildSystem(entry)
 export function buildCreatureItems(entry)
 {
   return mergeSameNamedRules([...parseAttacks(entry), ...abilityReminders(entry)], ruleItems(entry))
-    .concat(rolledStatItems(entry), generatedGearPlaceholders(entry), usableItems(entry));
+    .concat(rolledStatItems(entry), generatedGearPlaceholders(entry), usableItems(entry), attackRoutineItems(entry));
+}
+
+/**
+ * THE ATTACK ROUTINE (Effect Engine: Creatures, ruling D, RULED 2026-10-06 by
+ * Matt): which of its attacks a creature makes in one round, from the roster's
+ * `routines` - a list of alternatives, each a list of ability indices made
+ * together. One reminder Item, read on the sheet; nothing rolls it. [[0,1]] is
+ * "Claw and Maul", [[0],[1]] "Bellyflop, or Tongue Grab"; an ability with a count
+ * says it ("2 x Claw"). Worded "in a round", not "each round", so the round
+ * wording never takes it for a per-round tick.
+ */
+export function attackRoutineItems(entry)
+{
+  const routines = (entry.routines ?? []).filter(r => Array.isArray(r) && r.length);
+  if(!routines.length) return [];
+  const name = i => { const a = entry.abilities?.[i]; return a ? `${a.count > 1 ? `${a.count} × ` : ""}${a.name}` : null; };
+  const said = routines.map(r => r.map(name).filter(Boolean).join(" and ")).filter(Boolean);
+  if(!said.length) return [];
+  return [{
+    name: "Attack Routine",
+    type: "item",
+    img: "icons/svg/clockwork.svg",
+    system: { description: `<p>Attacks in a round: ${said.join(", or ")}.</p>`, slots: 0, quantity: 1, tradeValue: 0, intrinsic: true },
+    // DECLARED, so toggle-census.mjs exempts it on the declaration (as every
+    // other control-less rule Item), never on its name.
+    flags: { vaarn: { attackRoutine: true } }
+  }];
 }
 
 /**

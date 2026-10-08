@@ -15,6 +15,7 @@
  * Modifier row.
  */
 
+import { WEAPON_TAG_EFFECTS } from "./weapon-tag-effects-data.js";
 export const TRADE_VALUE_MULTIPLIERS = {
   "Ancient": 0.5,
   "Corroded": 0.5,
@@ -158,13 +159,18 @@ export const CONDITIONAL_VALUE_TAGS = {
  */
 export function conditionalValueOf(tradeValue, tags = [])
 {
+  // From the tags' sentences since Effect Engine: Weapon Tags chunk 5a
+  // (2026-10-05): a LIVE trade-value sentence naming a buyer (`to`) - Bone,
+  // Nomad's, Ritual. CONDITIONAL_VALUE_TAGS stays as the book table the
+  // parity test (tools/test-weapon-tags.mjs) holds those sentences to.
   for(const tag of tags)
   {
-    const c = CONDITIONAL_VALUE_TAGS[tag];
-    if(!c) continue;
+    const s = (WEAPON_TAG_EFFECTS[tag]?.effects ?? []).find(x => !x.baked && x.do?.stat === "trade-value" && x.do.to);
+    if(!s) continue;
+    const multiplier = Number(String(s.do.amount).replace("x", ""));
     let base = Number(tradeValue);
     if(!Number.isFinite(base)) base = 1;
-    return { value: Math.round(base * c.multiplier * 100) / 100, buyer: c.buyer, tag };
+    return { value: Math.round(base * multiplier * 100) / 100, buyer: s.do.to, tag };
   }
   return null;
 }

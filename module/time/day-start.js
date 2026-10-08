@@ -52,6 +52,7 @@
  */
 
 import { rollDay as rollWeatherDay, currentWeather } from "./weather.js";
+import { weatherSentencesOf } from "../item/remaining-effects.js";
 import { rollEncounterCheck, ENVIRONMENTS } from "./exploration-clock.js";
 // Quantum Daemon Debt. The Evil Twins d6 rides the encounter card — RULED
 // 2026-09-17 (Matt), see curse.js — so the Referee reads the day's hunters
@@ -306,7 +307,8 @@ export async function startDay({ envKey, formula } = {})
     dayId: foundry.utils.randomID(),
     day: weather.day,
     weather: weather.type,
-    disadvantage: type?.vigilance === "disadvantage"
+    // The Vigilance Die's DIS from the weather's sentence (Remaining Sources chunk 2c-i, 2026-10-07).
+    disadvantage: weatherSentencesOf(type?.key).some(s => s.do?.from === "vigilance" && s.do.verb === "dis")
   };
 
   await ChatMessage.create({

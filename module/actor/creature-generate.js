@@ -35,6 +35,8 @@ import { rollWeapon } from "./weapon-roller.js";
 import { mutationByRoll, mutationItemData } from "./granted-pick.js";
 import { buildStartingImplant } from "../item/loot-builders.js";
 import { dropItem } from "./dropped-container.js";
+// Creature flags from their sentences (Effect Engine: Creatures chunk 2c-i).
+import { creatureFlagsOf } from "../item/creature-effects.js";
 
 const d = n => Math.floor(Math.random() * n) + 1;
 
@@ -45,7 +47,7 @@ async function rollGenerated(spec)
   {
     const forceKind = spec.weaponKind === "melee" ? "Melee" : spec.weaponKind === "ranged" ? "Ranged" : undefined;
     const w = await rollWeapon(spec.tier, null, null, null, null, forceKind);
-    const out = [{ name: w.name, type: w.type, system: { ...w.system, equipped: true } }];
+    const out = [{ name: w.name, type: w.type, system: { ...w.system, equipped: true }, flags: w.flags }];
     if (w.altForm) out.push({ name: w.altForm.name, type: w.altForm.type, system: { ...w.altForm.system } });
     return out;
   }
@@ -66,13 +68,13 @@ export async function resolveGeneratedGear(actor, options, userId)
 {
   if (userId !== game.user.id) return;
   if (actor.type !== "npc" || actor.pack) return;
-  const placeholders = actor.items.filter(i => i.flags?.vaarn?.generate);
+  const placeholders = actor.items.filter(i => creatureFlagsOf(i).generate);
   if (!placeholders.length) return;
 
   const lines = [];
   for (const ph of placeholders)
   {
-    const data = await rollGenerated(ph.flags.vaarn.generate);
+    const data = await rollGenerated(creatureFlagsOf(ph).generate);
     if (!data.length) continue;
     const created = await actor.createEmbeddedDocuments("Item", data);
     if (created.length === 2 && created[0].type.startsWith("weapon") && created[1].type.startsWith("weapon"))

@@ -29,6 +29,10 @@
  * ADDING AN ABILITY WITH A DAILY POOL is one entry below and no other edit.
  */
 
+import { MUTATION_EFFECTS } from "./mutation-effects-data.js";
+import { IMPLANT_EFFECTS } from "./implant-effects-data.js";
+import { perDaySizeOf } from "../effects/sentence.js";
+
 /**
  * Every Item that owns a daily use pool. `size` is the full pool, evaluated
  * against the bearer — Ink Ducts is Level-scaled, Trauma-Response Rig is a flat
@@ -39,8 +43,21 @@
  * that gets a refresh icon is by construction an entry a rest can refill.
  */
 export const DAILY_POOLS = [
-  { type: "mutation", name: "Ink Ducts",           size: actor => actor.system.level.value },
-  { type: "implant",  name: "Trauma-Response Rig", size: () => 1 },
+  // A mutation's pool is its use sentence's per-day cost (Mutations and
+  // Ancestry Rules chunk 4, 2026-10-06): Ink Ducts' Level, and Gas Glands'
+  // once a day (RULED 2026-10-06, Matt). The interpreter spends from it.
+  ...Object.entries(MUTATION_EFFECTS).flatMap(([name, { effects }]) =>
+  {
+    const use = effects.find(s => perDaySizeOf(s, 1) !== null);
+    return use ? [{ type: "mutation", name, size: actor => perDaySizeOf(use, actor.system.level.value) }] : [];
+  }),
+  // An implant's from its use sentence's per-day cost since Implants, Exotica
+  // and Figments chunk 3a (2026-10-06): the Trauma-Response Rig's once a day.
+  ...Object.entries(IMPLANT_EFFECTS).flatMap(([name, { effects }]) =>
+  {
+    const use = effects.find(s => perDaySizeOf(s, 1) !== null);
+    return use ? [{ type: "implant", name, size: actor => perDaySizeOf(use, actor?.system?.level?.value) }] : [];
+  }),
 ];
 
 /**

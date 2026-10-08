@@ -28,6 +28,7 @@ import { abilityBonus } from "./ambush.js";
 import { applyHeal } from "../actor/rest.js";
 import { blocksHealing } from "../actor/deprived.js";
 import { dropItem } from "../actor/dropped-container.js";
+import { dealDamage } from "../effects/deal.js";
 
 const SOURCE = "Surgical Array";
 
@@ -51,8 +52,10 @@ export async function resolveSurgicalArray(attacker, target)
   {
     const dmg = await failDamageFor(target, { dice: "1d8" }, SOURCE);
     await post(target, `${who} — not biological: ${dmg.line ?? `${dmg.amount} damage.`}`);
-    const hp = Number(target.system?.health?.value ?? 0);
-    if (dmg.amount > 0) await target.sheet?._resolveHPChange(target, hp, hp - dmg.amount);
+    // Through the whole HP pipeline (Shared Pipelines chunk 2, 2026-10-05): the
+    // raw d8, kinetic, from the drone; failDamageFor's line is the preview.
+    if (dmg.amount > 0)
+      dealDamage(target, dmg.rolled, { source: attacker ?? null, types: ["kinetic"], min: 1, name: SOURCE });
     return;
   }
 

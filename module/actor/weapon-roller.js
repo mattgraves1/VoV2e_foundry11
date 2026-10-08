@@ -29,6 +29,7 @@
  * `d` is passed in rather than imported so this stays synchronous for
  * chargen and loadable in node for tools/test-weapon-base-roll.mjs.
  */
+import { specialHandlersOfTags } from "../item/weapon-tags.js";
 export function rollWeaponBase(table, quality, d)
 {
   if(quality === "Exotic")
@@ -97,9 +98,10 @@ export async function rollWeapon(quality,baseChoice, basicTagChoice, advancedTag
       : `<p>Ammo only available in Vaarnish cities.</p>`);
   }
 
-  // "Fragile" must be a literal tag, not just display text — actor-sheet.js's
-  // nat-1 handler checks tags.includes("Fragile") to decide whether a weapon
-  // actually breaks (_weaponNat1) vs. just fumbles (_weaponFumble). Matches
+  // "Fragile" must be a literal tag, not just display text — its sentence
+  // (weapon-tag-effects-data.js, read by actor-sheet.js _checkWeaponCrit since
+  // Effect Engine: Weapon Tags chunk 4) is what makes a natural 1 break the
+  // weapon (_weaponNat1) rather than fumble it (_weaponFumble). Matches
   // chargen-app.js's own Advanced Weapon boon, which already does this.
   const allTags = [...(isFragileTier ? ["Fragile"] : []), ...tagNames, ...(base.base_tags || [])];
 
@@ -137,7 +139,9 @@ export async function rollWeapon(quality,baseChoice, basicTagChoice, advancedTag
   // the other way regardless: Heavy is "x2 base slot weight" with no value
   // clause, so Colossal has to name trade value explicitly precisely BECAUSE
   // slot weight alone would not move it.
-  const finalSlots = applySlotTagModifiers(base.slots ?? 1, allTags);
+  // LIVE (Stats as Sentences chunk 2d-i, RULED 2026-10-07): the fields hold the BASE; the tags'
+  // sentences and the tier's apply through statOf, read beside flags.vaarn.liveStats and tier.
+  const finalSlots = base.slots ?? 1;
 
   const weaponSystem =
   {
@@ -147,7 +151,7 @@ export async function rollWeapon(quality,baseChoice, basicTagChoice, advancedTag
     // Nano-edged's static damage modifiers, baked in here so every
     // weapon this function creates (Generate Weapon macro, Advanced
     // Exotica's weaponGen rows) reflects them.
-    damageDice: applyDamageTagModifiers(normalizeDamageDice(base.damage), allTags),
+    damageDice: normalizeDamageDice(base.damage),
     tags: allTags,
     // Trade-value tags, baked at creation like slots and damage above.
     // Only the UNCONDITIONAL ones — Bone/Nomad's/Ritual depend on who is
@@ -156,7 +160,7 @@ export async function rollWeapon(quality,baseChoice, basicTagChoice, advancedTag
     // Order is cosmetic today — every modifier is multiplicative — but it states
     // the intent. Exotic gets NO tier bonus on purpose: those weapons are
     // Exotica, so this field renders as XP and a multiplier would inflate it.
-    tradeValue: applyTierTradeMultiplier(applyTradeValueTagModifiers(base.tradeValue ?? 1, allTags), quality),
+    tradeValue: base.tradeValue ?? 1,
     description: descLines.join(""),
   };
   if(base.ammo_die)
@@ -181,7 +185,9 @@ export async function rollWeapon(quality,baseChoice, basicTagChoice, advancedTag
   // either way, there's nothing left for a slot mismatch to bug out, so
   // it can now roll totally freely from the full opposite-kind table.
   let altForm = null;
-  if(allTags.includes("Polymorphic"))
+  // From the tags' sentences since Weapon Tags chunk 5a: a tag carrying the
+  // polymorphic handler rolls the alternate form.
+  if(specialHandlersOfTags(allTags).includes("polymorphic"))
   {
     const altTable = resolvedBaseKind === "Melee" ? RANGED_WEAPONS : MELEE_WEAPONS;
     const altBase = pick(altTable);
@@ -211,6 +217,7 @@ export async function rollWeapon(quality,baseChoice, basicTagChoice, advancedTag
     name: fullName,
     type: resolvedBaseKind === "Ranged" ? "weaponRanged" : "weaponMelee",
     system: weaponSystem,
+    flags: { vaarn: { liveStats: true, tier: quality } },
     baseNote,
     altForm
   };
@@ -256,13 +263,14 @@ export async function buildBaseWeapon(kind, name)
   if(tags.length) descLines.push(`<p><b>Built-in tags:</b> ${tags.join(", ")}</p>`);
   if(base.ammo_die) descLines.push(`<p>Ammo only available in Vaarnish cities.</p>`);
 
+  // The base in the fields, its built-in tags live (Stats as Sentences chunk 2d-i).
   const system =
   {
-    slots: applySlotTagModifiers(base.slots ?? 1, tags),
+    slots: base.slots ?? 1,
     hands: base.hands ?? 1,
-    damageDice: applyDamageTagModifiers(normalizeDamageDice(base.damage), tags),
+    damageDice: normalizeDamageDice(base.damage),
     tags,
-    tradeValue: applyTradeValueTagModifiers(base.tradeValue ?? 1, tags),
+    tradeValue: base.tradeValue ?? 1,
     description: descLines.join("")
   };
   if(base.ammo_die)
@@ -271,5 +279,5 @@ export async function buildBaseWeapon(kind, name)
     system.usageDie = { die, max: die };
   }
 
-  return { name: base.name, type: kind === "Ranged" ? "weaponRanged" : "weaponMelee", system };
+  return { name: base.name, type: kind === "Ranged" ? "weaponRanged" : "weaponMelee", system, flags: { vaarn: { liveStats: true, tier: "Basic" } } };
 }

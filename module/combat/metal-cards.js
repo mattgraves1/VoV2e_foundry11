@@ -17,6 +17,7 @@
  * to judge, as every other area here.
  */
 import { isMetalItem, wearsMetalArmour } from "../item/metal.js";
+import { armourSlotOf } from "../effects/item-stats.js";
 
 /** Metal an actor carries that a magnet could move: not innate, not installed. */
 export function metalCarried(actor)
@@ -28,7 +29,7 @@ export function metalCarried(actor)
 export function metalHeld(actor)
 {
   return metalCarried(actor).filter(i => i.system?.equipped
-    && (i.type === "weaponMelee" || i.type === "weaponRanged" || (i.type === "armor" && i.system?.armorSlot === "shield")));
+    && (i.type === "weaponMelee" || i.type === "weaponRanged" || (i.type === "armor" && armourSlotOf(i) === "shield")));
 }
 
 /** The tokens a card reaches, and the words that say how they were chosen. */
@@ -41,7 +42,7 @@ function tokensInReach(source)
 }
 
 const itemLabel = i => `${i.name}${Number(i.system?.quantity) > 1 ? ` (×${i.system.quantity})` : ""}`
-  + `${i.system?.equipped ? (i.type === "armor" && i.system?.armorSlot !== "shield" ? " (worn)" : " (held)") : ""}`;
+  + `${i.system?.equipped ? (i.type === "armor" && armourSlotOf(i) !== "shield" ? " (worn)" : " (held)") : ""}`;
 
 /**
  * The card for a magnet: every metal item in reach, a metal vehicle, and -

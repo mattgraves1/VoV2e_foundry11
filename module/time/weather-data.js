@@ -163,3 +163,11 @@ export const WEATHER_TYPES = Object.freeze([
         + "damage every hour they spend aboveground."
   })
 ]);
+
+/**
+ * The weathers that count as a sandstorm for Beam ("Beam attacks are ... not
+ * effective during sandstorms"). RULED 2026-09-23 (Matt): Sand Storm and
+ * Prismatic Tempest, whose sheets of sand make it one; NOT Dust Storm, which
+ * is dust.
+ */
+export const BEAM_STORMS = new Set(["sand", "tempest"]);

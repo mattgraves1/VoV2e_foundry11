@@ -4,6 +4,12 @@ import { ANCESTRY_NATURAL_WEAPONS } from "../actor/ancestry-rules-data.js";
 import { IMPLANTS } from "../actor/chargen-data.js";
 import { UNARMED_STRIKE, normalizeDamageDice } from "../actor/chargen-app.js";
 import { isSuppressed } from "./suppression.js";
+import { MUTATION_EFFECTS } from "../actor/mutation-effects-data.js";
+import { ANCESTRY_RULE_EFFECTS } from "../actor/ancestry-effects-data.js";
+import { IMPLANT_EFFECTS } from "../actor/implant-effects-data.js";
+import { chargeDamage } from "./weapon-tags.js";
+// Creature attack flags from their sentences (Effect Engine: Creatures chunk 2a).
+import { creatureAttackOf } from "./creature-effects.js";
 
 /**
  * DAMAGE ADD-ONS — a natural weapon that is a damage BONUS to another attack
@@ -54,11 +60,31 @@ import { isSuppressed } from "./suppression.js";
 function* naturalWeaponEntries()
 {
   const one = (source, kind, e) => ({ source, kind, nw: e.naturalWeapon, addOn: e.damageAddOn ?? null, replacesUnarmed: !!e.replacesUnarmed });
-  for(const m of MUTATION_TABLE) if(m.naturalWeapon) yield one(m.name, "mutation", m);
-  for(const i of IMPLANTS) if(i.naturalWeapon) yield one(i.name, "implant", i);
-  for(const i of ADVANCED_IMPLANTS) if(i.naturalWeapon) yield one(i.name, "implant", i);
+  // A mutation's add-on is its sentence since Mutations and Ancestry Rules chunk 3
+  // (2026-10-05): a hit's addOn damage beside the baked natural weapon it rides on.
+  for(const m of MUTATION_TABLE) if(m.naturalWeapon) yield { ...one(m.name, "mutation", m), addOn: sentenceAddOn(MUTATION_EFFECTS[m.name]?.effects) };
+  // An implant's too since Implants, Exotica and Figments chunk 5 (RULED
+  // 2026-10-06, Matt): Tank Treads' +d10 on a charge, no longer the roster's damageAddOn.
+  for(const i of [...IMPLANTS, ...ADVANCED_IMPLANTS]) if(i.naturalWeapon) yield { ...one(i.name, "implant", i), addOn: sentenceAddOn(IMPLANT_EFFECTS[i.name]?.effects) };
   for(const rules of Object.values(ANCESTRY_NATURAL_WEAPONS))
-    for(const r of rules) if(r.naturalWeapon) yield one(r.rule, "ancestry", r);
+    for(const r of rules) if(r.naturalWeapon) yield { ...one(r.rule, "ancestry", r), addOn: sentenceAddOn(ANCESTRY_RULE_EFFECTS[r.rule]?.effects) };
+}
+
+/**
+ * The add-on a source's sentences declare, in the roster's damageAddOn shape:
+ * { appliesTo, requires, damageTypes } from its hit's `addOn` damage sentence -
+ * the attack-kind gate, a charging gate, its type. Null with none.
+ */
+function sentenceAddOn(effects)
+{
+  const s = (effects ?? []).find(x => (x.when?.trigger ?? x.when) === "attack-hit" && x.do?.verb === "damage" && x.do.addOn);
+  if(!s) return null;
+  const gates = s.if ?? [];
+  return {
+    appliesTo: gates.find(g => g.gate === "attack-kind")?.is ?? "melee",
+    requires: gates.some(g => g.gate === "charging") ? "charge" : null,
+    damageTypes: s.do.type ? [s.do.type] : null
+  };
 }
 
 /**
@@ -172,8 +198,10 @@ const ROCKET_BOOSTED_DEF = { dice: "1d12", source: "Rocket Boosted",
 function rocketBoostedOn(parentItem)
 {
   if(parentItem?.type !== "weaponMelee") return null;
-  const tags = parentItem.system?.tags ?? [];
-  return tags.includes(ROCKET_BOOSTED_TAG) ? { def: ROCKET_BOOSTED_DEF, item: parentItem } : null;
+  // From the weapon's sentences since Weapon Tags chunk 5a: a hit's extra
+  // damage gated on charging, which the charge toggle answers (ruling D).
+  const s = chargeDamage(parentItem);
+  return s ? { def: { ...ROCKET_BOOSTED_DEF, dice: s.do.dice, source: s.tag ?? parentItem.name }, item: parentItem } : null;
 }
 
 /**
@@ -227,7 +255,7 @@ export function collectDamageAddOns(actor, parentItem)
   // (Breathing and Suffocation, RULED 2026-09-27 by Matt). Rocket Boosted's
   // shape: an add-on the parent carries itself, so any actor rolls it, and
   // the component split gives it its own damage type.
-  for(const t of parentItem.flags?.vaarn?.typedDice ?? [])
+  for(const t of creatureAttackOf(parentItem).typedDice ?? [])
     out.push({ def: { dice: t.dice, source: t.source, damageTypes: t.damageTypes }, item: parentItem });
   return out;
 }

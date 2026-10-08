@@ -51,6 +51,8 @@
 
 import { AFFLICTIONS } from "../actor/affliction-data.js";
 import { entriesOf } from "../time/effect-board.js";
+import { afflictionOverTimeOf } from "../item/affliction-effects.js";
+import { dealDamage } from "../effects/deal.js";
 
 /**
  * Every failed-save consequence this actor is currently carrying that watches
@@ -63,9 +65,11 @@ import { entriesOf } from "../time/effect-board.js";
 export function consequencesFor(actor, ability)
 {
   const keys = new Set(entriesOf(actor).filter(e => e.kind === "affliction").map(e => e.afflictionKey));
+  // From the failed-save sentence since Wounds and Afflictions chunk 4 (2026-10-06).
   return AFFLICTIONS
-    .filter(a => keys.has(a.key) && a.onFailedSave?.ability === ability)
-    .map(a => ({ entry: a, spec: a.onFailedSave }));
+    .filter(a => keys.has(a.key))
+    .map(a => ({ entry: a, spec: afflictionOverTimeOf(actor, a.key).onFailedSave }))
+    .filter(x => x.spec?.ability === ability);
 }
 
 /**
@@ -99,7 +103,9 @@ export async function onSaveResolved(actor, ability, verdict)
       // Through the HP funnel (2026-09-26, Matt), so temporary HP soaks it and a
       // character taken below 0 meets the Wounds table like any other damage.
       // It used to write HP directly and skip both.
-      if(actor.sheet?._resolveHPChange) actor.sheet._resolveHPChange(actor, hp, hp - amount);
+      // Through the whole HP pipeline since chunk 2 (2026-10-05): untyped (the
+      // body doing it to itself), no attacker, so multipliers and splits apply.
+      if(actor.sheet?._doDamage) dealDamage(actor, amount, { name: entry.name });
       else await actor.update({ "system.health.value": hp - amount });
     }
     if(spec.text)

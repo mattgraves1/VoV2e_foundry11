@@ -44,6 +44,7 @@
 import { isIntrinsic } from "./intrinsic.js";
 import { startActivity } from "../time/activity.js";
 import { hasCondition } from "../time/stateful-effect.js";
+import { bodySentences } from "../effects/body.js";
 
 /**
  * The ancestry this applies to. A named constant rather than a literal at the
@@ -78,8 +79,11 @@ export const ATTUNING_CONDITION = "attuneWithMatter";
 /** Does this actor attune at all - by ancestry, by the rule gained later, or for a span? */
 export function attunes(actor)
 {
-  return actor?.system?.ancestry === ATTUNING_ANCESTRY
-    || !!actor?.items?.some?.(i => i.type === "ancestry" && i.system?.rule === ATTUNING_RULE)
+  // Mutations and Ancestry Rules chunk 6 (RULED 2026-10-06): Attune with
+  // Matter's own sentence, from its rule Item or - a Planeyfolk made before
+  // its rule Items - the ancestry text (ruling B), in place of the ancestry
+  // name and the rule name. The two constants above name what that reads.
+  return bodySentences(actor, "passive").some(p => p.sentence.do?.verb === "special" && p.sentence.do.handler === "attunes")
     || hasCondition(actor, ATTUNING_CONDITION);
 }
 

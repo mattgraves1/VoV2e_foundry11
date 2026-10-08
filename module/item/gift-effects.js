@@ -20,6 +20,12 @@
  *                NO SAVE (ruled: Gifts always hit) and NO DURATION (ruled:
  *                it lasts until the Referee ends it).
  *
+ * SINCE 2026-10-05 (Effect Engine: Interpreter and Mystic Gifts) the list is
+ * stored as effect sentences in vaarn.effects. The entry shape above is still
+ * the Effects tab's fields and the suggestions' shape: giftEffectSentence
+ * turns one into a sentence and giftEntryOf turns a sentence back, and an old
+ * Gift's vaarn.giftEffects is read through the translator, never rewritten.
+ *
  * Pure functions at the top so tools/test-gift-effects.mjs can run them
  * without Foundry; the item writes are at the bottom.
  */
@@ -27,6 +33,9 @@
 import { COMMON_DAMAGE_TYPES } from "./attack-properties.js";
 import { CONDITIONS, conditionByKey } from "../actor/condition-data.js";
 import { SAMPLE_GIFT_SUGGESTIONS, QUALITY_SUGGESTIONS, FORM_DAMAGE_TYPES } from "./gift-effect-suggestions.js";
+import { registerTranslator, sentencesOf } from "../effects/interpret.js";
+import { normalise as normaliseSentence, EFFECTS_FLAG } from "../effects/sentence.js";
+import { stateForWording } from "../effects/states.js";
 
 export const GIFT_SCOPE = "vaarn";
 export const GIFT_EFFECTS_FLAG = "giftEffects";
@@ -157,6 +166,81 @@ export function giftConditionSpec(effect, source)
   return { name, text: `${effect.text ?? ""}${from} <b>${UNTIL_ENDED}</b>`.trim(), rounds: null, unit: "round" };
 }
 
+/* -------------------------------------------- */
+/*  The translator - Effect Engine: Interpreter and Mystic Gifts, chunk 2     */
+/* -------------------------------------------- */
+
+/**
+ * A Gift's roll: "roll damage dice of the same size the user paid in HP,
+ * adding the user's PSY bonus ... the same ratio applies if trying to heal"
+ * (Mystic Gifts). @cost is the die the user chose in the cost dialog.
+ */
+export const GIFT_ROLL = "@cost+@psy";
+export const GIFT_COST = { kind: "hp", die: "chosen" };
+
+/**
+ * One old effect-list entry as a sentence (RULED 2026-10-05: an old Gift is
+ * read through this, and nothing on an actor is rewritten).
+ *  - damage    -> damage of its type, rolled as GIFT_ROLL
+ *  - healing   -> heal, rolled as GIFT_ROLL
+ *  - condition -> Blinded or Entangled as the real condition; a named effect
+ *                 whose wording is a registered state becomes that state with
+ *                 the Gift's wording kept (ruling C); any other named effect
+ *                 is a lasting reminder - a board entry with no mechanics, as
+ *                 it always was. All until the Referee ends it (2026-09-29).
+ *  - prose     -> a reminder: the text in chat, only the cost modelled.
+ * No resist anywhere: Gifts always hit (ruled 2026-09-29).
+ */
+export function giftEffectSentence(entry)
+{
+  const e = normaliseEffect(entry);
+  const s = { when: "use", cost: { ...GIFT_COST } };
+  if(e.label) s.label = e.label;
+  switch(e.kind)
+  {
+    case "damage":  s.do = { verb: "damage", dice: GIFT_ROLL, type: e.damageType }; break;
+    case "healing": s.do = { verb: "heal", amount: GIFT_ROLL }; break;
+    case "condition":
+    {
+      s.for = "until-referee";
+      if(e.condition) { s.do = { verb: "condition", state: e.condition }; break; }
+      const name = e.effectName || "Named effect";
+      const state = stateForWording(name);
+      s.do = state ? { verb: "condition", state: state.key, name } : { verb: "reminder", name };
+      if(e.text) s.text = e.text;
+      break;
+    }
+    default:
+      s.do = { verb: "reminder" };
+      s.text = e.text ?? "";
+  }
+  return s;
+}
+
+/** An old Gift's effect list as sentences - the translator the interpreter reads. */
+export function giftSentencesOf(item)
+{
+  return effectsOf(item).map(giftEffectSentence);
+}
+
+registerTranslator("gift", giftSentencesOf);
+
+/**
+ * "Other use": the freeform cast every Gift has - one roll, which the table
+ * applies as damage or as healing, untyped (RULED 2026-09-26; kept as a
+ * sentence the interpreter runs, ruling B 2026-10-05).
+ */
+export const OTHER_USE = {
+  when: "use", cost: { ...GIFT_COST }, label: "Other use",
+  choice: [[{ when: "use", do: { verb: "damage", dice: GIFT_ROLL } }], [{ when: "use", do: { verb: "heal", amount: GIFT_ROLL } }]]
+};
+
+/** Every suggestion for this Gift as a sentence, with `from` and `summary` kept for the editor. */
+export function suggestionSentencesFor(item)
+{
+  return suggestionsFor(item).map(({ from, index, summary, ...e }) => ({ sentence: giftEffectSentence(e), from, index, summary }));
+}
+
 /** What the effect editor lists for its selects. */
 export const CONDITION_CHOICES = [...CONDITIONS.map(c => ({ key: c.key, label: c.label })), { key: "", label: "Named effect..." }];
 export const DAMAGE_TYPE_CHOICES = COMMON_DAMAGE_TYPES.map(t => ({ key: t, label: title(t) }));
@@ -171,31 +255,75 @@ export function effectsOf(item)
   return Array.isArray(list) ? list.map(normaliseEffect) : [];
 }
 
-async function writeEffects(item, list)
+/* -------------------------------------------- */
+/*  The editor writes sentences - Interpreter chunk 4 (RULED 2026-10-05)      */
+/* -------------------------------------------- */
+
+const sortedJSON = v => Array.isArray(v) ? `[${v.map(sortedJSON).join(",")}]`
+  : v && typeof v === "object" ? `{${Object.keys(v).sort().map(k => JSON.stringify(k) + ":" + sortedJSON(v[k])).join(",")}}`
+  : JSON.stringify(v);
+
+/**
+ * A sentence as the Effects tab shows it: the old entry shape, which is the
+ * tab's fields. The inverse of giftEffectSentence. `custom` is true when the
+ * tab's fields cannot say it - a sentence written some other way, which the
+ * tab shows read-only rather than rewrite and lose what it said.
+ */
+export function giftEntryOf(sentence)
 {
-  return item.update({ [`flags.${GIFT_SCOPE}.${GIFT_EFFECTS_FLAG}`]: list.map(normaliseEffect) });
+  const n = normaliseSentence(sentence) ?? {};
+  const d = n.do ?? {};
+  let e;
+  if(d.verb === "damage") e = { kind: "damage", damageType: d.type ?? "" };
+  else if(d.verb === "heal") e = { kind: "healing" };
+  else if(d.verb === "condition" && conditionByKey(d.state)) e = { kind: "condition", condition: d.state };
+  else if(d.verb === "condition" || (d.verb === "reminder" && n.for))
+    e = { kind: "condition", condition: "", effectName: d.name ?? "", text: n.text ?? "" };
+  else e = { kind: "prose", text: n.text ?? "" };
+  e = normaliseEffect({ ...e, label: n.label ?? "" });
+  const custom = sortedJSON(normaliseSentence(giftEffectSentence(e))) !== sortedJSON(n);
+  return { ...e, custom };
 }
 
+/** The list the tab edits: the Gift's own sentences, or an old list read through the translator. */
+function editableList(item)
+{
+  return sentencesOf(item);
+}
+
+/**
+ * Write the whole list to vaarn.effects. The first edit of an old Gift writes
+ * its translated list here, beside the untouched vaarn.giftEffects, which is
+ * ignored from then on (ruling A, 2026-10-05).
+ */
+async function writeSentences(item, list)
+{
+  return item.update({ [`flags.${GIFT_SCOPE}.${EFFECTS_FLAG}`]: list });
+}
+
+/** Add one entry (a blank of a kind, or a suggestion) as a sentence. */
 export async function addEffect(item, effect)
 {
-  const { from, index, summary, ...clean } = effect ?? {};
-  return writeEffects(item, [...effectsOf(item), normaliseEffect(clean)]);
+  const { from, index, summary, custom, ...clean } = effect ?? {};
+  return writeSentences(item, [...editableList(item), giftEffectSentence(clean)]);
 }
 
+/** Change one field of one entry; a new kind starts from that kind's blank, keeping the label and text. */
 export async function updateEffect(item, index, field, value)
 {
-  const list = effectsOf(item);
+  const list = editableList(item);
   if(!list[index]) return null;
-  let next = { ...list[index], [field]: value };
-  // A new kind starts from that kind's blank, keeping only the label and text.
-  if(field === "kind") next = { ...blankEffect(value), label: list[index].label, text: list[index].text };
-  list[index] = next;
-  return writeEffects(item, list);
+  const { custom, ...cur } = giftEntryOf(list[index]);
+  if(custom) return null;
+  let next = { ...cur, [field]: value };
+  if(field === "kind") next = { ...blankEffect(value), label: cur.label, text: cur.text };
+  list[index] = giftEffectSentence(next);
+  return writeSentences(item, list);
 }
 
 export async function removeEffect(item, index)
 {
-  const list = effectsOf(item);
+  const list = editableList(item);
   list.splice(index, 1);
-  return writeEffects(item, list);
+  return writeSentences(item, list);
 }

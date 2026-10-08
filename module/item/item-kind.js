@@ -1,4 +1,5 @@
 import { isExotica } from "./xp-value.js";
+import { armourSlotOf } from "../effects/item-stats.js";
 
 /**
  * Item Type on Item Sheet — what KIND of thing an Item is, in words, on its
@@ -68,7 +69,7 @@ export function kindsOf(item)
   const kinds = [];
   if(isExotica(item)) kinds.push("Exotica");
 
-  if(item.type === "armor") kinds.push(ARMOUR_KIND[item.system?.armorSlot || "body"] ?? ARMOUR_KIND.body);
+  if(item.type === "armor") kinds.push(ARMOUR_KIND[armourSlotOf(item)] ?? ARMOUR_KIND.body);
   else if(KIND_BY_TYPE[item.type]) kinds.push(KIND_BY_TYPE[item.type]);
 
   return kinds;

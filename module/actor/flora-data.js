@@ -159,11 +159,9 @@ export function buildFlora(key)
   return [{
     name: f.name,
     type: f.item.type,
-    system: { ...f.item.system, description, ...spanFieldFrom(f) },
-    ...(f.spanApplied || f.endGrant || f.toxDie ? { flags: { vaarn: {
-      ...(f.spanApplied ? { spanApplied: f.spanApplied } : {}),
-      ...(f.endGrant ? { endGrant: f.endGrant } : {}),
-      ...(f.toxDie ? { toxDie: f.toxDie } : {}),
-      ...(f.toxLapses ? { toxLapses: true } : {}) } } } : {})
+    system: { ...f.item.system, description, ...spanFieldFrom(f) }
+    // The scent, the Gift save, the toxin die and its lapse are the plant's
+    // sentences since Effect Engine: Consumables chunk 3c (2026-10-06, ruling B),
+    // read by name; the flags they were written as are no longer written.
   }];
 }

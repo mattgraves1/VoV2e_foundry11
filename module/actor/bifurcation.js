@@ -27,7 +27,6 @@ import { addEntry, expiryFor, SCOPE } from "../time/effect-board.js";
 import { isIntrinsic } from "../item/intrinsic.js";
 import { declaredSpanOf } from "../time/declared-span.js";
 import { gmHP } from "./hidden-hp.js";
-import { ELIXIRS } from "./chargen-data.js";
 
 export const BIFURCATING_BREW = "Bifurcating Brew";
 const HYPERGEOMETRIC = "hypergeometric";
@@ -114,10 +113,10 @@ export async function bifurcate(item, post)
  * "Remove the half" button stays the Brew's: its half is the table's to
  * settle, a jelly-clone is not.
  */
-export async function cloneFromElixir(item, post)
+// `spec` is the Doppeldraught's clone sentence's (Consumables chunk 3a, 2026-10-06).
+export async function cloneFromElixir(item, post, spec)
 {
   const actor = item?.parent;
-  const spec = ELIXIRS.find(e => e.name === item?.name)?.clone;
   if(!actor || !spec) return null;
 
   if(actor.type !== "character")

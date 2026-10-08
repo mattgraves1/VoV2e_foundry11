@@ -30,6 +30,7 @@
  * 2026-09-21 (Matt): "extend it to 30 feet (6 grid squares) radius, but dim
  * and your green selection are perfect".
  */
+import { remainingItemFlagsOf } from "./remaining-effects.js";
 
 /** The light a chemcell torch casts. Radius in grid squares; see above. */
 export const CHEMCELL_LIGHT = { dimSquares: 6, color: "#7dff9b", alpha: 0.35 };
@@ -54,7 +55,8 @@ export function chemcellTorchItem()
 /** The declared light, or null. */
 export function lightSourceOf(item)
 {
-  const l = item?.flags?.vaarn?.lightSource;
+  // From its sentence since Remaining Sources chunk 2d (2026-10-07).
+  const l = remainingItemFlagsOf(item).lightSource;
   return l && Number(l.dimSquares) > 0 ? l : null;
 }
 

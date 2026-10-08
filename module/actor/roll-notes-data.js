@@ -18,9 +18,15 @@ export const DAMAGE_NOTES = {};
 // as Electrical's are (2026-09-05). Its leftover clauses have no state and are
 // about USING the weapon, so they ride the attack roll - Electrical's, which
 // change the damage, ride the damage card instead.
-export const TO_HIT_NOTES = {
-  "Flaming": "Flaming: cannot be used underwater or against a submerged target. Ignites flammable objects.",
-};
+//
+// The water clauses are ASKED before the roll since Effect Engine: Weapon Tags
+// chunk 4 (RULED 2026-10-05, Matt) - the wielder underwater stops the attack,
+// a submerged target is left out - so the note keeps only what is not asked.
+//
+// EMPTY since Weapon Tags chunk 5a (2026-10-05): Flaming's "ignites flammable
+// objects" is its own sentence's reminder, posted by _tagNotes from the
+// weapon's sentences. Kept as a table for a creature weapon's own note.
+export const TO_HIT_NOTES = {};
 
 // weapon tag name -> reminder text, shown ONCE PER TARGET ACTUALLY HIT.
 //
@@ -52,9 +58,8 @@ export const HIT_NOTES = {};
 // Cacklemaw Exile's No Quarter is a save the character makes at a moment the
 // sheet cannot see - showing mercy, or retreating - so it rides every EGO Save
 // as a reminder rather than being compelled by anything.
-export const SAVE_NOTES = [
-  { mutationName: "Albino", abilities: null, note: "Albino: DIS on this Save during daylight hours unless you're carrying a sunshade." },
-  { mutationName: "Extra Head", abilities: ["int", "psy", "ego"], note: "Extra Head: ADV on this Save." },
-  { mutationName: "Small Stature", abilities: ["str"], note: "Small Stature: DIS on this Save." },
-  { ancestryName: "Cacklemaw Exile", rule: "No Quarter", abilities: ["ego"], note: "No Quarter: you must pass an EGO Save to show mercy to a defeated foe or to retreat from a fight." },
-];
+// EMPTIED by Effect Engine: Mutations and Ancestry Rules chunk 2b (2026-10-05):
+// Albino, Extra Head, Small Stature and No Quarter are their own sentences
+// (mutation-effects-data.js, ancestry-effects-data.js), read by save-notes.js.
+// Kept as an export so a later save note has its place.
+export const SAVE_NOTES = [];

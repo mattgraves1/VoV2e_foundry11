@@ -33,6 +33,11 @@
  * gives as a chance rather than a save at all. Auto-infecting on a failure
  * would take both of those away.
  *
+ * SUPERSEDED 2026-10-05 (Matt, Effect Engine: Shared Pipelines chunk 7, ruling
+ * D): the engine's ruling B - a failed save always applies its effect itself -
+ * covers contraction too, a secret roll included. A failed save now infects
+ * (infectActor); the reasoning above is kept as the record of why it did not.
+ *
  * GM-ONLY, BOTH BUTTONS. Infecting and curing are Referee acts. The save is
  * not.
  */
@@ -42,10 +47,12 @@ import { contractAffliction, cureAffliction, afflictionSaveModifiers, immunityNo
          rollContractionDetails, implantsDisplacedBy, sourceKeyFor,
          applyManualEffect } from "./affliction.js";
 import { slotsOccupiedBy } from "./affliction-data.js";
+import { afflictionOverTimeOf } from "../item/affliction-effects.js";
 import { rollCardSave } from "../combat/card-save.js";
 import { startActivity } from "../time/activity.js";
 import { woundItemsNamed } from "../time/recurrence.js";
 import { forgetWoundItems } from "./named-wound.js";
+import { statOf } from "../effects/item-stats.js";
 
 const SCOPE = "vaarn";
 export const CARD_FLAG = "affliction";
@@ -147,7 +154,7 @@ export async function rollAfflictionSave(message)
   const disSources = spec.disSources?.length ? spec.disSources : (spec.dis ? ["nanomachine DIS"] : []);
   // The roll, the message, the natural-20 clause and the Goldencough
   // consequence (site 3 of save-consequences.js) all live in card-save.js.
-  const { roll } = await rollCardSave(actor, {
+  const { roll, verdict } = await rollCardSave(actor, {
     ability: "con",
     label: entry.name,
     target,
@@ -157,6 +164,14 @@ export async function rollAfflictionSave(message)
       cardId: message.id, total: r.total, passed: !!r.verdict?.passed,
       reason: r.verdict?.reason ?? "total" } }),
   });
+  // A FAILED SAVE INFECTS BY ITSELF (Shared Pipelines chunk 7, RULED D
+  // 2026-10-05) - a secret roll the Referee makes for a PC included. The
+  // Infect button stays for the Referee, and refuses a second infection.
+  if(!verdict?.passed && !(await infectedFor(spec)))
+  {
+    await infectActor(actor, spec.key, { stomaObject: spec.stomaObject ?? null });
+    ui.chat?.updateMessage?.(message);
+  }
   return roll;
 }
 
@@ -196,15 +211,29 @@ export async function onInfectClick(message)
   const spec = message.getFlag(SCOPE, CARD_FLAG);
   if(!spec) return;
   const actor = await fromUuid(spec.actorUuid);
-  const entry = afflictionByKey(spec.key);
-  if(!actor || !entry) return;
+  if(!actor) return;
+  await infectActor(actor, spec.key, { stomaObject: spec.stomaObject ?? null });
+  ui.chat?.updateMessage?.(message);
+}
+
+/**
+ * Contract an affliction and post what it did - the Infect button's work,
+ * shared since Shared Pipelines chunk 7 (2026-10-05) with every failed
+ * contraction save, which now infects by itself (RULED D: ruling B supersedes
+ * this card's 2026-09-13 "the save does not infect anybody"). Returns the
+ * report, or null when there was nothing to do.
+ */
+export async function infectActor(actor, key, { stomaObject = null } = {})
+{
+  const entry = afflictionByKey(key);
+  if(!actor || !entry) return null;
 
   const details = await rollContractionDetails(entry);
   const slots = slotsOccupiedBy(entry, details.abilitySlot);
   const willDisplace = implantsDisplacedBy(actor, slots).map(i => i.name);
 
-  const report = await contractAffliction(actor, spec.key, { details, stomaObject: spec.stomaObject ?? null });
-  if(report.error) return ui.notifications.warn(report.error);
+  const report = await contractAffliction(actor, key, { details, stomaObject });
+  if(report.error) { ui.notifications.warn(report.error); return null; }
 
   const bits = [`<p><b>${actor.name}</b> has contracted <b>${entry.name}</b>.</p>`];
   if(report.heldSlots?.length)
@@ -232,7 +261,7 @@ export async function onInfectClick(message)
     speaker: ChatMessage.getSpeaker({ actor }),
     content: bits.join(""),
   });
-  ui.chat?.updateMessage?.(message);
+  return report;
 }
 
 /**
@@ -286,7 +315,7 @@ export async function cureAndReport(actor, key)
   // player who expects their STR back needs to know where it went.
   bits.push(`<p><i>Ability damage does not come back with the cure — it heals`
     + ` normally with rest.</i></p>`);
-  if(report.entry.cureReversesDeparture)
+  if(report.overTime?.cureReversesDeparture)
     bits.push(`<p><i>Note: the book says this cure ARRESTS rather than reverses.`
       + ` This table reverses it.</i></p>`);
 
@@ -346,12 +375,13 @@ export const TREATMENT_PURPOSE = "treat:";
 export async function startTreatment(actor, key)
 {
   const entry = afflictionByKey(key);
-  const spec = entry?.treatment;
+  // The Gitch's debridement from its treatment sentence since chunk 4 (2026-10-06).
+  const spec = afflictionOverTimeOf(actor, key).treatment;
   if(!spec) return ui.notifications.warn(`${entry?.name ?? key} has no treatment that takes time.`);
   const purpose = TREATMENT_PURPOSE + key;
   if((actor.getFlag("vaarn", "effects") ?? []).some(e => e.kind === "activity" && e.purpose === purpose))
     return ui.notifications.warn(`${actor.name} is already being treated for ${entry.name}.`);
-  const slots = woundItemsNamed(actor, spec.perSlotOf).reduce((n, i) => n + (Number(i.system?.slots) || 1), 0);
+  const slots = woundItemsNamed(actor, spec.perSlotOf).reduce((n, i) => n + (Number(statOf(i, "slots")) || 1), 0);
   if(!slots)
     return ui.notifications.warn(`${actor.name} has no ${spec.perSlotOf} to remove — use the Cured control.`);
   await startActivity(actor, {
@@ -380,7 +410,7 @@ export async function onTreatmentComplete({ actor, entry } = {})
   const purpose = String(entry?.purpose ?? "");
   if(!purpose.startsWith(TREATMENT_PURPOSE) || !actor) return;
   const key = purpose.slice(TREATMENT_PURPOSE.length);
-  const spec = afflictionByKey(key)?.treatment;
+  const spec = afflictionOverTimeOf(actor, key).treatment;
   if(!spec) return;
   const held = (actor.getFlag("vaarn", "effects") ?? []).some(e => e.afflictionKey === key);
   if(held) await cureAndReport(actor, key);

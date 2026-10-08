@@ -43,4 +43,5 @@ included under its own licence and is not covered by it:
   This includes the location images in the Vaarn Region Map Legend, which
   are drawn from them. Each icon's author is listed in
   module/icons/credits.txt, which also names the images drawn for this
-  system; those are covered by the MIT licence above.
+  system; those are covered by the MIT licence above and were made with AI
+  assistance.

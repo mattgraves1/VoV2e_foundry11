@@ -24,6 +24,8 @@
  * actor data. Settled 2026-09-19 (Matt) — that is never a concern here.
  */
 
+import { concealsHp } from "../effects/body.js";
+
 export const ANALGESIA = "Analgesia";
 const GM_HP_CLASS = "vaarn-gm-hp";
 
@@ -31,7 +33,8 @@ const GM_HP_CLASS = "vaarn-gm-hp";
 export function hidesHP(actor)
 {
   if(actor?.type !== "character") return false;
-  return actor.items.some(i => i.type === "mutation" && i.name === ANALGESIA);
+  // Analgesia's `conceal hp` sentence since Mutations and Ancestry Rules chunk 2b.
+  return concealsHp(actor);
 }
 
 /** True when THIS client must not see the actor's HP. */

@@ -1,4 +1,7 @@
 import { loseLevels, ABILITY_CAP, ABILITY_LABEL } from "./advancement.js";
+import { maxHpChange } from "../effects/max-hp.js";
+// Creature flags from their sentences (Effect Engine: Creatures chunk 2c-i).
+import { creatureFlagsOf } from "../item/creature-effects.js";
 
 /**
  * CREATURE-DRIVEN LEVEL DRAIN
@@ -51,7 +54,7 @@ import { loseLevels, ABILITY_CAP, ABILITY_LABEL } from "./advancement.js";
 /** The rule Item's declared drain spec, or null. */
 export function levelDrainSpecOf(item)
 {
-  return item?.flags?.vaarn?.levelDrain ?? null;
+  return creatureFlagsOf(item).levelDrain ?? null;
 }
 
 /** Every stored drain a victim is currently carrying. */
@@ -167,8 +170,7 @@ export async function applyDrainerGain(drainer, gain)
   }
   if(hpUp)
   {
-    updates["system.health.max"] = Number(drainer.system.health.max) + hpUp;
-    updates["system.health.value"] = Number(drainer.system.health.value) + hpUp;
+    Object.assign(updates, maxHpChange(drainer, { add: hpUp }));
   }
 
   await drainer.update(updates);
@@ -195,8 +197,7 @@ async function redoEntry(actor, entry, items)
     // Max and current both rise, which is what the level-up did. A character
     // wounded since the drain keeps the wound: current goes up by the same
     // amount, not to full.
-    updates["system.health.max"] = Number(actor.system.health.max) + entry.hp;
-    updates["system.health.value"] = Number(actor.system.health.value) + entry.hp;
+    Object.assign(updates, maxHpChange(actor, { add: entry.hp }));
   }
 
   // The undo REFUNDED the XP this level cost, so giving the level back has to

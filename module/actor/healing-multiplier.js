@@ -24,22 +24,11 @@
  * their maximum. What the book halves is the healing RECEIVED, so the caller
  * works out the gain exactly as before and passes that here.
  */
-import { woundItemsNamed } from "../time/recurrence.js";
+import { namedWoundPerSlot } from "../item/creature-effects.js";
 
-/**
- * Each affliction that scales healing, and by how much PER SLOT. A wound
- * Item's name is the key because that is what a slot of it is on the actor.
- */
-export const HEALING_MULTIPLIERS = [
-  { wound: "Deathblight", perSlot: 0.5 }
-];
-
-/** Slots of `wound` the actor carries — the sum of each Item's slots field. */
-function slotsOf(actor, wound)
-{
-  return woundItemsNamed(actor, wound)
-    .reduce((n, i) => n + Math.max(1, Number(i.system?.slots) || 1), 0);
-}
+// SINCE Effect Engine: Creatures chunk 2e (2026-10-07) the factor is the wound's own
+// sentence (healing-per-slot), read by its key through namedWoundPerSlot - the name
+// table that stood here, and the by-name slot count beside it, are gone.
 
 /**
  * Scale a heal's gain for the actor's afflictions.
@@ -59,12 +48,10 @@ export function scaleHealing(actor, gained)
 
   let factor = 1;
   const named = [];
-  for (const m of HEALING_MULTIPLIERS)
+  for (const m of namedWoundPerSlot(actor, "healing-per-slot"))
   {
-    const slots = slotsOf(actor, m.wound);
-    if (!slots) continue;
-    factor *= Math.pow(m.perSlot, slots);
-    named.push(`<b>${m.wound}</b> (${slots} slot${slots === 1 ? "" : "s"})`);
+    factor *= Math.pow(m.perSlot, m.slots);
+    named.push(`<b>${m.name}</b> (${m.slots} slot${m.slots === 1 ? "" : "s"})`);
   }
   if (factor === 1) return { gained: raw, note: "" };
 

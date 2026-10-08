@@ -119,9 +119,12 @@
 import { SIDE, sideOf } from "./initiative.js";
 import { addEntry, entriesOf, expiryFor, SCOPE } from "../time/effect-board.js";
 import { resolveSave } from "./saves.js";
+import { bodyImmunities, bodyPassives } from "../effects/body.js";
 // Quantum Daemon Debt: Jinxed. This card rolls its own d20 rather than going
 // through the sheet, so it is one of the three roll creators that apply it.
 import { applyJinx, JINX_BANNER } from "../time/curse.js";
+// A creature's own flags from its actor-level sentences (Effect Engine: Creatures chunk 2d).
+import { creatureActorFlagsOf, namedWoundHeldOf } from "../item/creature-effects.js";
 
 /** Flag on the roster card. */
 export const AMBUSH_FLAG = "ambush";
@@ -285,46 +288,36 @@ let _immuneNames = null;
 export async function immuneItemNames()
 {
   if (_immuneNames) return _immuneNames;
-  const [mut, imp, exo] = await Promise.all([
-    import("../actor/mutation-data.js"),
-    import("../actor/advanced-implants-data.js"),
-    import("../actor/advanced-exotica-data.js")
-  ]);
+  // Every ambush immunity is a sentence now - mutations since Mutations and
+  // Ancestry Rules chunk 2b, Vigilance Radar and the Ultravisor since Implants,
+  // Exotica and Figments chunk 2 (2026-10-06), read by immunityOf. The set is
+  // kept, empty, for its callers.
   const names = new Set();
-  const collect = obj => {
-    for (const v of Object.values(obj ?? {}))
-      if (Array.isArray(v))
-        for (const e of v) if (e?.ambush === "immune" && e.name) names.add(e.name);
-  };
-  collect(mut); collect(imp); collect(exo);
   _immuneNames = names;
   return names;
 }
 
 /** Test seam: drop the cache so a roster edit is picked up without a reload. */
-export function resetImmuneCache() { _immuneNames = null; _asleepNames = null; _giveawayNames = null; }
+export function resetImmuneCache() { _immuneNames = null; _giveawayNames = null; }
 
 /**
  * Afflictions whose bearer is not surprised WHILE ASLEEP - Janus Lenses, "they
  * cannot be ambushed or surprised while asleep, as the cameras always detect
  * approaching adversaries" (Ambush Resolution wiring, RULED 2026-09-26 by
  * Matt: the bearer only). Asleep means a sleeper in a night watch; awake, it
- * does nothing. Matched on the roster by exact name, as immuneItemNames is.
+ * does nothing. Read from the affliction's sentence since Effect Engine: Wounds
+ * and Afflictions chunk 3 (2026-10-06): an immunity to ambush gated on asleep.
+ * The gate is the sleeper's place in the watch, so it is taken as holding here
+ * and never asked; bodyImmunities' ungated read keeps it off a waking roll.
  */
-let _asleepNames = null;
-export async function asleepImmuneNames()
-{
-  if (_asleepNames) return _asleepNames;
-  const { AFFLICTIONS } = await import("../actor/affliction-data.js");
-  _asleepNames = new Set((AFFLICTIONS ?? []).filter(e => e.ambush === "immuneAsleep").map(e => e.name));
-  return _asleepNames;
-}
+const asleepGated = n => (n.if ?? []).some(g => (g?.gate ?? g) === "asleep");
 
 /** Why this sleeper is not surprised, or null. */
-export function asleepImmunityOf(actor, names)
+export function asleepImmunityOf(actor)
 {
-  const item = (actor?.items ?? []).find(i => names.has(i.name));
-  return item ? `${item.name} — cannot be surprised while asleep` : null;
+  const p = bodyPassives(actor, { verb: "immune", holds: () => true })
+    .find(x => x.sentence.do.to === "ambush" && asleepGated(x.sentence));
+  return p ? `${p.source} — cannot be surprised while asleep` : null;
 }
 
 /**
@@ -411,8 +404,12 @@ export function immunityOf(actor, immuneNames)
   // rather than an Item because a creature rule is not a carried thing — the
   // same split `ambushFlagOf` makes. Reading only items would have left this
   // atom looking wired while nothing ever consulted it.
-  const flag = actor?.flags?.vaarn?.ambush;
+  const flag = creatureActorFlagsOf(actor).ambush;
   if (flag?.mode === "immune") return flag.rule;
+  // A body's immunity since Mutations and Ancestry Rules chunk 2b (2026-10-05):
+  // Backwards Head, Heightened Hearing - not suppressed.
+  const body = bodyImmunities(actor, "ambush")[0];
+  if (body) return body.source;
 
   for (const item of actor?.items ?? [])
   {
@@ -436,7 +433,8 @@ export function immunityOf(actor, immuneNames)
  */
 export function exposureOf(actor)
 {
-  const w = (actor?.items ?? []).find(i => i.type === "wound" && i.flags?.vaarn?.namedWound?.alwaysSurprised);
+  // From the wound's sentences by its key since Effect Engine: Creatures chunk 2e.
+  const w = (actor?.items ?? []).find(i => i.type === "wound" && namedWoundHeldOf(i)?.alwaysSurprised);
   return w ? `Wound: ${w.name.replace(/ \(Wound x\d+\)$/, "")}` : null;
 }
 
@@ -450,7 +448,7 @@ export function exposureOf(actor)
  */
 export function ambusherOverride(combatant)
 {
-  const f = combatant?.actor?.flags?.vaarn?.ambush;
+  const f = creatureActorFlagsOf(combatant?.actor).ambush;
   if (!f) return null;
   if (f.mode === "always" || f.mode === "cannot" || f.mode === "prompt") return f;
   return null;
@@ -700,7 +698,6 @@ export async function postAmbushCard({ ambusher, ambushers, targets, sprungBy = 
                                        mode = MODE.GROUP, sleepers = [] } = {})
 {
   const immuneNames = await immuneItemNames();
-  const asleepNames = await asleepImmuneNames();
   const giveawayNames = await giveawayRuleNames();
   const spec = {
     ambushId: foundry.utils.randomID(),
@@ -729,7 +726,7 @@ export async function postAmbushCard({ ambusher, ambushers, targets, sprungBy = 
     // Lenses), who acts in the ambush round.
     sleepers: sleepers.map(c => ({
       name: c.name ?? c.actor?.name ?? "Unnamed",
-      immune: immunityOf(c.actor, immuneNames) ?? asleepImmunityOf(c.actor, asleepNames)
+      immune: immunityOf(c.actor, immuneNames) ?? asleepImmunityOf(c.actor)
     })),
     // Anyone on the AMBUSHING side who gives the party away (Babbling).
     giveaways: giveawaysOf(ambushers.map(c => c.actor).filter(Boolean), giveawayNames)

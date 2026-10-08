@@ -6,10 +6,6 @@
             {{#if kindLabel}}<div class="item-kind">{{kindLabel}}</div>{{/if}}
             <div class="grid grid-2col">
               <div class="resource">
-                <label class="resource-label">Defense</label>
-                  <input type="text" name="system.defense" value="{{data.system.defense}}" data-dtype="Number"/>
-              </div>
-              <div class="resource">
                 <div class="grid grid-3col">
                   <label class="resource-label">Current</label><span></span><label class="resource-label">Max</label>
                   <input type="text" name="system.quality.value" value="{{data.system.quality.value}}" data-dtype="Number"/>
@@ -20,20 +16,24 @@
               <div class="resource">
                 <label class="resource-label">Slots</label>
                   <input type="text" name="system.slots" value="{{data.system.slots}}" data-dtype="Number"/>
+                  {{#if statNotes.slots}}<p class="resource-label-small stat-in-effect">{{statNotes.slots}}</p>{{/if}}
               </div>
               <div class="resource">
                 <label title="Made of metal: rust, corrosion, magnets and metal-eaters can reach it. Set from the book when the item is made; tick or untick it for anything made by hand. Body armour that is metal and worn makes its wearer count as wearing metal armour."><input type="checkbox" name="system.metal" {{checked data.system.metal}}/> Metal</label>
+                {{#if statNotes.metal}}<p class="resource-label-small stat-in-effect">{{statNotes.metal}}</p>{{/if}}
               </div>
               <div class="resource">
                 <label class="resource-label">{{valueLabel}}</label>
                   <input type="text" name="system.tradeValue" value="{{data.system.tradeValue}}" data-dtype="Number"/>
-                  {{#if conditionalValue}}
-                    <div class="conditional-trade-value">{{conditionalValue.value}} to {{conditionalValue.buyer}}</div>
-                  {{/if}}
+                  {{#if statNotes.tradeValue}}<p class="resource-label-small stat-in-effect">{{statNotes.tradeValue}}</p>{{/if}}
+                  {{#each buyerValues}}
+                    <div class="conditional-trade-value">{{this.value}} to {{this.buyer}}</div>
+                  {{/each}}
               </div>
               <div class="resource">
                 <label class="resource-label" title="AV this item contributes when equipped — work-queue item 11">AV Bonus</label>
                   <input type="text" name="system.avBonus" value="{{data.system.avBonus}}" data-dtype="Number"/>
+                  {{#if statNotes.av}}<p class="resource-label-small stat-in-effect">{{statNotes.av}}</p>{{/if}}
               </div>
               <div class="resource">
                 <label class="resource-label" title="Which equip slot this occupies — work-queue item 11">Slot</label>
@@ -43,14 +43,17 @@
                     <option value="face" {{#if (eq data.system.armorSlot "face")}}selected{{/if}}>Face</option>
                     <option value="shield" {{#if (eq data.system.armorSlot "shield")}}selected{{/if}}>Shield</option>
                   </select>
+                  {{#if statNotes.armourSlot}}<p class="resource-label-small stat-in-effect">{{statNotes.armourSlot}}</p>{{/if}}
               </div>
             </div>
         </div>
+        {{> "systems/vaarn/templates/item/parts/usage-die.html"}}
     </header>
 
     {{!-- Sheet Tab Navigation --}}
     <nav class="sheet-tabs tabs" data-group="primary">
-        <a class="item" data-tab="description">Description</a>        
+        <a class="item" data-tab="description">Description</a>
+        <a class="item" data-tab="effects">Effects</a>        
     </nav>
 
     {{!-- Sheet Body --}}
@@ -59,5 +62,7 @@
         <div class="tab" data-group="primary" data-tab="description">
             {{editor content=data.system.description target="system.description" button=true owner=owner editable=editable}}
         </div>        
+        {{!-- Effects Tab - GM Effect Builder (Effect Engine, ruled 2026-10-05) --}}
+        {{> "systems/vaarn/templates/item/parts/effects-tab.html"}}
     </section>
 </form>

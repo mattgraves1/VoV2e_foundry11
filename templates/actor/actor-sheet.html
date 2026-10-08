@@ -491,7 +491,7 @@
                       <div class="item-image item-roll" title="damage"><img src="systems/vaarn/module/icons/crossed-sabres.svg" title="damage" width="24" height="24"/></div>
                       {{!-- A weapon that names its reload (the Tempest Cannon, RULED
                             2026-09-26 by Matt) can be reloaded without attacking. --}}
-                      {{#if item.flags.vaarn.reload}}
+                      {{#if (hasReload item)}}
                       <div class="item-image weapon-reload" title="reload"><i class="fas fa-rotate"></i></div>
                       {{/if}}
                       {{/if}}
@@ -502,6 +502,10 @@
                       {{#unless (isCorroded item)}}
                       {{#if (isGift item)}}
                       <div class="item-image gift-use" title="use"><img src="systems/vaarn/module/icons/d20.svg" title="use" width="24" height="24"/></div>
+                      {{/if}}
+                      {{!-- GM Effect Builder chunk 1 (2026-10-05): a use effect a GM wrote on any Item but a Gift. --}}
+                      {{#if (hasEffectUse item)}}
+                      <div class="item-image effect-use" title="use an effect"><i class="fas fa-wand-sparkles"></i></div>
                       {{/if}}
                       {{#if (isCodex item)}}
                       <div class="item-image codex-read" title="read"><img src="systems/vaarn/module/icons/d20.svg" title="read" width="24" height="24"/></div>

@@ -1,3 +1,5 @@
+// Creature flags from their sentences (Effect Engine: Creatures chunk 2c-i).
+import { creatureFlagsOf } from "../item/creature-effects.js";
 /**
  * Vaarn's Morale Save, in one place because three consumers need the same
  * vocabulary and must not drift: actor-sheet.js rolls it, bestiary-build.js
@@ -82,7 +84,7 @@ export function moraleModeFor(text)
  */
 export function moraleFailRules(actor)
 {
-  return (actor?.items?.contents ?? actor?.items ?? []).filter(i => i.flags?.vaarn?.moraleFail);
+  return (actor?.items?.contents ?? actor?.items ?? []).filter(i => creatureFlagsOf(i).moraleFail);
 }
 
 /** What the button says it will do; the handler's card reuses it. */
@@ -95,7 +97,7 @@ export function moraleFailLabel(spec, holderName)
 /** The whispered card's content for one rule Item. */
 export function moraleFailCard(actor, item)
 {
-  const spec = item.flags.vaarn.moraleFail;
+  const spec = creatureFlagsOf(item).moraleFail;
   return `<b>${item.name}</b> <i>(Referee only)</i> — ${actor.name} failed its Morale Save.`
     + `<div>${item.system?.description ?? ""}</div>`
     + `<button type="button" class="vaarn-morale-fail" data-actor-uuid="${actor.uuid}" `

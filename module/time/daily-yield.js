@@ -33,6 +33,8 @@
 
 import { ownerOf } from "../actor/companion.js";
 import { THIRD_OF_A_SLOT } from "../actor/rest.js";
+// A creature's own flags from its actor-level sentences (Effect Engine: Creatures chunk 2d).
+import { creatureActorFlagsOf } from "../item/creature-effects.js";
 
 const SCOPE = "vaarn";
 export const DAILY_YIELD_FLAG = "dailyYield";
@@ -40,7 +42,7 @@ export const DAILY_YIELD_FLAG = "dailyYield";
 /** The yield this creature brings, or null. {rule, item, count} */
 export function dailyYieldOf(actor)
 {
-  const y = actor?.flags?.[SCOPE]?.[DAILY_YIELD_FLAG];
+  const y = creatureActorFlagsOf(actor)[DAILY_YIELD_FLAG];
   return (y?.item && Number(y.count) > 0) ? { rule: y.rule ?? "", item: y.item, count: Number(y.count) } : null;
 }
 

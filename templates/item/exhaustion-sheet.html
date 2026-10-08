@@ -1,0 +1,28 @@
+{{!-- The exhaustion sheet - added by GM Effect Builder chunk 2 (2026-10-05): the type had no
+      sheet template, and the builder's tab belongs on every Item type. --}}
+<form class="{{cssClass}}" autocomplete="off">
+    <header class="sheet-header">
+        <img class="profile-img" src="{{item.img}}" data-edit="img" title="{{item.name}}"/>
+        <div class="header-fields">
+            <h1 class="charname"><input name="name" type="text" value="{{item.name}}" placeholder="Name"/></h1>
+            {{#if kindLabel}}<div class="item-kind">{{kindLabel}}</div>{{/if}}
+        </div>
+        {{> "systems/vaarn/templates/item/parts/usage-die.html"}}
+    </header>
+
+    {{!-- Sheet Tab Navigation --}}
+    <nav class="sheet-tabs tabs" data-group="primary">
+        <a class="item" data-tab="description">Description</a>
+        <a class="item" data-tab="effects">Effects</a>
+    </nav>
+
+    {{!-- Sheet Body --}}
+    <section class="sheet-body">
+        {{!-- Description Tab --}}
+        <div class="tab" data-group="primary" data-tab="description">
+            {{editor content=data.system.description target="system.description" button=true owner=owner editable=editable}}
+        </div>
+        {{!-- Effects Tab - GM Effect Builder (Effect Engine, ruled 2026-10-05) --}}
+        {{> "systems/vaarn/templates/item/parts/effects-tab.html"}}
+    </section>
+</form>

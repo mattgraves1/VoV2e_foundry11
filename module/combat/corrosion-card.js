@@ -43,6 +43,8 @@
  *             since nothing rusts. The card says not to roll this hit's damage.
  */
 import { isMetalItem } from "../item/metal.js";
+import { itemForbids } from "../item/weapon-tags.js";
+import { statOf } from "../effects/item-stats.js";
 
 const SCOPE = "vaarn";
 export const CORROSION_CARD_FLAG = "corrosionCard";
@@ -60,7 +62,9 @@ export function corrodible(item, mode = "corrode")
   if (!CARRIED_TYPES.includes(item?.type)) return false;
   if (item.system?.intrinsic) return false;
   if (!isMetalItem(item)) return false;
-  if (mode !== "devour" && (item.system?.tags ?? []).includes("Laquered")) return false;
+  // From the sentences since Weapon Tags chunk 5a: Laquered and Indestructible
+  // (ruling F) forbid corrosion.
+  if (mode !== "devour" && itemForbids(item, "corrode")) return false;
   return !isCorroded(item);
 }
 
@@ -136,11 +140,14 @@ export async function corrodeItem(message, itemId)
     await message.setFlag(SCOPE, CORROSION_CARD_FLAG, { ...spec, chosen: { itemId, line } });
     return line;
   }
-  const bonus = Number(item.system?.avBonus ?? 0);
+  // The EFFECTIVE AV, whatever sets it (Stats as Sentences chunk 2b, ruling B):
+  // the field is written one lower - below 0 if a sentence carries the AV - so a
+  // +N sentence stacks on the corroded base. Repair is the Referee's edit of it.
+  const bonus = Number(statOf(item, "av") ?? 0);
   const qty = Number(item.system?.quantity ?? 1);
   if (item.type === "armor" && bonus > 0)
   {
-    await item.update({ "system.avBonus": bonus - 1 });
+    await item.update({ "system.avBonus": Number(item.system?.avBonus ?? 0) - 1 });
     line = `<b>${actor.name}</b>'s <b>${name}</b> is corroded — its AV bonus drops from +${bonus} to +${bonus - 1}, for good.`;
   }
   else if (qty > 1)

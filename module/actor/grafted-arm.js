@@ -36,6 +36,9 @@
  */
 import { spawnNamedCreature } from "./bestiary-spawn.js";
 import { MAX_HP_DEFERRED, zeroMaxHpMessage } from "./zero-max-hp.js";
+import { maxHpChange } from "../effects/max-hp.js";
+// A creature's own flags from its actor-level sentences (Effect Engine: Creatures chunk 2d).
+import { creatureActorFlagsOf } from "../item/creature-effects.js";
 
 const SCOPE = "vaarn";
 export const GRAFTED_FLAG = "graftedToHost";
@@ -46,7 +49,7 @@ const GRAFT_DEATH_CAUSE = "grafting its last limb";
 /** The host a grafted limb is attached to, or null. */
 export function graftHostOf(limb)
 {
-  if(!limb?.flags?.[SCOPE]?.[GRAFTED_FLAG]) return null;
+  if(!creatureActorFlagsOf(limb)[GRAFTED_FLAG]) return null;
   const id = limb.flags[SCOPE][HOST_FLAG];
   return id ? (game.actors?.get(id) ?? null) : null;
 }
@@ -82,13 +85,10 @@ export function splitForHost(parts)
 export function graftCost(poster)
 {
   const level = Number(poster.system?.level?.value ?? 0);
-  const max = Number(poster.system?.health?.max ?? 0);
-  const hp = Number(poster.system?.health?.value ?? 0);
-  const nextMax = Math.max(0, max - HP_PER_LEVEL);
   const update = {
     "system.level.value": level - 1,
-    "system.health.max": nextMax,
-    "system.health.value": Math.min(hp, nextMax),
+    // The max HP verb (Shared Pipelines chunk 5): a loss, floored at 0, clamps current.
+    ...maxHpChange(poster, { add: -HP_PER_LEVEL }),
   };
   if(!poster.system?.morale?.mode) update["system.morale.value"] = Number(poster.system?.morale?.value ?? 0) - 1;
   return update;
@@ -176,7 +176,7 @@ function refreshLimbs(host)
 {
   if(!host?.id) return;
   for(const a of game.actors ?? [])
-    if(a.flags?.[SCOPE]?.[GRAFTED_FLAG] && a.flags[SCOPE][HOST_FLAG] === host.id)
+    if(creatureActorFlagsOf(a)[GRAFTED_FLAG] && a.flags[SCOPE][HOST_FLAG] === host.id)
     {
       a.reset();
       a.sheet?.rendered && a.sheet.render(false);
@@ -192,5 +192,5 @@ export function registerGraftedArm()
     Hooks.on(h, item => { if(item.parent instanceof Actor) refreshLimbs(item.parent); });
   // The world's actors prepare in no fixed order, so a limb can prepare before
   // its host has; once everything is ready, prepare the limbs again.
-  Hooks.once("ready", () => { for(const a of game.actors ?? []) if(a.flags?.[SCOPE]?.[GRAFTED_FLAG]) a.reset(); });
+  Hooks.once("ready", () => { for(const a of game.actors ?? []) if(creatureActorFlagsOf(a)[GRAFTED_FLAG]) a.reset(); });
 }

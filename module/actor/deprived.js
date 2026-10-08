@@ -59,6 +59,7 @@
  */
 import { entriesOf, addEntry, removeEntry, formatSpan } from "../time/effect-board.js";
 import { hasCondition } from "../time/stateful-effect.js";
+import { waterLapseOf } from "../effects/body.js";
 
 /** The condition string. One spelling, imported everywhere. */
 export const DEPRIVED = "Deprived";
@@ -140,7 +141,8 @@ export function deprivedElapsedLabel(actor, now = null)
  */
 export function deprivedFuseLine(actor)
 {
-  return actor?.system?.ancestry === "Faa Nomad"
+  // Desert Metabolism's sentence since Mutations and Ancestry Rules chunk 2c.
+  return waterLapseOf(actor)
     ? "if by thirst, a Faa Nomad perishes after three weeks (Desert Metabolism)"
     : "if by thirst, perishes after three days in a row";
 }

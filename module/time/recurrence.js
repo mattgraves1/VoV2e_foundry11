@@ -73,8 +73,10 @@ import { RECURRENCES, recurrenceByKey } from "./recurrence-data.js";
 import { findContainer, ensureContainer } from "../actor/dropped-container.js";
 import { gmHP } from "../actor/hidden-hp.js";
 import { MAX_HP_DEFERRED, zeroMaxHpMessage } from "../actor/zero-max-hp.js";
+import { maxHpChange } from "../effects/max-hp.js";
 import { applyNamedWound, forgetWoundItems } from "../actor/named-wound.js";
-import { TRAPS } from "../combat/trap-data.js";
+import { trapOf } from "../item/remaining-effects.js";
+import { dealDamage } from "../effects/deal.js";
 
 export { RECURRENCES, recurrenceByKey };
 
@@ -376,18 +378,14 @@ export async function applyTickLosses(actor, def, ticks = 1)
   const death = Number(actor.system.health?.max) > 0 && maxHp <= 0 ? zeroMaxHpMessage(actor) : null;
   if (maxHp !== actor.system.health.max)
   {
-    update["system.health.max"] = maxHp;
-    // Clamp current HP the way _prepareCharacterData would on the next render,
-    // so a character never sits above a maximum that has just dropped.
-    if (Number(actor.system.health.value) > maxHp)
-      update["system.health.value"] = maxHp;
+    // The max HP verb (Shared Pipelines chunk 5): a loss clamps current, so a
+    // character never sits above a maximum that has just dropped.
+    Object.assign(update, maxHpChange(actor, { add: maxHp - Number(actor.system.health.max) }));
   }
   await actor.update(update, death ? { [MAX_HP_DEFERRED]: true } : {});
-  if (hpDamage > 0)
-  {
-    const hp = Number(actor.system.health?.value) || 0;
-    await actor.sheet?._resolveHPChange(actor, hp, hp - hpDamage);
-  }
+  // Through the whole HP pipeline (Shared Pipelines chunk 2, 2026-10-05):
+  // untyped and with no attacker, so multipliers, splits and temp HP apply.
+  if (hpDamage > 0) dealDamage(actor, hpDamage, { name: def?.name ?? "damage" });
   return { lines, death };
 }
 
@@ -902,7 +900,7 @@ export function vortexHalves(first, index, ticks)
  */
 function trapTickBlock({ actor, entry, ticks, index })
 {
-  const trap = TRAPS[entry.trapKey];
+  const trap = trapOf(entry.trapKey);
   const many = ticks > 1
     ? ` <span class="vaarn-recur-count">×${ticks} — ${formatTicks(entry, ticks)} passed</span>`
     : "";

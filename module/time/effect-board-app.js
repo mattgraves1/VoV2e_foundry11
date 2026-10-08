@@ -22,7 +22,7 @@
  */
 
 import { TIME_HOOK, currentTime, advance } from "./vaarn-time.js";
-import { actorRef, actorFromRef, collectAll, visibilityFor, formatSpan, clockRemaining, roundsRemaining,
+import { actorRef, actorFromRef, collectAll, visibilityFor, formatSpan, clockRemaining, roundsRemaining, turnsLeftLabel,
          removeEntry, updateEntry, SCALES } from "./effect-board.js";
 import { isOpenEndedCondition } from "../actor/condition-data.js";
 import { isActivity, activityLine, activityPercent, activityRunning,
@@ -42,6 +42,7 @@ import { AFFLICTIONS, afflictionByKey, saveTargetFor, treatmentCostFor, diseaseI
   from "../actor/affliction-data.js";
 import { postExposure, cureAndReport, applyOnsetAndReport, startTreatment } from "../actor/affliction-card.js";
 import { elapsedSeconds, stageReached, formatElapsed, rollObjectTable } from "../actor/affliction.js";
+import { afflictionOverTimeOf } from "../item/affliction-effects.js";
 import { inDarkness, setDarkness, DARKNESS_NAME } from "./darkness.js";
 
 /**
@@ -229,7 +230,7 @@ export class VaarnEffectBoard extends Application
         // three. Announced, never applied, which is the same ruling
         // Long-Clock Recurrence thresholds already run on.
         stage: entry.kind === "affliction"
-          ? stageReached(afflictionByKey(entry.afflictionKey), entry, now)?.text ?? null
+          ? stageReached(afflictionOverTimeOf(actor, entry.afflictionKey), entry, now)?.text ?? null
           : null,
         afflictionKey: entry.afflictionKey ?? null,
         // Cost of Treatment (JADE IBIS). GM-ONLY, and decided HERE rather than
@@ -243,10 +244,10 @@ export class VaarnEffectBoard extends Application
         // applied, then replaced by what it rolled, so the board answers
         // "has this landed yet?" without anyone opening the sheet.
         onsetLabel: entry.kind === "affliction" && !entry.manualApplied
-          ? afflictionByKey(entry.afflictionKey)?.manualEffect?.label ?? null : null,
+          ? afflictionOverTimeOf(actor, entry.afflictionKey).manualEffect?.label ?? null : null,
         // A treatment that takes time (the Gitch's debridement, 2026-09-24).
         treatLabel: isGM && entry.kind === "affliction"
-          ? afflictionByKey(entry.afflictionKey)?.treatment?.label ?? null : null,
+          ? afflictionOverTimeOf(actor, entry.afflictionKey).treatment?.label ?? null : null,
         onsetDone: entry.kind === "affliction" && entry.manualApplied
           ? `onset applied — ${entry.manualRoll}` : null,
         progress: isActivity(entry) ? activityLine(entry, now) : null,
@@ -305,7 +306,9 @@ export class VaarnEffectBoard extends Application
     const secs = clockRemaining(entry, now);
     if (secs !== null) parts.push(formatSpan(secs, entry.unit ?? "turn", entry.amount));
 
-    if (round !== null)
+    // Turn-Counted Round Duration (2026-10-04): counted on the holder's turns.
+    if (round !== null && entry.turnCount) parts.push(turnsLeftLabel(entry.turnCount));
+    else if (round !== null)
     {
       const r = roundsRemaining(entry, round);
       if (r !== null) parts.push(`${Math.max(0, r)} combat round${r === 1 ? "" : "s"}`);

@@ -30,6 +30,8 @@ import { suppressesDeath } from "./fatality.js";
 import { soakDamage, tempHpOf } from "./temp-hp.js";
 import { hasAttackProperty } from "../item/attack-properties.js";
 import { BIOLOGICAL_WOUNDS, SYNTHETIC_WOUNDS, getWound } from "../actor/wounds-data.js";
+import { woundEffectsOf, woundTableKind } from "../item/wound-affliction-effects.js";
+import { creatureFlagsOf } from "../item/creature-effects.js";
 
 const SCOPE = "vaarn";
 const WATCHDOG_FLAG = "watchdog";
@@ -38,7 +40,9 @@ const WATCHDOG_FLAG = "watchdog";
 export function hasWatchdogProtocol(actor)
 {
   const items = actor?.items?.contents ?? actor?.items ?? [];
-  return items.some(i => i.getFlag?.(SCOPE, WATCHDOG_FLAG) ?? i.flags?.[SCOPE]?.[WATCHDOG_FLAG]);
+  // From the Item's sentence (Effect Engine: Creatures, chunk 2c-i - this read was
+  // missed there behind the constant and moved in the proving pass, 2026-10-07).
+  return items.some(i => !!creatureFlagsOf(i)[WATCHDOG_FLAG]);
 }
 
 /**
@@ -86,7 +90,9 @@ export function wouldBeLethal(actor, dmg)
   if((actor.system.wounds ?? []).some(w => w.deathsDoor)) return true;
 
   const table = actor.system.creatureTypes?.synthetic ? SYNTHETIC_WOUNDS : BIOLOGICAL_WOUNDS;
-  return !!getWound(table, newHP)?.instantDeath;
+  // The row the table picks (ruling A); whether it kills is its sentence (chunk 2a).
+  const row = getWound(table, newHP);
+  return !!row && woundEffectsOf(woundTableKind(actor), row.name).instantDeath;
 }
 
 /**

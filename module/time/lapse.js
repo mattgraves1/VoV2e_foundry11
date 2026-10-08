@@ -98,7 +98,7 @@ export function fuseLine(entry)
  * Start tracking a lapse.
  *
  * Takes EITHER a roster key or a free-typed label. RULED 2026-09-13 (Matt):
- * both, where every other roster in this system is pick-only. The four the book
+ * both, where every other roster in this system is pick-only. The ones the book
  * states carry its wording and join back to an atom row; a typed one covers a
  * table ruling the book never wrote, and carries no fuse because there is no
  * book sentence to print.

@@ -430,7 +430,7 @@ export const EXOTICA = [
   { name: "Ulfire Candle", description: "Ulfire is the ninth colour. Its light shines through solid objects. It is blocked only by lead." },
   { name: "Unbearable Wax", description: "Black wax that increases in weight one hundred times as it dries. Single dose." },
   { name: "Vial of ICE-9", description: "One dose of an alchemical substance that transforms all water it touches into un-meltable ice" },
-  { name: "Visualiser Helm", description: "Golden bubble-helmet that projects imagery of the wearer's thoughts, whether they want it to or not", armorType: { armorSlot: "helm", avBonus: 0 } }
+  { name: "Visualiser Helm", description: "Golden bubble-helmet that projects imagery of the wearer's thoughts, whether they want it to or not", armorType: { armorSlot: "helm" } }
 ];
 
 // Flavor-text-only appearances for a rolled Codex — the equation itself comes

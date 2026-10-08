@@ -30,9 +30,11 @@
  *     and it can still be discarded.
  */
 
-import { SPARK_TABLES } from "./chargen-data.js";
 import { postToxSave } from "../combat/compelled-save.js";
+import { heal } from "../effects/heal.js";
 import { PERISHABLE_FLAG, isSpoiled } from "../time/perishable.js";
+// Grown parts and fruit from their sentences (Remaining Sources chunk 2d, 2026-10-07).
+import { remainingItemFlagsOf } from "../item/remaining-effects.js";
 
 const SCOPE = "vaarn";
 export const GROWN_FLAG = "grownPart";
@@ -40,22 +42,19 @@ export const FRUIT_FLAG = "fruit";
 
 const LABEL = { str: "STR", dex: "DEX", con: "CON", int: "INT", psy: "PSY", ego: "EGO" };
 
-/** The Bloomboon roster row by name, or null. */
-export function bloomboonEntry(name)
-{
-  return (SPARK_TABLES["Neobloom"]?.bloomboon_table ?? []).find(b => b.name === name) ?? null;
-}
+// bloomboonEntry (the table row by name) was deleted in Effect Engine: Consumables
+// chunk 3b (2026-10-06): nothing called it, and a Bloomboon's growth is its sentence's.
 
 /** Whether this Item is a grown part. */
 export function isGrownPart(item)
 {
-  return !!item?.flags?.[SCOPE]?.[GROWN_FLAG];
+  return !!remainingItemFlagsOf(item)[GROWN_FLAG];
 }
 
 /** Whether this Item is a grown fruit. */
 export function isGrownFruit(item)
 {
-  return !!item?.flags?.[SCOPE]?.[FRUIT_FLAG];
+  return !!remainingItemFlagsOf(item)[FRUIT_FLAG];
 }
 
 /** The live base-score malus every grown part on these Items adds up to: {dex: 4}. */
@@ -64,7 +63,7 @@ export function grownPartMalus(items)
   const out = {};
   for (const i of items ?? [])
   {
-    const g = i.flags?.[SCOPE]?.[GROWN_FLAG];
+    const g = remainingItemFlagsOf(i)[GROWN_FLAG];
     if (!g?.ability) continue;
     out[g.ability] = (out[g.ability] || 0) + Number(g.cost || 0);
   }
@@ -74,7 +73,7 @@ export function grownPartMalus(items)
 /** The AV one grown part adds (Shield Vine), or 0. */
 export function grownPartAv(item)
 {
-  return Number(item?.flags?.[SCOPE]?.[GROWN_FLAG]?.av || 0);
+  return Number(remainingItemFlagsOf(item)[GROWN_FLAG]?.av || 0);
 }
 
 /**
@@ -149,19 +148,21 @@ export function fruitItemData(boon, hpSpent)
  */
 export async function eatFruit(actor, item)
 {
-  const fruit = item.flags?.[SCOPE]?.[FRUIT_FLAG];
+  const fruit = remainingItemFlagsOf(item)[FRUIT_FLAG];
   if (!fruit) return null;
   if (isSpoiled(item))
     return `${item.name} is only good as a rotting meal now.`;
 
   if (fruit.eaten === "heal")
   {
-    const hp = Number(actor.system.health.value);
-    const max = Number(actor.system.health.max);
-    const healed = Math.max(0, Math.min(max, hp + Number(fruit.hp)) - hp);
-    await actor.update({ "system.health.value": hp + healed });
-    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }),
-      content: `eats a <b>${item.name}</b> and heals <b>${healed}</b> HP.` });
+    // A heal like any other (Shared Pipelines chunk 3, RULED 2026-10-05, Matt:
+    // "yes, count it as a heal") - gated, floored, halved by Deathblight. A
+    // refused heal has posted why; the fruit is eaten either way, as the
+    // Universal Ration is.
+    const { gained, note, refused } = await heal(actor, Number(fruit.hp), { label: `the <b>${item.name}</b>` });
+    if (!refused)
+      await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }),
+        content: `eats a <b>${item.name}</b> and heals <b>${gained}</b> HP.${note}` });
   }
   else
   {
@@ -182,7 +183,7 @@ export async function eatFruit(actor, item)
 export async function onGrownPartDeleted(item, options, userId)
 {
   if (userId !== game.user.id) return;
-  const g = item.flags?.[SCOPE]?.[GROWN_FLAG];
+  const g = remainingItemFlagsOf(item)[GROWN_FLAG];
   const actor = item.parent;
   if (!g?.ability || !actor || actor.documentName !== "Actor") return;
   const key = `system.abilities.${g.ability}.woundDamage`;

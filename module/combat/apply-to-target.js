@@ -258,6 +258,8 @@ export async function applyEffectToActor(actor, spec)
     sourceActorId: spec.sourceActorId ?? null,
     sourceName: spec.sourceName ?? null,
     endsWithSource: !!spec.endsWithSource,
+    // Ended by the combat's end (the Fate Inverter, Implants, Exotica and Figments chunk 3b).
+    endsWithCombat: !!spec.endsWithCombat,
     startTime: now,
     startRound: round,
     ...stamps

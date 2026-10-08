@@ -18,7 +18,7 @@
  *
  * So the check now hangs on the WRITE rather than on any one writer. Every
  * current writer is covered by construction — the Annihilating equip, the
- * hpBonus reversal in item-effects.js when an item leaves, applyPoison — and
+ * hpBonus reversal in item-effects.js when an item leaves, resolvePoison — and
  * so is every writer added later, which is the property the row wanted.
  *
  * WHAT IT DELIBERATELY DOES NOT DO. No state change: death is GM-adjudicated
@@ -47,7 +47,7 @@ export const MAX_HP_CAUSE = "vaarnMaxHpCause";
  * lands before anything the writer posts afterwards. That is fine for a writer
  * whose own message comes first — Annihilating posts its draw line and then
  * writes — and wrong for one whose message REPORTS the write and therefore
- * cannot exist until it has happened. applyPoison is the second kind: its card
+ * cannot exist until it has happened. resolvePoison is the second kind: its card
  * says "Loses 8 Max HP — now 0", which is only knowable afterwards, so the
  * hook posting first put "is dead" above the sentence explaining it. Group 224
  * found that and could not reorder its way out.

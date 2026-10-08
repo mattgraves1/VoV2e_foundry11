@@ -1,0 +1,40 @@
+{{!-- THE USAGE DIE BLOCK, one file for every item sheet that does not draw its own
+      (Stats as Sentences chunk 2e-i, RULED 2026-10-07). Shown when the Item has a die -
+      its field's, or a size its Stats effect gives it (the builder's "Give it a usage
+      die"), which is how the GM starts one now that the "+ Add usage die" link is gone.
+      Current is the die's state, stepped by every roll; the size is the Max field, or
+      the effect's when it sets one (the In effect line says so). --}}
+{{#if hasUsageDie}}
+<div class="resource usage-die-block">
+  <div class="grid grid-3col">
+    <label class="resource-label">Current</label><span></span><label class="resource-label">Max</label>
+    <select name="system.usageDie.die">
+      {{#select data.system.usageDie.die}}
+      <option value="">None</option>
+      <option value="d20">Ud20</option>
+      <option value="d12">Ud12</option>
+      <option value="d10">Ud10</option>
+      <option value="d8">Ud8</option>
+      <option value="d6">Ud6</option>
+      <option value="d4">Ud4</option>
+      <option value="expended">Expended</option>
+      {{/select}}
+    </select>
+    <label class="resource-label">Usage Die</label>
+    <select name="system.usageDie.max">
+      {{#select data.system.usageDie.max}}
+      <option value="">None</option>
+      <option value="d20">Ud20</option>
+      <option value="d12">Ud12</option>
+      <option value="d10">Ud10</option>
+      <option value="d8">Ud8</option>
+      <option value="d6">Ud6</option>
+      <option value="d4">Ud4</option>
+      {{/select}}
+    </select>
+  </div>
+  <p class="resource-label-small">{{data.system.usageDie.statusLine1}}<br>{{data.system.usageDie.statusLine2}}</p>
+  {{#if statNotes.usageDie}}<p class="resource-label-small stat-in-effect">{{statNotes.usageDie}}</p>{{/if}}
+  <a class="usage-die-step">+1 Step</a> &nbsp; <a class="usage-die-refill">Refill to Max</a>
+</div>
+{{/if}}

@@ -3,24 +3,22 @@
  *
  * GM-only tool for introducing Hypergeometric Codex items into the world.
  * The `codex` item sheet deliberately has no editable equation dropdown
- * (that would let players browse all 20 possibilities or reassign an
+ * (that would let players browse every possibility or reassign an
  * already-found codex), so this macro is the one place equations get set.
  *
  * Ships in the Vaarn Macros compendium: import it (Import Entry) or drag it
  * to the hotbar. Run it to open a picker: create one specific known equation,
- * batch-create all 20 known equations at once, or create a custom/homebrew
+ * batch-create every known equation at once, or create a custom/homebrew
  * equation (INT-save resolution still works automatically either way — it's
  * keyed off the reader at read time, not baked into the item).
+ *
+ * The known equations are the roster itself, codex-data.js EQUATIONS (40 in
+ * the Jade Ibis draft) - this list once held the original 20 by hand and fell
+ * behind (Remaining Sources chunk 2a, 2026-10-07).
  */
 
-const EQUATION_NAMES =
-[
-  "Antithetical Copy", "Diminish", "Erase Paradox", "Exchange Coordinates",
-  "Expand", "Flatten", "Golem", "Imperfect Copy", "Increase Gravity",
-  "Invert Gravity", "Kinetic Ward", "Perfect Copy", "Phase", "Portal",
-  "Return Fixed Coordinates", "Return Random Coordinates", "Singularity",
-  "Stasis", "Summon", "Vanish",
-];
+const { EQUATIONS } = await import("/systems/vaarn/module/actor/codex-data.js");
+const EQUATION_NAMES = EQUATIONS.map(e => e.name);
 
 async function createCodex(equationName, description = "")
 {
@@ -50,7 +48,7 @@ function openDialog()
 {
   const options = EQUATION_NAMES.map(n => `<option value="${n}">${n}</option>`).join("");
   const content = `
-    <p>Pick a known equation to create a single Codex item, create all 20 at once, or enter a custom/homebrew equation.</p>
+    <p>Pick a known equation to create a single Codex item, create all ${EQUATION_NAMES.length} at once, or enter a custom/homebrew equation.</p>
     <div class="form-group">
       <label>Known equation</label>
       <select id="vaarn-codex-select">${options}</select>
@@ -84,7 +82,7 @@ function openDialog()
       },
       all:
       {
-        label: "Create All 20 Known Equations",
+        label: `Create All ${EQUATION_NAMES.length} Known Equations`,
         callback: () => createAllKnown()
       },
       custom:

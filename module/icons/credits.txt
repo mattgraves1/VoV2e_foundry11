@@ -129,12 +129,14 @@ Region Generator locations (module/icons/region, CC BY 3.0, recoloured when draw
     Anomaly - https://game-icons.net/1x1/lorc/vortex.html (Lorc)
     landmark-star.svg and route-signpost.svg (the landmark and route pins) are
     simple shapes drawn for this system, not from game-icons.net; they are
-    covered by the system's MIT licence.
+    covered by the system's MIT licence. They were made with AI assistance.
 
 Region Map Legend images (module/icons/region/legend, the Vaarn Region Map Legend compendium)
     Drawn by this system's region map painter. The location-*.png images are the
     Region Generator location icons above, recoloured, under the same CC BY 3.0
     terms and authors. The landscape-*.png and key-*.png images are the painter's
     own terrain patterns and map marks, covered by the system's MIT licence.
+    The painter, and so its patterns, relief and marks, was made with AI
+    assistance.
 
 rolled-stat-unknown.svg (Roll for Level / AV / Morale) - https://game-icons.net/1x1/lorc/uncertainty.html (Lorc), its black background removed

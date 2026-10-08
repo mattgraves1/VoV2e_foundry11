@@ -163,6 +163,41 @@ export const ANCESTRY_RULE_ITEMS =
   ],
 };
 
+/*
+ * THE RULES THAT HAD NO ITEM - Effect Engine: Mutations and Ancestry Rules,
+ * chunk 2c (ruling B, Matt 2026-10-05): every special rule of every ancestry
+ * becomes an Item for a character made from now on, so its sentences live on
+ * an Item like the rest. A character made before keeps working from its
+ * ancestry text (mutation-effects.js ancestryTextSentences). The book's words
+ * (JADE IBIS, Ancestries); `before` puts a rule ahead of the Items its ancestry
+ * already had, so the sheet lists them in the book's order.
+ */
+const RULES_WITHOUT_ITEMS =
+{
+  "True-kin": { before: [
+    { rule: "Pure of Blood", text: "You have ADV on reaction and persuasion rolls when you encounter other true-kin. You lose this bonus if you are visibly mutated." }] },
+  "Cacogen": { after: [
+    { rule: "Corrupted Blood", text: "At character creation, roll d100 three times for mutations. If any effects contradict one another, the more recently rolled mutation takes precedence." },
+    { rule: "Proteus", text: "When you gain a Level, you may roll for another mutation instead of increasing HP and Ability scores. You have DIS on Saves to resist mutation and other metamorphic effects." }] },
+  "Synth": { before: [
+    { rule: "Synthetic Flesh", text: "You are metal and plastic. You need not eat or breathe. You are immune to suffocation, drowning, toxins, extreme temperatures, or spores. You suffer double damage from electrical weapons. When you receive wounds, use the Synthetic Wounds table." },
+    { rule: "Synthetic Mind", text: "You are vulnerable to attacks targeting the LogLang syntax that powers you. These include strobing basilisk patterns, malicious infoglyphs, and ancient Titan-era language viruses. You suffer d6 INT damage per round from magnetic fields." }] },
+  "Newbeast": { after: [
+    { rule: "Beasthood", text: "You gain ADV on saves whenever it would make sense for your animal nature to provide it. Your referee may impose DIS in circumstances where your animal nature might prove unhelpful." },
+    { rule: "Kinship", text: "You can speak to all creatures that share your underlying animal form, even if they would not normally be able to communicate. New-cats can speak to true cats, cat-like monsters, mimics pretending to be cats, etc. They do not always like you." }] },
+  "Faa Nomad": { before: [
+    { rule: "Desert Metabolism", text: "You recycle the moisture from your own sweat and can survive long periods without water. You become Deprived from thirst after three days without drinking, and it will be three weeks before you die." }] },
+  "Cacklemaw Exile": { after: [
+    { rule: "No Quarter", text: "You must EGO Save to show mercy to a defeated foe or to retreat from a fight." },
+    { rule: "Biter", text: "If you hit a foe with a melee attack, you may add d6 fang damage to the roll." },
+    { rule: "Overkill", text: "When you kill a foe with a melee attack, you may immediately make another melee attack against a nearby target." }] },
+  "Lithling": { after: [
+    { rule: "Crystalline Flesh", text: "You are living crystal. Your base AV is 10 + your Level (maximum 20). You do not need to eat or drink. You do not take damage from fire, cold, poison, radiation, electricity, fungal spores, or suffocation. You suffer double damage from bludgeoning attacks." },
+    { rule: "Inevitable", text: "During character generation, roll 10d8. This number is your starting and maximum HP. You cannot heal HP through any means, and do not add to your maximum HP when you gain a Level. When your HP reaches zero, you crumble into iridescent dust, leaving behind a pebble-sized lithling seed." }] }
+};
+for (const [ancestry, { before = [], after = [] }] of Object.entries(RULES_WITHOUT_ITEMS))
+  ANCESTRY_RULE_ITEMS[ancestry] = [...before, ...(ANCESTRY_RULE_ITEMS[ancestry] ?? []), ...after];
+
 /** Every `rule` key above, for the sheet handler's dispatch check. */
 export const ANCESTRY_RULE_KEYS =
   Object.values(ANCESTRY_RULE_ITEMS).flat().map(r => r.rule);
@@ -173,7 +208,10 @@ export const ANCESTRY_RULE_KEYS =
  * Keyed by `rule` here rather than flagged on the entry, so the roster carries
  * no field the field map would have to rule on for a single entry.
  */
-export const PASSIVE_ANCESTRY_RULES = new Set(["Detritivore", "Flammable", "Flat", "Attune with Matter"]);
+export const PASSIVE_ANCESTRY_RULES = new Set(["Detritivore", "Flammable", "Flat", "Attune with Matter",
+  // The rules given Items by chunk 2c (above): none has anything to use.
+  "Pure of Blood", "Corrupted Blood", "Proteus", "Synthetic Flesh", "Synthetic Mind", "Beasthood", "Kinship",
+  "Desert Metabolism", "No Quarter", "Biter", "Overkill", "Crystalline Flesh", "Inevitable"]);
 
 /**
  * Ancestry special rules that grant a NATURAL WEAPON Item — the same

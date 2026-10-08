@@ -26,6 +26,7 @@
 import { soakDamage, tempHpOf } from "./temp-hp.js";
 import { suppressesDeath } from "./fatality.js";
 import { wouldBeLethal } from "./watchdog.js";
+import { creatureFlagsOf } from "../item/creature-effects.js";
 
 export const PROTECTOR_RULE_FLAG = "protector";
 export const PROTECTING_FLAG = "protecting";
@@ -35,7 +36,9 @@ export const HELD_BLOW_FLAG = "heldBlow";
 export function hasProtectorRule(actor)
 {
   const items = actor?.items?.contents ?? actor?.items ?? [];
-  return items.some(i => i.flags?.vaarn?.[PROTECTOR_RULE_FLAG]);
+  // From the Item's sentence (Effect Engine: Creatures, chunk 2c-i - this read was
+  // missed there behind the constant and moved in the proving pass, 2026-10-07).
+  return items.some(i => !!creatureFlagsOf(i)[PROTECTOR_RULE_FLAG]);
 }
 
 /** What a protector records about the token it guards. */

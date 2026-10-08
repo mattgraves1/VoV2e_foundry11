@@ -4,9 +4,8 @@ import { KnaveActorSheet } from "./actor/actor-sheet.js";
 import { KnaveNpcSheet } from "./actor/npc-sheet.js";
 import { KnaveItem } from "./item/item.js";
 import { KnaveItemSheet } from "./item/item-sheet.js";
-import { EQUATIONS } from "./actor/codex-data.js";
+import { codexOf, remainingItemFlagsOf, remainingActorFlagsOf } from "./item/remaining-effects.js";
 import { restoreDrainsFrom } from "./actor/level-drain.js";
-import { ELIXIRS } from "./actor/chargen-data.js";
 import { ADVANCED_EXOTICA } from "./actor/advanced-exotica-data.js";
 import { resolveCombatUsageDice } from "./item/usage-die.js";
 import { KnaveCharacterCreator } from "./actor/chargen-app.js";
@@ -15,7 +14,7 @@ import { registerFactionSettings } from "./actor/faction-config.js";
 import { registerFactionGraphSettings } from "./actor/faction-graph.js";
 import { registerFactionBrowserControls } from "./actor/faction-browser.js";
 import { findFigment } from "./actor/figments.js";
-import { applyBakedItemEffects, checkImplantSlotConflict, supersedeUnarmedReplacers, reverseBakedItemEffects } from "./actor/item-effects.js";
+import { applyBakedItemEffects, checkImplantSlotConflict, supersedeUnarmedReplacers, reverseBakedItemEffects, liveMarkFor } from "./actor/item-effects.js";
 import { onItemChange, onActorChange, onTokenCreate } from "./actor/token-light.js";
 import { registerPackBuild } from "./pack-build.js";
 import { registerGuidePacks } from "./guide-pack.js";
@@ -46,7 +45,7 @@ import { isDroppable, ensureContainer } from "./actor/dropped-container.js";
 import { VaarnContainerSheet } from "./actor/container-sheet.js";
 import { VaarnVehicleSheet } from "./actor/vehicle-sheet.js";
 import { moraleFailLabel } from "./actor/morale.js";
-import { onRoundChange, clearAll as clearRoundEffects, isRoundEffectActive, PER_ROUND_WORDING, hpTickLabel, hpTickNow } from "./combat/round-effects.js";
+import { onRoundChange, clearAll as clearRoundEffects, isRoundEffectActive, hpTickLabel, hpTickNow } from "./combat/round-effects.js";
 import { registerApplyCardButtons, applyEffectToActor, endEffectsOfSource } from "./combat/apply-to-target.js";
 import { conditionApplySpec, conditionByKey } from "./actor/condition-data.js";
 import { lightSourceOf, isLit } from "./item/light-source.js";
@@ -59,7 +58,8 @@ import { WINDSONG_BUTTON } from "./actor/granted-ability.js";
 import { spawnBeside, performSplit, spawnInPlace } from "./actor/bestiary-spawn.js";
 import { registerDayStartCardButtons } from "./time/day-start.js";
 import { VaarnEffectBoard, registerBoardControls } from "./time/effect-board-app.js";
-import { onTimeAdvance as onEffectBoardTime, removeEntry, updateEntry, actorFromRef } from "./time/effect-board.js";
+import { dealDamage, kill } from "./effects/deal.js";
+import { onTimeAdvance as onEffectBoardTime, onTurnAdvance as onEffectBoardTurn, removeEntry, updateEntry, actorFromRef } from "./time/effect-board.js";
 import { onTimeAdvance as onActivityTime } from "./time/activity.js";
 import { isSuppressed, suppressorsOf } from "./item/suppression.js";
 import { offersArmourChoice, isDegradingArmour, DEGRADE_FLAG, hasAnyCreatureType } from "./item/attack-properties.js";
@@ -72,6 +72,25 @@ import { registerGambitCardButtons } from "./combat/gambit-card.js";
 import { registerThemeSettings, applyTheme } from "./ui/theme.js";
 import { registerCorrosionCardButtons, isCorroded } from "./combat/corrosion-card.js";
 import { registerGiftApplyButtons } from "./combat/gift-damage.js";
+import { registerEffectCardButtons } from "./effects/effect-card.js";
+import { registerGateSettings, registerGateSocket } from "./effects/gates.js";
+import { registerValueReaches } from "./effects/value-reaches.js";
+import { killHealFor } from "./effects/weapon-heals.js";
+import { registerWeaponFeeding } from "./item/weapon-feeding.js";
+// Registers the weapon translator (Effect Engine: Weapon Tags, chunk 2).
+import "./item/weapon-tags.js";
+import "./actor/mutation-effects.js";
+// The implant, figment and Exotica translators (Implants, Exotica and Figments chunk 2).
+import "./item/implant-exotica-effects.js";
+// The affliction translator (Wounds and Afflictions chunk 3).
+import "./item/affliction-effects.js";
+// The named one-off use handlers (Mutations and Ancestry Rules chunk 4).
+import "./actor/body-uses.js";
+import { bodyRollMods } from "./effects/body.js";
+import { hasEffectUse, hasBodyUse, isEquippableItem } from "./effects/item-readers.js";
+import { useSentences } from "./effects/interpret.js";
+import { statOf, usageDieOf } from "./effects/item-stats.js";
+import { reloadOf } from "./item/weapon-tags.js";
 import { registerEquationDamageButtons } from "./combat/equation-damage.js";
 import { rollCardSave, mayRollFor } from "./combat/card-save.js";
 import { randomGiftData } from "./actor/granted-pick.js";
@@ -85,138 +104,45 @@ import { MUTATIONS_WITH_USE_POOL, IMPLANTS_WITH_USE_POOL } from "./actor/daily-p
 import { hasDeclaredSpan } from "./time/declared-span.js";
 import { targetHealOf, fieldGeneratorOf, registerHealingFieldButtons, applyHeal } from "./actor/healing-field.js";
 import { actorValueRollData } from "./combat/actor-value-damage.js";
-import { PASSIVE_ANCESTRY_RULES } from "./actor/ancestry-rules-data.js";
 import { onReminderItemCreate, onReminderItemDelete, onCompanionOwnerUpdate, onCompanionDelete } from "./time/gm-reminder.js";
 import { registerHiddenHP, registerHiddenHPToken } from "./actor/hidden-hp.js";
 import { isGrownPart, isGrownFruit, onGrownPartDeleted } from "./actor/bloomboon-growth.js";
 import { isGraft, onGraftDeleted } from "./actor/graft.js";
 import { resolveGeneratedGear } from "./actor/creature-generate.js";
 import { HELD_BLOW_FLAG, canStandIn } from "./combat/protector.js";
+import { elixirDrinkOf } from "./item/consumable-effects.js";
 import { metalDefault, METAL_ARMOUR_IMPLANTS, METAL_ARMOUR_NOTE } from "./item/metal.js";
+// Creature attack flags from their sentences (Effect Engine: Creatures chunk 2a).
+import { creatureAttackOf, creatureFlagsOf, roundWordingOf } from "./item/creature-effects.js";
 
-// work-queue item 3.6 (Ink Ducts) / 3.7 (future: Frog Tongue, Silk
-// Production): name-list gates for mutations with an active "use" button
-// on the sheet, and separately, mutations whose use is capped by a daily
-// pool needing the refresh button + uses-remaining counter. Kept as two
-// separate lists (not one) because 3.7's mutations want a use icon but
-// have no daily cap to refresh — adding a future mutation to either list
-// is the only code change its "use"/"refresh" treatment should require.
-export const MUTATIONS_WITH_USE_ICON = ["Ink Ducts", "Frog Tongue", "Silk Production", "Gas Glands (Blinding)", "Gas Glands (Sleeping)", "Leaves"];
-// MUTATIONS_WITH_USE_POOL is imported, not declared here — 2026-09-20. A Long
-// Rest now refills the pool as well as the refresh button, so the membership
-// and the pool size are one answer in daily-pool.js that the gate below, the
-// button and rest.js all read. The USE_ICON list above stays a literal: it
-// gates a control, not a pool, and nothing outside this file asks it anything.
+// A mutation's use control is its use sentence since Mutations and Ancestry
+// Rules chunk 4 (2026-10-06) - effects/item-readers.js hasBodyUse; the
+// MUTATIONS_WITH_USE_ICON name list is gone. MUTATIONS_WITH_USE_POOL is
+// imported, not declared here — 2026-09-20. A Long Rest refills the pool as
+// well as the refresh button, so the membership and the pool size are one
+// answer in daily-pool.js (from the sentence's per-day cost since chunk 4)
+// that the gate below, the button and rest.js all read.
 
 // Same shape, for `implant`-type Items — work-queue item 10.2 (2026-08-25).
-// Kept as its own pair of lists rather than folded into the mutation ones
-// above since it's a different Item type; Trauma-Response Rig is a flat
-// 1-per-day cap (not Level-scaled like Ink Ducts), handled in
-// _onImplantRefresh's own logic, not by anything in these lists. Alluring
-// Fakeface (item 10.6, 2026-08-25) has a use icon but no pool, same as
-// Frog Tongue/Silk Production above — a real rolled EGO save, not
-// per-day-limited.
-// Dream Artefact Assembler, Quantum Tunnelling BlinkPack, Combat Voxbox
-// (item 10.7, 2026-08-26) added to the use-icon list — none need
-// IMPLANTS_WITH_USE_POOL, no daily caps on any of the three. Berserker
-// StimRig (item 10.8, 2026-08-27) also added — a toggle, not a
-// consumable use, but it needs the same use-icon click to trigger.
-export const IMPLANTS_WITH_USE_ICON = ["Trauma-Response Rig", "Alluring Fakeface", "Dream Artefact Assembler", "Quantum Tunnelling BlinkPack", "Combat Voxbox", "Berserker StimRig", "Magnetised Palms"];
+// An implant's use control is its use sentence since Implants, Exotica and
+// Figments chunk 3a (2026-10-06) - effects/item-readers.js hasBodyUse; the
+// IMPLANTS_WITH_USE_ICON name list is gone.
 // IMPLANTS_WITH_USE_POOL is imported too — see the note under the mutation
 // list above for why the pool lists moved and the icon lists did not.
 
-// Same shape again, for generic `type: "item"` Items — item 10.8/10.3.8
-// (2026-08-27, Berserker Brew). Elixirs have no dedicated Item type of
-// their own (chargen-app.js creates them as plain `type: "item"`), so
-// this is a new third list rather than folding into the mutation/implant
-// ones above, which are both gated on a specific `item.type`.
-// Work-queue item 10.3.8.2 (2026-08-27): the other 4 duration-based
-// Elixirs. Matt's ruling, after reviewing what each would actually take
-// to wire up (real elapsed-time hours, a per-combat-round tick, a
-// blanket damage-immunity check, none of which this codebase tracks
-// anywhere): don't build ANY of it mechanically. Same "descriptive-only,
-// GM/player adjudicates" philosophy this project already uses for Ink
-// Ducts'/Mutation-refresh's daily timing, just applied to a duration
-// instead of a refresh cadence — the effect and duration are stated in
-// full in chat, the Elixir is consumed, nothing else happens in code.
-// DERIVED SINCE 2026-09-09, and it had to be. Stateful Effect Application
-// widened actor-sheet.js's drink path to every Elixir declaring a `stateful`
-// spec, and this list — the gate on whether a USE icon renders at all — was a
-// SECOND hand-written copy that did not move with it. The result was the worst
-// shape a gap can take: the mechanism worked and was unreachable, for exactly
-// the three elixirs the widening added. Found by testing 111.1, which could
-// not find a control to click.
-//
-// So the two lists are now one question asked twice of the same source. The
-// four literals kept below are the ones that are NOT roster-derived: Berserker
-// Brew is fiction-locked with no span and no spec, and the other three predate
-// the specs and keep their icon whether or not they ever gain one.
-export const ITEMS_WITH_USE_ICON = [...new Set([
-  "Berserker Brew", "Hilarious Strength", "Spineskin Syrup",
-  "Lithification Syrup", "Regeneration Serum",
-  // permanentAbility joins stateful here for the reason stated above: a spec
-  // IS the statement that this elixir does something mechanical, so the icon
-  // gate has to ask that one question rather than keep a second list.
-  // Autarch's Ambrosia was unreachable from the sheet until it did - the drink
-  // branch existed and nothing could click it (Group 157, 2026-09-14).
-  ...ELIXIRS.filter(e => e.stateful || e.permanentAbility).map(e => e.name),
-  // An Elixir that compels a TARGET to save - Glittercough Tonic, Puppeteer
-  // Potion (Compel-a-Target Save, 2026-09-22). The declared save is the
-  // statement that drinking it does something, the same question again.
-  ...ELIXIRS.filter(e => e.save).map(e => e.name),
-  // A DECLARED SPAN, and a setsHP spec (Elixir Use Normalisation, criterion
-  // 2, RULED 2026-09-23 by Matt). actor-sheet.js's statefulElixirNames has
-  // admitted a span alone since Group 297, so the drink path was there for
-  // Windsong, Skulk Salve and seven more and this gate was the one thing
-  // keeping it unreachable - the shape the comment above already records.
-  // Death Draught's branch was BUILT under Direct HP Adjustment (Group
-  // 316.14) and reachable only by a test that called it. The two filters are
-  // written out rather than folded into the ones above so that each line
-  // still names the spec that earned the icon.
-  ...ELIXIRS.filter(e => e.declaredSpan || Number.isFinite(e.setsHP)).map(e => e.name),
-  // DRUNK AS TEXT (Elixir Use Normalisation, RULED 2026-09-23 by Matt): an
-  // elixir whose whole effect is prose the table adjudicates - Babel Beer,
-  // Oblivion Brew, Obsession Philtre, Lazarus Tonic, Kalotoxin Injector -
-  // still gets a control, so drinking it posts the card and spends the vial.
-  // The flag is the ruling written on the roster row; an elixir with no flag
-  // and no spec is one whose control is still a decision to make (Cloning
-  // Jelly: adjudicated, and smeared rather than drunk, so no control).
-  ...ELIXIRS.filter(e => e.drinkAsText).map(e => e.name),
-  // A permanent, additive change to what the character is - Planeyfication
-  // Potion (2026-09-24). Found in Group 340.2: the branch existed and the
-  // vial had no icon, the exact shape this list's header warns about.
-  ...ELIXIRS.filter(e => e.permanentChange).map(e => e.name),
-  // A roll on another generator - Metamorphic Syrup (2026-09-24). Added with
-  // the branch this time, not after a test found the vial had no icon.
-  ...ELIXIRS.filter(e => e.grantsRoll).map(e => e.name),
-  // A baked Item - Hollowheart Hooch's chest slots (2026-09-24).
-  ...ELIXIRS.filter(e => e.bakedItem).map(e => e.name),
-  // A Referee's pick from another roster - Geneshock Tonic, Transcendence
-  // Tonic (2026-09-24).
-  ...ELIXIRS.filter(e => e.grantsPick).map(e => e.name),
-  // A fixed grant (Recursive Infusion) and a spawn from the Bestiary
-  // (Broodling Broth), 2026-09-24.
-  ...ELIXIRS.filter(e => e.grantsFixed || e.spawns).map(e => e.name),
-  // Character Split/Clone (2026-09-18): the Brew's effect is a second Actor,
-  // not a spec, so it is named rather than found by the filter above.
-  BIFURCATING_BREW
-])];
+// THE ELIXIR DRINK CONTROL (Effect Engine: Consumables chunk 3a, RULED 2026-10-06,
+// Matt): an Elixir gets its control exactly when it has a use sentence
+// (consumable-effects.js elixirDrinkOf) - the drink the interpreter runs. The
+// name list that stood here (ITEMS_WITH_USE_ICON, nine roster filters and four
+// literals) is gone. Cloning Jelly gains its control (ruling 1).
 
 // Same shape again, for `exotica`-type Items with NO consumption pool at
 // all (no usageDie or usesRemaining field) but still a real activated
-// effect worth a click — work-queue items 10.3.4/10.3.7 (2026-08-27).
-// Exotica items with a usageDie or usesRemaining pool (C-Foam Puddings,
-// Titancreed Fragments, etc.) already get a use icon via hasUsageDie/
-// hasExoticaCharges above; this list is only for entries that would
-// otherwise have no icon at all — same "use icon, no pool" shape as Frog
-// Tongue/Silk Production/Alluring Fakeface. The Crimson Cantos/Spirit
-// Prison (Empty) are "Unlimited" (reusable, never consumed); Universal
-// Ration is the odd one out — a single flat consumable that IS deleted
-// on use, just with no numeric pool to count down from first.
-export const EXOTICA_WITH_USE_ICON = ["The Crimson Cantos", "Spirit Prison (Empty)", "Universal Ration",
-  // Declared, not named: an entry with no pool whose use poisons a target -
-  // Mord-Red's Grail (Compel-a-Target Save's TOX card, 2026-09-22).
-  ...ADVANCED_EXOTICA.filter(e => e.toxSave && !e.usageDie && e.usesRemaining == null).map(e => e.name)];
+// effect worth a click. Since Implants, Exotica and Figments chunk 3b (2026-10-06)
+// that is an Exotica with a use sentence and no pool (the Crimson Cantos, Spirit
+// Prison, Universal Ration, Mord-Red's Grail) - hasExoticaUse below; the
+// EXOTICA_WITH_USE_ICON name list is gone. A pooled one keeps hasUsageDie or
+// hasExoticaCharges.
 
 // Ranged weapons roll their Usage Die once per combat, not once per shot —
 // resolved here once the encounter actually ends. See usage-die.js.
@@ -242,18 +168,23 @@ Hooks.on('deleteCombat', combat =>
 Hooks.on('preCreateChatMessage', message => onPreCreateChatMessage(message));
 
 // Per-Round Effect Reminder / Round-Duration Expiry — see combat/round-effects.js.
-// updateCombat fires for turn advances too, so the round guard is what keeps this
-// on a ROUND cadence: Matt ruled durations end on a round boundary, and a reminder
-// that also fired per turn would bury the one message a round it is supposed to be.
-Hooks.on('updateCombat', (combat, changed) =>
+// updateCombat fires for turn advances too. The round card stays on a ROUND
+// cadence (the round guard below): a reminder that also fired per turn would
+// bury the one message a round it is supposed to be. Turn-Counted Round
+// Duration (RULED 2026-10-04 by Matt) reads every turn advance first: a round
+// span in combat ends on its holder's turns, and the last turn of a round is
+// counted before that round's card is built.
+Hooks.on('updateCombat', async (combat, changed) =>
 {
-  if(changed?.round === undefined) return;
+  if(changed?.round === undefined && changed?.turn === undefined) return;
   // ONE poster, and isGM is not enough to pick one. Matt is permanently
   // connected as Gamemaster, so any automation or second GM session makes two
   // users for whom isGM is true, and each posts its own copy — found in
   // testing on 2026-09-08, where every card arrived twice. activeGM resolves
   // to the same single user on every client, which is the property needed.
   if(game.user !== game.users.activeGM) return;
+  await onEffectBoardTurn(combat);
+  if(changed?.round === undefined) return;
   return onRoundChange(combat.round);
 });
 
@@ -261,13 +192,29 @@ Hooks.on('updateCombat', (combat, changed) =>
 // Berserker cleanup below, and the same reason it walks all actors rather than
 // combat.combatants: a reminder can be switched on for an actor who was never
 // added to the tracker, and scoping the sweep would leave it running forever.
-Hooks.on('deleteCombat', () =>
+Hooks.on('deleteCombat', async () =>
 {
   // Same single-writer guard as the round hook above: two GM clients racing to
   // unset the same flags is harmless but pointless, and keeping the two hooks
   // on one rule means a future change cannot fix one and miss the other.
   if(game.user !== game.users.activeGM) return;
-  return clearRoundEffects();
+  await clearRoundEffects();
+  // THE COMBAT STATES END WITH THEIR BOARD ENTRIES now (Shared Pipelines chunk
+  // 6, RULED A 2026-10-05): berserk, an Exotica's combat AV and a borrowed
+  // hand each carry one that ends with the combat and clears its flag. These
+  // lines are the FALLBACK (RULED C) for a flag with no entry - set before
+  // chunk 6 by a character who updated mid-combat, or a failed save-gated
+  // record - and run after the board clear, so nothing ends twice. Foundry does
+  // not await a hook, which is why they live here and not in hooks of their own.
+  for(const actor of game.actors)
+  {
+    if(actor.getFlag("vaarn", "berserkerActive")) await actor.unsetFlag("vaarn", "berserkerActive");
+    if(actor.getFlag("vaarn", "combatAv")) await actor.unsetFlag("vaarn", "combatAv");
+    // The lapse card reads the hand before it goes (Matt's catch 2026-09-13).
+    const lapse = handsLapseCard(actor);
+    await clearSaveGated(actor);
+    if(lapse) await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: lapse });
+  }
 });
 
 
@@ -293,14 +240,9 @@ Hooks.on('deleteCombat', combat =>
   if(!game.users.activeGM?.isSelf) return;
   for(const actor of game.actors)
   {
-    if(actor.getFlag("vaarn", "berserkerActive"))
-      actor.unsetFlag("vaarn", "berserkerActive");
-    // The Brew's Exit the Frenzy Item goes with the flag (Elixir-Granted
-    // Ability Item, RULED 2026-09-23 by Matt): a frenzy that combat ended
-    // has nothing left to save against. Unconditional on the flag, because
-    // a successful save already cleared the flag and took the Item with it.
-    const exits = actor.items.filter(i => i.flags?.vaarn?.grantedBy === "Berserker Brew").map(i => i.id);
-    if(exits.length) actor.deleteEmbeddedDocuments("Item", exits);
+    // The berserk flag and the Brew's Exit the Frenzy Item end with their
+    // board entry since Shared Pipelines chunk 6 (2026-10-05); the fallback for
+    // a flag with no entry is in the board-clear hook above.
 
     // THE CORROSIVE TAG'S DECLARATION rides the same sweep, RULED 2026-09-22
     // (Matt), and the pairing with berserk rather than with the charge is the
@@ -314,44 +256,18 @@ Hooks.on('deleteCombat', combat =>
     // The cost of keeping it is a declaration that outlives the fight, which
     // is the sticky-flag failure the charge's auto-clear exists to prevent.
     // Clearing it here answers that without taking the choice away mid-combat
-    // — the same trade, and the same disposal, as the berserk flag above.
+    // — the same trade, and the same disposal, as the berserk flag had.
+    // Not on the board (Shared Pipelines chunk 6, RULED D): an intent for the
+    // next swing, not an effect with a duration.
     if(actor.getFlag("vaarn", DEGRADE_FLAG))
       actor.unsetFlag("vaarn", DEGRADE_FLAG);
-
-    // An Exotica's until-end-of-combat AV - the Active Camouflage Ring
-    // (Live AV Computation wiring, 2026-09-25). See _activateCombatAv.
-    if(actor.getFlag("vaarn", "combatAv"))
-      actor.unsetFlag("vaarn", "combatAv");
   }
 });
 
-// Save-Gated Effect (2026-09-13). Same disposal as the Berserker sweep above
-// and for the same reason it walks all actors: the gate to use one of these is
-// "is *some* combat active", not "is this actor in the tracker", so scoping the
-// cleanup to combat.combatants would strand an untracked actor's +1 hand
-// forever with nothing able to clear it.
-//
-// THE FLAG ONLY. RULED 2026-09-13 (Matt): a limb spawned by a failed save is
-// left alone — "leave it, clear the flag only". Nothing here deletes an Actor.
-Hooks.on('deleteCombat', () =>
-{
-  // Single-writer guard, same as the round hooks above: Matt is permanently
-  // connected as Gamemaster, so any automation session makes two users for whom
-  // isGM is true.
-  if(game.user !== game.users.activeGM) return;
-  for(const actor of game.actors)
-  {
-    // ORDER MATTERS: the card reads the grant it is about to lose, so it is
-    // built before the flag goes. Matt's catch 2026-09-13 — a character who
-    // spent the borrowed hand on a second weapon is over capacity the instant
-    // the encounter ends, and nothing else in the system looks, because the
-    // equip gate only fires when something is equipped and here the LIMIT
-    // moved instead.
-    const lapse = handsLapseCard(actor);
-    clearSaveGated(actor);
-    if(lapse) ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: lapse });
-  }
-});
+// Save-Gated Effect (2026-09-13): a borrowed hand ends with its board entry
+// since Shared Pipelines chunk 6 (2026-10-05); the fallback for a record with
+// no entry is in the board-clear hook above. THE FLAG ONLY (RULED 2026-09-13,
+// Matt): a limb spawned by a failed save is left alone - nothing deletes an Actor.
 
 // Work-queue item 10.7 (2026-08-26, broadened by item 15, 2026-08-26):
 // mutations, Starting Implants, and Advanced Implants all only ever baked
@@ -400,8 +316,9 @@ Hooks.on('createItem', (item, options, userId) => supersedeUnarmedReplacers(item
 // mutation's natural weapon explicitly rather than relying on a cascade.
 Hooks.on('deleteItem', (item, options, userId) => reverseBakedItemEffects(item, options, userId));
 
-// Standing GM Reminder (2026-09-23). An Item flagged gmReminder (the Watchful
-// Ferret) puts a GM-only, open-ended row on its holder's board and takes it
+// Standing GM Reminder (2026-09-23). An Item flagged gmReminder, or with a
+// gm-reminder sentence (the Watchful Ferret, since Implants, Exotica and Figments
+// chunk 5), puts a GM-only, open-ended row on its holder's board and takes it
 // away when it leaves. A transfer is a delete plus a flag-carrying create, so
 // the row follows the Item. Gated on userId inside, one writer per change.
 Hooks.on('createItem', (item, options, userId) => onReminderItemCreate(item, options, userId));
@@ -435,6 +352,8 @@ Hooks.on('deleteItem', (item, options, userId) => onGraftDeleted(item, options, 
 // on game.users.activeGM, for the two-GM reason the comment above describes.
 Hooks.on('createItem', item => onItemChange(item));
 Hooks.on('deleteItem', item => onItemChange(item));
+// Equip and colour changes on a Luminous weapon (Weapon Tags chunk 5b).
+Hooks.on('updateItem', item => onItemChange(item));
 Hooks.on('updateActor', (actor, changed) => onActorChange(actor, changed));
 Hooks.on('createToken', doc => onTokenCreate(doc));
 
@@ -475,6 +394,9 @@ Hooks.on('preCreateItem', (item, data, options, userId) =>
   const desc = item.system?.description ?? "";
   if(item.type === "implant" && METAL_ARMOUR_IMPLANTS.has(item.name) && !desc.includes(METAL_ARMOUR_NOTE))
     changes["system.description"] = `${desc}<p>${METAL_ARMOUR_NOTE}</p>`;
+  // Stats as Sentences chunk 2d-ii (RULED 2026-10-07): a bonus Item made in play
+  // is live from its creation data - the marker, not the bake.
+  Object.assign(changes, liveMarkFor(item, item.parent, options) ?? {});
   if(Object.keys(changes).length) item.updateSource(changes);
 });
 
@@ -491,7 +413,7 @@ Hooks.on('createItem', (item, options, userId) =>
 {
   if(userId !== game.user.id) return;
   if(item.type !== "weaponMelee" && item.type !== "weaponRanged") return;
-  const pairName = item.getFlag("vaarn", "polymorphicPairName");
+  const pairName = remainingItemFlagsOf(item).polymorphicPairName;
   if(!pairName) return;
   const actor = item.parent;
   if(!actor) return;
@@ -561,8 +483,8 @@ Hooks.on('renderChatMessage', (message, html) =>
       return ui.notifications.warn(`${btn.dataset.label} has already been applied this round.`);
     const actor = actorFromRef(btn.dataset.actorId);
     if(!actor) return ui.notifications.warn("That actor no longer exists.");
-    if(!game.user.isGM && !actor.isOwner)
-      return ui.notifications.warn(`Only the Referee or ${actor.name}'s player can apply this.`);
+    const refusal = roundApplyRefusal(actor, (actor.getFlag('vaarn', 'effects') ?? []).find(e => e.id === entryId));
+    if(refusal) return ui.notifications.warn(refusal);
     await message.setFlag("vaarn", "roundAbilityApplied",
       [...(message.getFlag("vaarn", "roundAbilityApplied") ?? []), entryId]);
     const key = btn.dataset.ability;
@@ -615,11 +537,10 @@ Hooks.on('renderChatMessage', (message, html) =>
       return ui.notifications.warn(`${btn.dataset.label} has already been applied this round.`);
     const actor = actorFromRef(btn.dataset.actorId);
     if(!actor) return ui.notifications.warn("That actor no longer exists.");
-    if(!game.user.isGM && !actor.isOwner)
-      return ui.notifications.warn(`Only the Referee or ${actor.name}'s player can apply this.`);
-
     const entries = actor.getFlag('vaarn', 'effects') ?? [];
     const entry = entries.find(e => e.id === entryId);
+    const refusal = roundApplyRefusal(actor, entry);
+    if(refusal) return ui.notifications.warn(refusal);
     if(!entry?.escalating)
       return ui.notifications.warn(`${btn.dataset.label} is no longer on ${actor.name}'s board.`);
 
@@ -630,8 +551,9 @@ Hooks.on('renderChatMessage', (message, html) =>
     await actor.setFlag('vaarn', 'effects', entries.map(e => e.id === entryId
       ? { ...e, escalating: { ...e.escalating, amount: amount * factor } } : e));
 
-    const currentHP = actor.system.health.value;
-    actor.sheet._resolveHPChange(actor, currentHP, currentHP - amount);
+    // Through the whole HP pipeline (Shared Pipelines chunk 2, 2026-10-05):
+    // untyped ("unblockable"), from the entry's source.
+    dealDamage(actor, amount, { source: game.actors.get(entry.sourceActorId) ?? null, name: entry.name });
     ChatMessage.create({
       user: game.user.id,
       speaker: ChatMessage.getSpeaker({ actor }),
@@ -657,7 +579,7 @@ Hooks.on('renderChatMessage', (message, html) =>
     const actor = await fromUuid(btn.dataset.actorUuid);
     if(!actor) return ui.notifications.warn("That creature no longer exists.");
     const item = actor.items.get(btn.dataset.itemId);
-    const spec = item?.flags?.vaarn?.moraleFail;
+    const spec = creatureFlagsOf(item).moraleFail;
     if(!spec) return ui.notifications.warn(`${label} is no longer on ${actor.name}.`);
 
     await message.setFlag("vaarn", "moraleFailApplied", true);
@@ -706,7 +628,10 @@ Hooks.on('renderChatMessage', (message, html) =>
     // except the target to beat is 10 + the other creature's [ability]").
     const holder = esc.opposed && entry.sourceActorId ? game.actors.get(entry.sourceActorId) : null;
     const opp = holder ? opposedTarget(holder, esc.ability) : null;
-    const r = await rollCardSave(actor, { ability: esc.ability,
+    // Slimy Skin's ADV to escape (ruling C 13, Mutations and Ancestry Rules
+    // chunk 2b): the body's ADV on escapes, every hold alike.
+    const escapeAdv = bodyRollMods(actor, "escape").adv;
+    const r = await rollCardSave(actor, { ability: esc.ability, advSources: escapeAdv,
       label: `${entry.name} — ${label} save to ${esc.by}${opp ? ` (opposed: 10 + ${holder.name}'s ${label} ${opp.opposedBonus})` : ""}`,
       ...(opp ? { target: opp.target } : {}),
       rollMode: message.whisper?.length ? CONST.DICE_ROLL_MODES.PRIVATE : CONST.DICE_ROLL_MODES.PUBLIC });
@@ -733,7 +658,6 @@ Hooks.on('renderChatMessage', (message, html) =>
 
   html.find('.vaarn-round-hp').click(async ev =>
   {
-    if(!game.user.isGM) return ui.notifications.warn("Only the Referee applies this.");
     const btn = ev.currentTarget;
     const entryId = btn.dataset.entryId;
     const label = btn.dataset.label;
@@ -742,6 +666,8 @@ Hooks.on('renderChatMessage', (message, html) =>
     const actor = actorFromRef(btn.dataset.actorId);
     if(!actor) return ui.notifications.warn("That actor no longer exists.");
     const entry = (actor.getFlag('vaarn', 'effects') ?? []).find(e => e.id === entryId);
+    const refusal = roundApplyRefusal(actor, entry);
+    if(refusal) return ui.notifications.warn(refusal);
     // This click's figure - the Black Cloud's doubling (see hpTickNow).
     const spec = hpTickNow(entry);
     if(!spec) return ui.notifications.warn(`${label} is no longer on ${actor.name}'s board.`);
@@ -1020,7 +946,7 @@ Hooks.on('renderChatMessage', (message, html) =>
     if(!made) return ui.notifications.warn(`${actor.name} has no split rule.`);
     await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
       content: `${actor.name} splits — @UUID[${made.uuid}]{${made.name}} (Level ${made.system.level?.value}, ${made.system.health.value} HP`
-        + `${made.flags?.vaarn?.immuneTo?.length ? `, immune to ${made.flags.vaarn.immuneTo.join(", ")}` : ""}).` });
+        + `${remainingActorFlagsOf(made).immuneTo?.length ? `, immune to ${remainingActorFlagsOf(made).immuneTo.join(", ")}` : ""}).` });
   });
 
   html.find('.vaarn-round-spawn').click(async ev =>
@@ -1105,11 +1031,9 @@ Hooks.on('renderChatMessage', (message, html) =>
       return ui.notifications.warn(`${dog.name} is already dead.`);
     }
     ev.currentTarget.disabled = true;
-    await dog.update({'system.health.value': 0, 'system.health.temp': 0});
-    await ChatMessage.create({
-      speaker: ChatMessage.getSpeaker({ actor: dog }),
-      content: `<b>${dog.name}</b> is killed — <b>Watchdog Protocol</b>.`
-    });
+    // The one kill route (Shared Pipelines chunk 4): temp HP, Defeated and the
+    // kill reported like any death; the funnel posts this line as its own.
+    kill(dog, { line: "is killed — <b>Watchdog Protocol</b>." });
   });
 });
 
@@ -1144,11 +1068,11 @@ Hooks.on('renderChatMessage', (message, html) =>
     const protectee = await fromUuid(held.actorUuid);
     await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: protector }),
       content: `<b>${protector.name}</b> dies in <b>${protectee?.name ?? "their charge"}</b>'s place — <b>Look Out Sire</b>.` });
-    const outcome = ctx.sheet._resolveHPChange(protector, Number(protector.system.health.value) || 0, 0, { toZero: true });
+    const outcome = kill(protector);
     // The kill is the attacker's (Matt): Blood-Rapturous reads the protector,
     // the creature that died, exactly as the Synthhound's death is read.
-    const heal = (outcome === "killed" && ctx.item && (ctx.item.system.tags || []).includes("Blood-Rapturous")
-      && protector.system.creatureTypes?.biological) ? protector.system.health.max : 0;
+    // From the weapon's sentences since Weapon Tags chunk 4 (weapon-heals.js).
+    const heal = outcome === "killed" ? killHealFor(ctx.item, protector) : 0;
     ctx.sheet._applyAttackHeals([{ verb: "feeds on the death of", label: "Blood-Rapturous", amount: heal, victims: 1 }], ctx.item?.name);
     if(outcome === "killed" && held.isMelee) ctx.sheet._postKillReactionReminder(1);
   });
@@ -1435,7 +1359,7 @@ Hooks.on('renderChatMessage', (message, html) =>
     const item = attacker?.items?.get(btn.dataset.itemId);
     const host = game.actors.get(btn.dataset.hostId);
     if(!attacker || !item || !host) return ui.notifications.warn("The attacker, its weapon or the host no longer exists.");
-    const formula = item.system.damageDice;
+    const formula = statOf(item, "damage-dice");
     if(!formula) return ui.notifications.warn(`${item.name} has no damage roll.`);
     await message.setFlag("vaarn", "boundHostApplied", true);
     const roll = await new Roll(formula).evaluate();
@@ -1451,14 +1375,30 @@ Hooks.on('renderChatMessage', (message, html) =>
     const btn = ev.currentTarget;
     const attacker = game.actors.get(btn.dataset.attackerId);
     if(!attacker?.sheet) return;
+    // WHO APPLIES IT (Effect Engine ruling A, 2026-10-04, applied here in
+    // Shared Pipelines chunk 2): the owner of the effect's SOURCE - the
+    // Reflecting weapon's wielder - or the GM. And ONCE: the card had no guard,
+    // so every click dealt the damage again.
+    const defender = game.actors.get(btn.dataset.defenderId);
+    if(!game.user.isGM && !defender?.isOwner)
+      return ui.notifications.warn(`Only the Referee or ${defender?.name ?? "the Reflecting weapon's wielder"}'s player can apply this.`);
+    const message = game.messages.get(btn.closest("[data-message-id]")?.dataset.messageId);
+    if(message?.getFlag("vaarn", "reflectApplied"))
+      return ui.notifications.warn("The reflected damage has already been dealt.");
+    await message?.setFlag("vaarn", "reflectApplied", true);
+    btn.disabled = true;
     const roll = new Roll(btn.dataset.damageDice);
     await roll.evaluate({async: true});
+    const min = (await new Roll(btn.dataset.damageDice).evaluate({ minimize: true })).total;
     roll.toMessage({
       speaker: ChatMessage.getSpeaker({ actor: attacker }),
       flavor: `Reflected <b>${btn.dataset.weaponName}</b> damage to <b>${attacker.name}</b>`
     });
-    const currentHP = attacker.system.health.value;
-    attacker.sheet._resolveHPChange(attacker, currentHP, currentHP - roll.total);
+    // Through the whole HP pipeline (chunk 2): the attacker's own weapon, so its
+    // damage types meet the attacker's own immunities, from the wielder.
+    const item = btn.dataset.itemUuid ? await fromUuid(btn.dataset.itemUuid) : null;
+    dealDamage(attacker, roll.total, { source: defender ?? null, item, min, name: btn.dataset.weaponName,
+      isMelee: item?.type === "weaponMelee" });
   });
 });
 
@@ -1525,6 +1465,10 @@ registerPageRefStripping();
 registerGambitCardButtons();
 registerCorrosionCardButtons();
 registerGiftApplyButtons();
+registerEffectCardButtons();
+registerGateSocket();
+registerValueReaches();
+registerWeaponFeeding();
 registerEquationDamageButtons();
 registerHealingFieldButtons();
 
@@ -1543,23 +1487,22 @@ registerBoardControls();
 // users for whom isGM is true and each posts its own copy. That exact
 // confusion double-posted every round-effect card until testing found it on
 // 2026-09-08. activeGM resolves to the same single user on every client.
-Hooks.on(TIME_HOOK, payload =>
-{
-  if(game.user !== game.users.activeGM) return;
-  return onEffectBoardTime(payload);
-});
+// ONE AT A TIME (2026-10-06, Group 563). The board's sweep, Long-Clock
+// Recurrence and Activity Time Cost each read and rewrite the same vaarn.effects
+// flag on this hook, and Foundry does not wait for one async handler before
+// starting the next - so they interleaved, and whichever wrote last from a stale
+// read won. A recurrence tick written after the Gitch's debridement was marked
+// announced dropped the mark, and "Effort complete" posted again on the next
+// clock move. Queued here in a fixed order: the sweep, then recurrences, then
+// activities LAST, because a finished effort fires its consumers (the cure)
+// without awaiting them, and those must not race a recurrence's write.
+let timeQueue = Promise.resolve();
+const inTurn = fn => (timeQueue = timeQueue.then(fn).catch(err => console.error("vaarn | time hook", err)));
 
-// Activity Time Cost rides the same hook and the same activeGM guard, but is
-// a SEPARATE subscription rather than a call inside the board's own sweep.
-// Two reasons, and the first is structural: activity.js imports
-// effect-board.js for the entry storage, so the board calling back into it
-// would make the pair import each other. The second is that they answer
-// opposite questions — the board asks what has run out and deletes it, this
-// asks what has reached its finish line and deliberately does not.
 Hooks.on(TIME_HOOK, payload =>
 {
   if(game.user !== game.users.activeGM) return;
-  return onActivityTime(payload);
+  return inTurn(() => onEffectBoardTime(payload));
 });
 
 // Long-Clock Recurrence rides the same hook and the same activeGM guard, for
@@ -1574,7 +1517,20 @@ Hooks.on(TIME_HOOK, payload =>
 Hooks.on(TIME_HOOK, payload =>
 {
   if(game.user !== game.users.activeGM) return;
-  return onRecurrenceTime(payload);
+  return inTurn(() => onRecurrenceTime(payload));
+});
+
+// Activity Time Cost rides the same hook and the same activeGM guard, but is
+// a SEPARATE subscription rather than a call inside the board's own sweep.
+// Two reasons, and the first is structural: activity.js imports
+// effect-board.js for the entry storage, so the board calling back into it
+// would make the pair import each other. The second is that they answer
+// opposite questions — the board asks what has run out and deletes it, this
+// asks what has reached its finish line and deliberately does not.
+Hooks.on(TIME_HOOK, payload =>
+{
+  if(game.user !== game.users.activeGM) return;
+  return inTurn(() => onActivityTime(payload));
 });
 
 // What HAPPENS when an effort reaches its finish line. Wired here rather than
@@ -1670,6 +1626,7 @@ Hooks.once('init', async function() {
   CONFIG.Combat.documentClass = VaarnCombat;
   registerHiddenHPToken();
   registerInitiativeSetting();
+  registerGateSettings();
   registerVaultSettings(); // the Generate Vault window's saved settings (Vault Journal)
   registerVaultControls(); // roll a vault room's lair and treasure from its page (Contents Buttons on Vault Pages)
   registerRegionControls(); // a region's Vault page generates its vault when wanted (Region Generator)
@@ -1742,6 +1699,8 @@ Hooks.once('init', async function() {
     "systems/vaarn/templates/actor/parts/deprived-row.html",
     "systems/vaarn/templates/actor/parts/rest-row.html",
     "systems/vaarn/templates/apps/parts/faction-added.html",
+    "systems/vaarn/templates/item/parts/effects-tab.html",
+    "systems/vaarn/templates/item/parts/usage-die.html",
   ]);
 
   // If you need to add Handlebars helpers, here are a few useful examples:
@@ -1800,8 +1759,7 @@ Hooks.once('init', async function() {
     // A DECLARED HP TICK (Direct HP Adjustment, 2026-09-23). The Jollyhoss's
     // Two Are One has no per-round wording - it returns "at the start of the
     // next combat round" - so the declaration, not the text, arms its toggle.
-    if(item?.flags?.vaarn?.hpTick) return true;
-    const t = `${item?.system?.description ?? ""} ${item?.system?.effect ?? ""}`;
+    if(creatureFlagsOf(item).hpTick) return true;
     // TWO WORDINGS, NOT ONE. Widened 2026-09-08, and found by testing rather
     // than by reading: the dialog had already grown from rounds to four units,
     // but this gate had not, so an item whose duration is purely clock-scale
@@ -1827,7 +1785,9 @@ Hooks.once('init', async function() {
     // different claim from a parsed duration and a rule may have both. Only
     // the guessed duration is suppressed, and only where something better has
     // been declared.
-    if(PER_ROUND_WORDING.test(t)) return true;
+    // A creature rule Item's words from its sentence since Effect Engine: Creatures
+    // chunk 2c-ii (2026-10-06); any other Item's still from its text.
+    if(roundWordingOf(item).perRound) return true;
     // THE ACTIVITY GUARD IS GONE (2026-09-20), and its absence is the point.
     // It was added 2026-09-08 to stop a PARSED duration being offered for
     // Windweird, whose "one hour of chanting" is a cost. Its own comment said
@@ -1862,6 +1822,13 @@ Hooks.once('init', async function() {
       return item.type === 'gift';
   });
 
+  // GM Effect Builder chunk 1 (2026-10-05): an Item carrying a use sentence a
+  // GM wrote (not a tag's, not a Gift's - those have their own controls).
+  Handlebars.registerHelper('hasEffectUse', function(item)
+  {
+      return hasEffectUse(item);
+  });
+
   Handlebars.registerHelper('isCodex', function(item)
   {
       return item.type === 'codex';
@@ -1869,14 +1836,13 @@ Hooks.once('init', async function() {
 
   // Ancestry special rules that a player actively uses get a use icon,
   // same as a Gift or a Codex — foundry-system-index.csv "Ancestry Rule
-  // as Rollable Item". Every `ancestry` Item is rollable, so unlike
-  // hasMutationUse there is no per-entry allow-list to consult.
-  // The use icon itself, which a PASSIVE rule does not get (Detritivore,
-  // Matt 2026-09-23): posting its text was all it could do. Separate from
-  // isAncestryRule below, which the template also uses as a plain type test.
+  // as Rollable Item". A PASSIVE rule does not (Detritivore, Matt
+  // 2026-09-23): posting its text was all it could do. Since Mutations and
+  // Ancestry Rules chunk 4 (2026-10-06) the test is the rule's use sentence.
+  // Separate from isAncestryRule below, a plain type test.
   Handlebars.registerHelper('hasAncestryUse', function(item)
   {
-      return item.type === 'ancestry' && !PASSIVE_ANCESTRY_RULES.has(item.system?.rule);
+      return item.type === 'ancestry' && hasBodyUse(item);
   });
 
   Handlebars.registerHelper('isAncestryRule', function(item)
@@ -1884,10 +1850,10 @@ Hooks.once('init', async function() {
       return item.type === 'ancestry';
   });
 
+  // The equation's words from its sentence (Remaining Sources chunk 2a, 2026-10-07).
   Handlebars.registerHelper('codexEquationEffect', function(equationName)
   {
-      const found = EQUATIONS.find(e => e.name === equationName);
-      return found ? found.effect : "";
+      return codexOf({ type: "codex", system: { equation: equationName } })?.words ?? "";
   });
 
   // Two distinct states per Item Slots.md: over the soft 10+CON limit is
@@ -1938,7 +1904,7 @@ Hooks.once('init', async function() {
   // antlers. What it loses is its ongoing effect, so the row is greyed the
   // same way a broken weapon is and says who is holding it down.
   // Affliction Contraction and Cure. Both read-only: the save target is
-  // 10 + Virulence wherever it is printed, and the displaced list is a stored
+  // the Virulence wherever it is printed, and the displaced list is a stored
   // payload rather than a set of live Items, so neither can be a field.
 
   Handlebars.registerHelper('displacedNames', function(item)
@@ -1968,7 +1934,7 @@ Hooks.once('init', async function() {
   {
     if(item.type === "spell")
       return (item.system.used === "true" || !item.system.spellUsable);
-    else if(item.system.usageDie?.die === "expended")
+    else if(usageDieOf(item).die === "expended")
       return true;
     else if(item.type === "weaponMelee" || item.type === "weaponRanged")
       return !!item.system.broken;
@@ -2023,7 +1989,7 @@ Hooks.once('init', async function() {
 
   Handlebars.registerHelper('hasUsageDie', function(item)
   {
-    return !!(item.system.usageDie && item.system.usageDie.die);
+    return !!usageDieOf(item).die;
   });
 
   // Gates the fixed-charge "use" icon and "(N left)" text for Exotica
@@ -2038,12 +2004,10 @@ Hooks.once('init', async function() {
     return item.type === 'exotica' && item.system.usesRemaining > 0;
   });
 
-  // Gates the "use" (spray/etc.) icon for mutations with an active,
-  // player-triggered effect. See MUTATIONS_WITH_USE_ICON's comment above
-  // for why this is name-list-based rather than hardcoded to one mutation.
+  // Gates the "use" icon for a mutation with a use sentence (chunk 4).
   Handlebars.registerHelper('hasMutationUse', function(item)
   {
-    return item.type === 'mutation' && MUTATIONS_WITH_USE_ICON.includes(item.name);
+    return item.type === 'mutation' && hasBodyUse(item);
   });
 
   // Gates the "refresh" icon and the Uses Remaining sheet field, for
@@ -2084,14 +2048,15 @@ Hooks.once('init', async function() {
   // saving against their own nerves.
   Handlebars.registerHelper('hasFigmentTargetSave', function(item)
   {
-    return item.type === 'figment' && !!findFigment(item.name)?.targetSave;
+    // Its use sentence since Implants, Exotica and Figments chunk 3a (2026-10-06).
+    return item.type === 'figment' && hasBodyUse(item);
   });
 
   // Same shape as hasMutationUse/hasMutationUsePool, for `implant`-type
   // Items — work-queue item 10.2 (2026-08-25).
   Handlebars.registerHelper('hasImplantUse', function(item)
   {
-    return item.type === 'implant' && IMPLANTS_WITH_USE_ICON.includes(item.name);
+    return item.type === 'implant' && hasBodyUse(item);
   });
 
   Handlebars.registerHelper('hasImplantUsePool', function(item)
@@ -2100,7 +2065,7 @@ Hooks.once('init', async function() {
   });
 
   // Same shape again, for generic `type: "item"` Items — item 10.8/10.3.8
-  // (2026-08-27, Berserker Brew). See ITEMS_WITH_USE_ICON's comment above.
+  // (2026-08-27, Berserker Brew). An Elixir's control is its drink sentence (chunk 3a).
   // An Antidote is ASKED FOR, not listed, because its name carries the toxin
   // die it answers ("Antidote (d8 TOX)") and a list cannot hold six of those
   // plus whatever the die chain grows. That is the same reason
@@ -2112,7 +2077,7 @@ Hooks.once('init', async function() {
   Handlebars.registerHelper('hasItemUse', function(item)
   {
     return item.type === 'item'
-      && (ITEMS_WITH_USE_ICON.includes(item.name) || !!antidoteDieOf(item.name)
+      && (!!elixirDrinkOf(item) || !!antidoteDieOf(item.name)
           || !!item.flags?.vaarn?.grantedBy || isGrownFruit(item));
   });
 
@@ -2135,7 +2100,7 @@ Hooks.once('init', async function() {
   // and by the item sheet's checkbox for gear a GM makes by hand.
   //
   // The two exclusions stop one item growing two use icons. An item already
-  // in ITEMS_WITH_USE_ICON has a name-keyed effect that consumes it its own
+  // with a drink sentence (an Elixir, chunk 3a) has an effect that consumes it its own
   // way. A usage die is the OTHER depletion shape the book uses, and the two
   // notations have stayed distinct across two editions — (xN) 25 times and
   // (UdN) 10 times in both CRIMSON HOUND and JADE IBIS, measured 2026-09-20
@@ -2144,15 +2109,23 @@ Hooks.once('init', async function() {
   {
     return item.type === 'item'
       && item.system.consumable === true
-      && !item.system.usageDie?.die
-      && !(ITEMS_WITH_USE_ICON.includes(item.name) || !!antidoteDieOf(item.name));
+      && !usageDieOf(item).die
+      && !(!!elixirDrinkOf(item) || !!antidoteDieOf(item.name));
   });
 
   // Same shape again, for `exotica`-type Items with no pool — item 10.3.4
   // (2026-08-27). See EXOTICA_WITH_USE_ICON's comment above.
+  // The reload control: a weapon's refill sentence (the Tempest Cannon) since
+  // Implants, Exotica and Figments chunk 3b-ii (2026-10-06).
+  Handlebars.registerHelper('hasReload', function(item)
+  {
+    return !!reloadOf(item);
+  });
+
   Handlebars.registerHelper('hasExoticaUse', function(item)
   {
-    return item.type === 'exotica' && EXOTICA_WITH_USE_ICON.includes(item.name);
+    return item.type === 'exotica' && !usageDieOf(item).die && !(item.system?.usesRemaining > 0)
+      && useSentences(item).some(({ s }) => !s.baked);
   });
 
   // Gates the "install" icon for a sealed Cocoon/Pack capsule — item
@@ -2202,7 +2175,8 @@ Hooks.once('init', async function() {
   Handlebars.registerHelper('isEquippable', function(item)
   {
     if(isIntrinsic(item)) return false;
-    return item.type === 'weaponMelee' || item.type === 'weaponRanged' || item.type === 'armor';
+    // Any carried Item that needs it, since Stats as Sentences chunk 2e-ii.
+    return isEquippableItem(item);
   });
 
   // Activity Time Cost. A rule offers to start an effort only where it
@@ -2212,7 +2186,7 @@ Hooks.once('init', async function() {
   // belonging to other mechanisms entirely.
   Handlebars.registerHelper('hasActivity', function(item)
   {
-    return !!item?.flags?.vaarn?.activity?.options?.length;
+    return !!creatureFlagsOf(item).activity?.options?.length;
   });
 
   // Ability Damage pass 3 (2026-09-22): an AUTO-HIT per-round loss on a
@@ -2223,9 +2197,16 @@ Hooks.once('init', async function() {
   // both are auto-hit per-round effects a use starts on the targeted tokens,
   // and the click handler starts whichever the Item declares. A second icon
   // for an identical gesture would only make the sheet harder to read.
+  // A creature Item's flag, read from its sentences (Effect Engine: Creatures chunk
+  // 2c-i, 2026-10-06) - what the NPC sheet's controls show and are gated on.
+  Handlebars.registerHelper('creatureFlag', function(item, key)
+  {
+    return creatureFlagsOf(item)[key];
+  });
+
   Handlebars.registerHelper('hasAbilityTick', function(item)
   {
-    const starts = !!item?.flags?.vaarn?.abilityTick?.length || !!item?.flags?.vaarn?.escalating?.length;
+    const starts = !!creatureFlagsOf(item).abilityTick?.length || !!creatureFlagsOf(item).escalating?.length;
     return starts && item.type !== 'weaponMelee' && item.type !== 'weaponRanged';
   });
 
@@ -2253,7 +2234,7 @@ Hooks.once('init', async function() {
     // Also an ability that inflicts a condition with no save at all
     // (Grimweaver's Web Shot, 2026-09-16): the same control posts its
     // Apply Effect to Target card, since there is no other click for it.
-    return !!(item?.flags?.vaarn?.save?.length || item?.flags?.vaarn?.applies?.length);
+    return !!(creatureFlagsOf(item).save?.length || creatureFlagsOf(item).applies?.length);
   });
 
   // Heal the targeted tokens by hand - the Biotic Field's Healing Cloud,
@@ -2267,19 +2248,19 @@ Hooks.once('init', async function() {
   // The Entropy Wight's max-HP cut (Direct HP Adjustment, 2026-09-23).
   Handlebars.registerHelper('hasMaxHPLoss', function(item)
   {
-    return !!item?.flags?.vaarn?.maxHPLoss;
+    return !!creatureAttackOf(item).maxHPLoss;
   });
 
   // Look Out Sire (2026-09-26): the Consul's Lictor's Protect control.
   Handlebars.registerHelper('hasProtector', function(item)
   {
-    return !!item?.flags?.vaarn?.protector;
+    return !!creatureFlagsOf(item).protector;
   });
 
   // Temporary HP (2026-09-26): the Zenithlight Negatick's Infusion.
   Handlebars.registerHelper('hasTempHp', function(item)
   {
-    return !!item?.flags?.vaarn?.tempHp;
+    return !!creatureFlagsOf(item).tempHp;
   });
 
   // Creature-Driven Level Drain. FLAG-GATED like the two above, never text:
@@ -2288,7 +2269,7 @@ Hooks.once('init', async function() {
   // written by bestiary-build.js from the rule's own levelDrain block.
   Handlebars.registerHelper('hasLevelDrain', function(item)
   {
-    return !!item?.flags?.vaarn?.levelDrain;
+    return !!creatureFlagsOf(item).levelDrain;
   });
 
   // Rolled Creature Stat. FLAG-GATED like the three above: the flag is written
@@ -2296,7 +2277,7 @@ Hooks.once('init', async function() {
   // off a stat line.
   Handlebars.registerHelper('hasRolledStat', function(item)
   {
-    return !!item?.flags?.vaarn?.rolledStat?.dice;
+    return !!creatureFlagsOf(item).rolledStat?.dice;
   });
 
   // Creature AV State Control. FLAG-GATED like the ones above: the list is
@@ -2306,17 +2287,17 @@ Hooks.once('init', async function() {
   // An aura's ability loss (the Thermasaur's Cold Aura, 2026-09-24).
   Handlebars.registerHelper('hasAuraDamage', function(item)
   {
-    return !!item?.flags?.vaarn?.auraAbilityDamage;
+    return !!creatureFlagsOf(item).auraAbilityDamage;
   });
 
   Handlebars.registerHelper('hasEncounterEffect', function(item)
   {
-    return !!item?.flags?.vaarn?.encounterEffect;
+    return !!creatureFlagsOf(item).encounterEffect;
   });
 
   Handlebars.registerHelper('avStatesOf', function(item)
   {
-    const states = item?.flags?.vaarn?.avStates;
+    const states = creatureFlagsOf(item).avStates;
     return Array.isArray(states) ? states : [];
   });
 
@@ -2425,3 +2406,22 @@ Hooks.on('renderChatMessage', (message, html) =>
     await postSaveCardsToTargets(actor, label, [entry.save]);
   });
 });
+
+/**
+ * WHO MAY APPLY A ROUND-CARD TICK (Effect Engine ruling A, 2026-10-04, applied
+ * to the round card's HP, ability and escalating buttons in Shared Pipelines
+ * chunk 2, 2026-10-05): the owner of the effect's SOURCE applies the result -
+ * the GM for a creature, trap or disease, a character's player for something
+ * their character started. An entry naming no source is its holder's own
+ * (burning, a rule a creature runs from its sheet, an elixir's regeneration),
+ * so its holder's owner applies it. Replaces "GM only" on the HP tick and
+ * "GM or the victim's owner" on the ability tick, which disagreed on one card.
+ * Returns the refusal to show, or null to go ahead.
+ */
+function roundApplyRefusal(holder, entry)
+{
+  if(game.user.isGM) return null;
+  const source = (entry?.sourceActorId && game.actors.get(entry.sourceActorId)) || holder;
+  if(source?.isOwner) return null;
+  return `Only the Referee or ${source?.name ?? "its source"}'s player can apply this.`;
+}

@@ -25,7 +25,7 @@ async function openDialog()
 {
   const { POISON_COLOURS, POISON_FORMS, POISON_DELIVERY, POISON_EFFECTS, poisonName, poisonItemData }
     = await import("/systems/vaarn/module/actor/poison-data.js");
-  const { applyPoison } = await import("/systems/vaarn/module/actor/poison.js");
+  const { postPoison } = await import("/systems/vaarn/module/actor/poison.js");
 
   const d20 = () => Math.floor(Math.random() * 20);
   const state = { colour: d20(), form: d20(), delivery: d20(), effect: d20() };
@@ -80,19 +80,13 @@ async function openDialog()
           const actor = game.actors.get(html.find("#vaarn-gp-target").val());
           if(!actor) return;
 
-          const { target, passed, lines, after } = await applyPoison(actor, effect, { label: name, rollMode: CONST.DICE_ROLL_MODES.PRIVATE });
-          // AWAITED, and `after` posted only once it has landed. Chat orders by
-          // creation, so a death handed back in `after` would otherwise race the
-          // card that explains it — which is the whole reason applyPoison hands
-          // it back rather than letting the Zero Max HP Death hook post it.
+          // How it was delivered, for the Referee; then a save card the target
+          // rolls, and the poison lands with that roll (Shared Pipelines chunk 7,
+          // RULED 2026-10-05). Before, this macro rolled the save itself.
           await ChatMessage.create({ whisper: ChatMessage.getWhisperRecipients("GM"),
             speaker: ChatMessage.getSpeaker({ actor }),
-            content: `<p><b>${name}</b> — ${delivery.toLowerCase()}. <i>${effect.text}</i></p>`
-                   + `<p>CON Save vs ${target}: <b>${passed ? "passed" : "failed"}</b>.</p>`
-                   + `<ul>${lines.map(l => `<li>${l}</li>`).join("")}</ul>`
-          });
-          for(const content of after ?? [])
-            await ChatMessage.create({ whisper: ChatMessage.getWhisperRecipients("GM"), speaker: ChatMessage.getSpeaker({ actor }), content });
+            content: `<p><b>${name}</b> — ${delivery.toLowerCase()}. <i>${effect.text}</i></p>` });
+          await postPoison(actor, effect, { label: name });
         }
       },
       cancel: { label: "Cancel" }

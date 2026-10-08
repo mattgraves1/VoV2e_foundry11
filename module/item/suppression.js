@@ -231,6 +231,9 @@ export function suppressionDeltas(actor)
   for(const item of actor?.items ?? [])
   {
     if(item.type !== "mutation" || !isSuppressed(item)) continue;
+    // A LIVE mutation's bonus was never baked in, so it has nothing to give back:
+    // the live reader simply stops counting it while suppressed (2d-ii, ruling 3).
+    if(item.flags?.vaarn?.liveStats) continue;
     const mod = entryFor(item)?.abilityMod;
     if(!mod) continue;
     for(const [long, amount] of Object.entries(mod))

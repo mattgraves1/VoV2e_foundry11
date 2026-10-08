@@ -94,6 +94,9 @@
  */
 
 import { TAKES_DOUBLE_DAMAGE, DEALS_DOUBLE_DAMAGE, HALF_FROM_BLUDGEONING } from "../item/attack-properties.js";
+// A cycle (affliction-effects-data.js reads AFFLICTIONS), safe because both
+// read the other only when called, never while loading.
+import { afflictionFixedOf } from "./affliction-effects-data.js";
 
 /**
  * The condition an affliction sets to forbid Gift use. A string enum for the
@@ -261,7 +264,7 @@ export const AFFLICTIONS = [
     recurrenceKey: "hivey-hump",
     effects: "The bees fight to defend their hive. After three days of infection, the character can deal d4 unblockable swarm damage to an opponent per combat round. This rises to d6 after seven days of infection.",
     cure: "Fumigation of the afflicted, with special herbs burned in the fumigate fires.",
-    vector: "A Sable Bee queen entering the airways. Hiveymen are another source.",
+    vector: "A Sable Bee queen entering the airways. During swarming months, anyone who sleeps without netting around their bed has a 1-in-10 chance of infection every night. Hiveymen are another source: after battle, secretly CON Save for each PC to establish possible infestations.",
     // THE BOOK'S OWN ELAPSED-TIME THRESHOLDS, not invented staging. The EGO
     // loss per day is the recurrence; these two are the hump appearing and
     // then growing, which Matt asked to model as the Item changing.
@@ -582,7 +585,9 @@ export function afflictionByKey(key)
 export function slotsOccupiedBy(entry, rolled = null)
 {
   if(entry?.kind !== "nanomachine") return [];
-  const spec = entry.abilitySlot === "d6" ? rolled : entry.abilitySlot;
+  // From the baked sentence since Effect Engine: Wounds and Afflictions chunk 3.
+  const slot = afflictionFixedOf(entry.key).abilitySlot;
+  const spec = slot === "d6" ? rolled : slot;
   if(!spec) return [];
   return String(spec).split("+").map(s => s.trim().toUpperCase()).filter(Boolean);
 }

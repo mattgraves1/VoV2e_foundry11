@@ -1,5 +1,6 @@
 import { depletionChance, expectedUsesRemaining } from "./usage-die.js";
 import { dailyPoolSize } from "../actor/daily-pool.js";
+import { usageDieOf } from "../effects/item-stats.js";
 
 /**
  * Extend the basic Item with some very simple modifications.
@@ -22,9 +23,17 @@ export class KnaveItem extends Item {
     // Always set as two lines, even when there's nothing to report, so the
     // sheet's status line holds a fixed two-line height at every state —
     // otherwise everything below it jumps around whenever the die is edited.
+    // Any Item may have a die since Stats as Sentences chunk 2e-i - its field's, or a size its
+    // Stats effect gives it - so one without the template's field gets it in memory, and a
+    // sentence-sized die not yet rolled shows as the full die it is.
+    const ud = usageDieOf(this);
+    if(!data.usageDie && (ud.die || ud.max)) data.usageDie = { die: "", max: "" };
     if(data.usageDie)
     {
-      const die = data.usageDie.die;
+      // usageDieOf's current die is the field's when set, else a sentence's full size.
+      data.usageDie.die = ud.die;
+      // The current die, a sentence-sized one full until rolled (Stats as Sentences chunk 2a).
+      const die = ud.die;
       if(!die)
       {
         data.usageDie.statusLine1 = "No usage die tracked.";

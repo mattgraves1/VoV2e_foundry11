@@ -1,3 +1,5 @@
+// Creature flags from their sentences (Effect Engine: Creatures chunk 2c-i).
+import { creatureFlagsOf } from "../item/creature-effects.js";
 /**
  * Usable Creature Ability - the Items a Bestiary entry's `usable` list builds
  * (foundry-system-index.csv "Spirit Form", 2026-09-27).
@@ -53,5 +55,5 @@ export function usableItems(entry)
 /** Is this Item one of the above? */
 export function isUsable(item)
 {
-  return !!item?.flags?.vaarn?.usable;
+  return !!creatureFlagsOf(item).usable;
 }

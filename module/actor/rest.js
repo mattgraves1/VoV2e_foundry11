@@ -115,18 +115,22 @@
  * mechanism row behind the generation rows that must come first.
  */
 
+import { rationTimesOf } from "../item/weapon-tags.js";
+// Registers the affliction translator, whose upkeep sentence is the Stoma's draw (Wounds and Afflictions chunk 3).
+import "../item/affliction-effects.js";
+import { offerWeaponFeeding } from "../item/weapon-feeding.js";
 import { blocksHealing, isDeprived, noHealRule, setDeprived } from "./deprived.js";
 import { hasCondition } from "../time/stateful-effect.js";
 import { MUTATION_TABLE } from "./mutation-data.js";
 import { ADVANCED_IMPLANTS } from "./advanced-implants-data.js";
 import { isSuppressed } from "../item/suppression.js";
 import { refillDailyPools } from "./daily-pool.js";
-import { scaleHealing } from "./healing-multiplier.js";
+import { heal, healFloor } from "../effects/heal.js";
 import { gmHP } from "./hidden-hp.js";
-import { ELIXIRS } from "./chargen-data.js";
 import { entriesOf } from "../time/effect-board.js";
-import { afflictionByKey } from "./affliction-data.js";
+import { elixirSentencesByName } from "../item/consumable-effects.js";
 import { startLapse, stopLapse } from "../time/lapse.js";
+import { bodyDiets, rationFreeRuleOf, bodyPassives } from "../effects/body.js";
 
 export const FOOD_RATION  = "Food Ration";
 export const WATER_RATION = "Water Ration";
@@ -192,19 +196,22 @@ export function rationKindsFor(actor, name)
   const key = name === FOOD_RATION ? "food" : name === WATER_RATION ? "water" : null;
   const kinds = [...rationKinds(name)];
   if(!key) return kinds;
-  for(const item of actor?.items ?? [])
+  // The body's 'also' - Omniguts' Stone and Scrap Metal - from its upkeep
+  // sentence since Implants, Exotica and Figments chunk 2 (2026-10-06), not
+  // suppressed, as the roster read was.
+  for(const p of bodyPassives(actor, { verb: "upkeep" }))
   {
-    if(item.type !== "implant" || isSuppressed(item)) continue;
-    const extra = ADVANCED_IMPLANTS.find(e => e.name === item.name)?.rationAlso?.[key] ?? [];
-    for(const k of [...extra].reverse()) if(!kinds.includes(k)) kinds.unshift(k);
+    if(p.sentence.do.item !== name) continue;
+    for(const k of [...(p.sentence.do.also ?? [])].reverse()) if(!kinds.includes(k)) kinds.unshift(k);
   }
   // An ELIXIR's rationAlso, while its row is on the board - the Metallovore
   // Potion's Scrap Metal (Metal Item Property Part B, RULED 2026-09-27 by
   // Matt, replacing the 2026-09-23 free meal now a metal item exists). The
   // board row is the span, so the kind goes when the row does.
+  // Its upkeep sentence since Effect Engine: Consumables chunk 2 (2026-10-06).
   for(const entry of entriesOf(actor))
   {
-    const extra = ELIXIRS.find(e => e.name === entry.name)?.rationAlso?.[key] ?? [];
+    const extra = elixirSentencesByName(entry.name).filter(s => s.do?.verb === "upkeep" && s.do.item === name).flatMap(s => s.do.also ?? []);
     for(const k of [...extra].reverse()) if(!kinds.includes(k)) kinds.unshift(k);
   }
   return kinds;
@@ -256,16 +263,16 @@ export const RATION_FREE =
 /*  Reads                                                                 */
 /* -------------------------------------------- */
 
-/** The "as though starting from 0" clause, and nothing else. */
-export function healFloor(current)
-{
-  return Math.max(0, current);
-}
+// The "as though starting from 0" clause lives with the heal path now
+// (effects/heal.js, Shared Pipelines chunk 3); re-exported for its readers.
+export { healFloor };
 
 /** The rule name blocking rations for this actor's ancestry, or null. */
 export function rationFreeRule(actor)
 {
-  return RATION_FREE[actor?.system?.ancestry] ?? null;
+  // The flesh's sentence since Mutations and Ancestry Rules chunk 2c - an Item,
+  // or the ancestry text (ruling B). RATION_FREE above is kept as what it was.
+  return rationFreeRuleOf(actor);
 }
 
 /**
@@ -306,16 +313,21 @@ export function rationDrawFor(actor, name)
   for(const item of actor?.items ?? [])
   {
     // Mutations by name; afflictions by key (the Fabricator Stoma, 2026-09-24).
-    const entry = item.type === "mutation" ? MUTATION_TABLE.find(m => m.name === item.name)
-      : item.type === "affliction" ? afflictionByKey(item.system?.afflictionKey)
-      : item.type === "implant" && !isSuppressed(item) ? ADVANCED_IMPLANTS.find(e => e.name === item.name)
-      : null;
-    if(!entry) continue;
-    const want = Number(entry?.rationDraw?.[key] ?? 0);
-    // Strictly greater, so a roster entry of 1 is a no-op rather than a
-    // silent reset of somebody else's doubling.
-    if(want > count) { count = want; sources.push(entry.name); }
-    else if(want > 1) sources.push(entry.name);
+    // A mutation's draw is its upkeep sentence since Mutations and Ancestry
+    // Rules chunk 2a (Gills: "Water Ration" x2), read by rationTimesOf below.
+    // An implant's draw (Dreadnaught Carapace's double) is its upkeep sentence
+    // since Implants, Exotica and Figments chunk 2 (2026-10-06), read by
+    // rationTimesOf below with every Item's.
+    // A weapon that makes its bearer eat and drink double - Parasitic, Effect
+    // Engine: Weapon Tags chunk 5c (Matt, 2026-10-05) - while equipped.
+    // Any Item's upkeep sentence since GM Effect Builder chunk 1 (2026-10-05) -
+    // a weapon's from its tags, anything else's from what a GM wrote on it.
+    const times = isSuppressed(item) ? 1 : rationTimesOf(item, key);
+    if(times > count) { count = times; sources.push(item.name); }
+    else if(times > 1) sources.push(item.name);
+    // An affliction's draw (the Fabricator Stoma's double) is its upkeep
+    // sentence since Effect Engine: Wounds and Afflictions chunk 3 (2026-10-06),
+    // read by rationTimesOf above with every Item's.
   }
   return { count, sources };
 }
@@ -348,16 +360,9 @@ export function rationDrawFor(actor, name)
  */
 export function dietRationsFor(actor)
 {
-  const out = [];
-  for(const item of actor?.items ?? [])
-  {
-    if(item.type !== "mutation") continue;
-    const entry = MUTATION_TABLE.find(m => m.name === item.name);
-    const diet  = entry?.dietRation;
-    if(diet?.item && !out.some(d => d.item === diet.item))
-      out.push({ item: diet.item, onMiss: diet.onMiss, replaces: diet.replaces ?? "food", source: entry.name });
-  }
-  return out;
+  // The body's diet sentences since Mutations and Ancestry Rules chunk 2c
+  // (Obligate Carnivore, Obligate Lithovore, Vampiric), not suppressed.
+  return bodyDiets(actor);
 }
 
 /**
@@ -412,29 +417,15 @@ export function damagedAbilities(actor)
 /* -------------------------------------------- */
 
 /**
- * Add HP through the floor clause and the max clamp. Returns what actually
- * happened rather than what was rolled — `gained` EXCEEDS `amount` whenever HP
- * was negative, and that difference is the rule doing its work, so the caller
- * reports `gained` and never the roll.
- *
- * Healing does not go through _resolveHPChange, which is documented as the
- * shared entry point for any DECREASE and would run the Wounds table. Writing
- * health.value directly is what _applyAttackHeals and Photosynthesis already
- * do.
+ * A rest's heal, through the one heal path (effects/heal.js, Shared Pipelines
+ * chunk 3). Ungated there: every caller has already refused a Deprived or
+ * never-healing actor with its own wording. Returns { before, after, gained,
+ * max, note } - `gained` EXCEEDS `amount` whenever HP was negative, so the
+ * caller reports `gained` and never the roll.
  */
 export async function applyHeal(actor, amount)
 {
-  const before = actor.system.health.value;
-  const max    = actor.system.health.max;
-  const full   = Math.min(max, healFloor(before) + amount);
-  // Healing Received Multiplier: Deathblight halves the gain, per slot. The
-  // gain, not the amount — a Long Rest passes max HP and clamps, and halving
-  // that would be a different number. `note` is for the caller's own line.
-  const { gained, note } = scaleHealing(actor, full - before);
-  const after  = before + gained;
-
-  if(gained !== 0) await actor.update({ "system.health.value": after });
-  return { before, after, gained, max, note };
+  return heal(actor, amount, { gate: false });
 }
 
 /**
@@ -697,6 +688,8 @@ export async function shortRest(actor, { ration = null, rotting = false } = {})
       ? `takes a <b>Short Rest</b> on ${on} — restores no HP.${note}`
       : `takes a <b>Short Rest</b> on ${on}, but is already at full HP.`);
 
+  // A weapon that can be fed at a rest (Fungal, Weapon Tags chunk 5c).
+  offerWeaponFeeding(actor);
   return { gained, after, max, spent: pick };
 }
 
@@ -744,6 +737,7 @@ export async function longRest(actor, { onWatch = false, picks = null } = {})
     const cleared = await clearLongRestMarkers(actor);
     say(actor, `<b>Long Rest</b> — ${actor.name} neither eats nor drinks, and `
              + `regains no HP (<b>${c.rationFree}</b>).${clearedTail(cleared)}`);
+    offerWeaponFeeding(actor);
     return { gained: 0, after: actor.system.health.value, max, atFullHp: c.atFullHp,
              offerRecovery: c.offerRecovery, cleared, rationFree: true, plan };
   }
@@ -815,5 +809,7 @@ export async function longRest(actor, { onWatch = false, picks = null } = {})
   else if(c.faaDrank && running)
     await stopLapse(actor, running.id);
 
+  // A weapon that can be fed at a rest (Fungal, Weapon Tags chunk 5c).
+  offerWeaponFeeding(actor);
   return { gained, after, max, atFullHp: c.atFullHp, offerRecovery: c.offerRecovery, cleared, plan };
 }

@@ -252,7 +252,7 @@ export const BESTIARY = [
     atk: "Bite (d6 x 2) / Vomit Blood (CON Save vs Wrathworms)",
     abilities: [
       {"name":"Bite","carried":false,"text":"Bite (d6 x 2)","effects":[{"kind":"damage","dice":"1d6"}],"count":2},
-      {"name":"Vomit Blood","text":"Vomit Blood (CON Save vs Wrathworms)","effects":[{"kind":"save","ability":"con","mode":"resist","vs":"Wrathworms"}]},
+      {"name":"Vomit Blood","text":"Vomit Blood (CON Save vs Wrathworms)","effects":[{"kind":"save","ability":"con","mode":"resist","vs":"Wrathworms","onFail":{"contracts":"wrathworms"}}]},
     ],
     routines: [[0],[1]],
     rules: [
@@ -861,7 +861,7 @@ export const BESTIARY = [
   { name: "Gitchghast", types: ["biological", "mineral"], level: 1, hp: 4, av: 20, moraleBonus: 0, enc: "d6",
     atk: "Bite (d6 + CON Save vs Gitch)",
     abilities: [
-      {"name":"Bite","carried":false,"text":"Bite (d6 + CON Save vs Gitch)","effects":[{"kind":"damage","dice":"1d6"},{"kind":"save","ability":"con","mode":"resist","vs":"the Gitch"}]},
+      {"name":"Bite","carried":false,"text":"Bite (d6 + CON Save vs Gitch)","effects":[{"kind":"damage","dice":"1d6"},{"kind":"save","ability":"con","mode":"resist","vs":"the Gitch","onFail":{"contracts":"the-gitch"}}]},
     ],
     bio: "<p>Unfortunates who have succumbed to the Gitch and have lost their minds beneath the creeping weight of the crystals. Shunned by all living souls, they are expelled from their communities to wander the margins of the Urth.</p>" },
 
@@ -1276,7 +1276,7 @@ export const BESTIARY = [
   { name: "Maladaptor", types: ["synthetic"], level: 5, hp: 20, av: 15, moraleBonus: 5, enc: "d4",
     atk: "Lash (d8 + CON Save vs Nanomachine Infection) / Feedback (d8, blast, electrical)",
     abilities: [
-      {"name":"Lash","carried":false,"text":"Lash (d8 + CON Save vs Nanomachine Infection)","effects":[{"kind":"damage","dice":"1d8"},{"kind":"save","ability":"con","mode":"resist","vs":"Nanomachine Infection"}]},
+      {"name":"Lash","carried":false,"text":"Lash (d8 + CON Save vs Nanomachine Infection)","effects":[{"kind":"damage","dice":"1d8"},{"kind":"save","ability":"con","mode":"resist","vs":"Nanomachine Infection","onFail":{"contracts":{"d6":["the-gitch","goldencough","fabricator-stoma","usurper-arm","dreamcage","janus-lenses"]}}}]},
       {"name":"Feedback","ranged":true,"carried":false,"text":"Feedback (d8, blast, electrical)","effects":[{"kind":"damage","dice":"1d8","damageType":"blast"}],"damageTypes":["blast","electrical"]},
     ],
     routines: [[0],[1]],

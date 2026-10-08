@@ -75,13 +75,18 @@ import { AFFLICTIONS, afflictionByKey, slotsOccupiedBy, saveTargetFor, heldSlots
          diseaseImmuneTypes } from "./affliction-data.js";
 import { IMPLANTS } from "./chargen-data.js";
 import { MUTATION_TABLE } from "./mutation-data.js";
+import { helmRefusal, bodyRollMods } from "../effects/body.js";
 import { ADVANCED_IMPLANTS } from "./advanced-implants-data.js";
 import { entriesOf, setEntries } from "../time/effect-board.js";
+import { afflictionFixedOf, afflictionSuppressesOf } from "./affliction-effects-data.js";
+// What an affliction does over time, from its sentences (Wounds and Afflictions chunk 4).
+import { afflictionOverTimeOf } from "../item/affliction-effects.js";
 import { spanFieldFrom } from "../time/declared-span.js";
 import { startRecurrence, stopRecurrence } from "../time/recurrence.js";
 import { recurrenceByKey } from "../time/recurrence-data.js";
 import { ROLLTABLES } from "./rolltable-data.js";
 import { innateItemsFor, suppressItems, releaseSuppression } from "../item/suppression.js";
+import { armourSlotOf } from "../effects/item-stats.js";
 
 /** The flag namespace an affliction's own state lives under on its Item. */
 export const SOURCE_PREFIX = "affliction:";
@@ -127,7 +132,9 @@ export function nanomachineDis(actor, entry)
 {
   if(entry?.kind !== "nanomachine") return { dis: false, sources: [] };
   const sources = [];
-  if(actor?.system?.ancestry === "Synth") sources.push("Synth");
+  // The body's DIS on saves vs nanomachines since Mutations and Ancestry Rules
+  // chunk 2b: Synthetic Mind (an Item, or the ancestry text - ruling B).
+  sources.push(...bodyRollMods(actor, "save", "nanomachine").dis);
   const implants = (actor?.items ?? []).filter(i => i.type === "implant");
   if(implants.length) sources.push(`${implants.length} cybernetic implant${implants.length === 1 ? "" : "s"}`);
   return { dis: sources.length > 0, sources };
@@ -146,8 +153,8 @@ export function diseaseAdv(actor, entry)
 {
   if(entry?.kind !== "disease") return { adv: false, sources: [] };
   const sources = [];
-  const has = [...(actor?.items ?? [])].some(i => i.type === "mutation" && i.name === "Heightened Immune System");
-  if(has) sources.push("Heightened Immune System");
+  // The body's ADV on saves vs disease since Mutations and Ancestry Rules chunk 2b.
+  sources.push(...bodyRollMods(actor, "save", "disease").adv);
   return { adv: sources.length > 0, sources };
 }
 
@@ -247,14 +254,11 @@ export function afflictionBlocking(actor, slots)
 export function helmRefusalFor(actor, entry)
 {
   if(entry?.item?.armorSlot !== "helm") return null;
-  const mutations = (actor?.items ?? []).filter(i => i.type === "mutation");
-  const blocker = mutations.find(i => MUTATION_TABLE.find(m => m.name === i.name)?.blocksHelmet);
-  if(blocker) return `${actor.name} cannot wear helmets — ${blocker.name}.`;
-  const cap = mutations.some(i => i.name === "Extra Head") ? 2 : 1;
+  // ONE COPY since Mutations and Ancestry Rules chunk 2a (ruling D, 2026-10-05):
+  // the equip control and this read body.js helmRefusal.
   const worn = (actor?.items ?? []).filter(i =>
-    i.type === "armor" && (i.system.armorSlot || "body") === "helm" && i.system.equipped).length;
-  if(worn >= cap) return `${actor.name} already has a helm equipped — there is no room for it.`;
-  return null;
+    i.type === "armor" && armourSlotOf(i) === "helm" && i.system.equipped).length;
+  return helmRefusal(actor, worn);
 }
 
 /* ------------------------------------------------------------------ *
@@ -276,21 +280,25 @@ export function helmRefusalFor(actor, entry)
  */
 export async function rollContractionDetails(entry)
 {
-  const out = { slotRoll: null, abilitySlot: entry.abilitySlot ?? null, location: null, object: null };
-  if(entry.kind === "nanomachine" && entry.abilitySlot === "d6")
+  // The slot and location from the baked sentences since Effect Engine: Wounds
+  // and Afflictions chunk 3 (2026-10-06).
+  const fixed = afflictionFixedOf(entry.key);
+  const out = { slotRoll: null, abilitySlot: fixed.abilitySlot, location: null, object: null };
+  if(entry.kind === "nanomachine" && fixed.abilitySlot === "d6")
   {
     const r = new Roll("1d6");
     await r.evaluate({ async: true });
     out.slotRoll = r.total;
-    out.abilitySlot = entry.slotRollOrder[r.total - 1];
+    out.abilitySlot = fixed.slotRollOrder[r.total - 1];
   }
-  if(entry.locations?.length)
+  if(fixed.locations?.length)
   {
     const r = new Roll("1d6");
     await r.evaluate({ async: true });
-    out.location = entry.locations[r.total - 1];
+    out.location = fixed.locations[r.total - 1];
   }
-  const objectTable = entry.recurrenceKey ? recurrenceByKey(entry.recurrenceKey)?.objectTable : null;
+  const recurrenceKey = afflictionOverTimeOf(null, entry.key).recurrenceKey;
+  const objectTable = recurrenceKey ? recurrenceByKey(recurrenceKey)?.objectTable : null;
   if(objectTable) out.object = rollObjectTable(objectTable);
   return out;
 }
@@ -336,6 +344,8 @@ export async function contractAffliction(actor, key, { details = null, stomaObje
   const rolled = details ?? await rollContractionDetails(entry);
   const isPC = actor.type === "character";
   const report = { entry, rolled, isPC, item: null, displaced: [], suppressed: 0, recurrence: null };
+  // Its stages, recurrence and span from its sentences since chunk 4 (2026-10-06).
+  const overTime = afflictionOverTimeOf(actor, key);
 
   // ── THE ITEM, PCs ONLY ───────────────────────────────────────────────────
   if(isPC)
@@ -393,7 +403,7 @@ export async function contractAffliction(actor, key, { details = null, stomaObje
         virulence: entry.virulence,
         // Labyrinth Pox's Stage 3 countdown (2026-09-21, Matt: the GM starts
         // it). An entry declaring nothing adds nothing.
-        ...spanFieldFrom(entry),
+        ...spanFieldFrom(overTime),
         // THE HELD SET, not the book set. afflictionSlots() reads this field and
         // item-effects.js refuses an implant against it, so recording only the
         // printed slot would leave the borrowed ones unguarded - which is the
@@ -413,25 +423,27 @@ export async function contractAffliction(actor, key, { details = null, stomaObje
     // wiring, RULED 2026-09-25 by Matt: "an item that can do an attack with
     // no to-hit roll"). Given now and inert until the first stage; the sheet
     // reads the stage when it is used, so no timer grows it. The cure takes it.
-    if(entry.stages?.some(s => s.damage))
+    if(overTime.stages?.some(s => s.damage))
       await actor.createEmbeddedDocuments("Item", [{
         name: `Swarm (${entry.name})`,
         type: "weaponMelee",
-        system: { damageDice: entry.stages[0].damage, equipped: true, hands: 0, slots: 0, tags: [], intrinsic: true,
+        system: { damageDice: overTime.stages[0].damage, equipped: true, hands: 0, slots: 0, tags: [], intrinsic: true,
           description: `<p>${entry.effects}</p><p><b>Automatically hits</b> one opponent - unblockable. Refused until the first stage.</p>` },
         flags: { vaarn: { autoHit: true, stagedBy: key } }
       }]);
 
     // ── SUPPRESSION, which today is Jellybones and only Jellybones ─────────
-    if(entry.suppresses?.length)
+    // Its suppress sentence since Effect Engine: Wounds and Afflictions chunk 3.
+    const suppresses = afflictionSuppressesOf(key);
+    if(suppresses.length)
       report.suppressed = await suppressItems(
-        actor, innateItemsFor(actor, entry.suppresses), sourceKeyFor(key));
+        actor, innateItemsFor(actor, suppresses), sourceKeyFor(key));
   }
 
   // ── PROGRESSION, where the book gives one ────────────────────────────────
-  if(entry.recurrenceKey)
+  if(overTime.recurrenceKey)
     report.recurrence = await startRecurrence(actor, {
-      recurrenceKey: entry.recurrenceKey,
+      recurrenceKey: overTime.recurrenceKey,
       objectLabel: stomaObject ?? null,
     });
 
@@ -464,10 +476,12 @@ export async function contractAffliction(actor, key, { details = null, stomaObje
     // `av` rides the same way (Live AV Computation wiring, 2026-09-25):
     // Jellybones' "lose one point of base AV", for as long as the entry is on
     // the board, which is until the cure.
-    applied: (entry.conditions?.length || entry.av)
-      ? { ...(entry.conditions?.length ? { conditions: [...entry.conditions] } : {}),
-          ...(entry.av ? { av: entry.av } : {}) }
-      : null,
+    //
+    // NO LONGER WRITTEN since Effect Engine: Wounds and Afflictions chunk 3
+    // (RULED 2026-10-06, Matt): stateful-effect.js reads an affliction entry's
+    // AV and conditions from its sentences by afflictionKey, and ignores the
+    // applied.av and applied.conditions every older entry still carries.
+    applied: null,
     // Never on either expiry number line, for the same reason a recurrence is
     // not: this is what keeps the board's sweep from deleting it. An affliction
     // ends on a cure, not on a date.
@@ -497,7 +511,8 @@ export async function cureAffliction(actor, key)
   const mine = board.find(e => e.afflictionKey === key);
   if(!mine) return { error: `${actor.name} does not have ${entry.name}.` };
 
-  const report = { entry, restored: [], released: 0, itemDeleted: false };
+  // Read before the Item is deleted - an Item's sentences win while it is held (chunk 4).
+  const report = { entry, overTime: afflictionOverTimeOf(actor, key), restored: [], released: 0, itemDeleted: false };
 
   // BY KEY FIRST, BY NAME AS INSURANCE, and the insurance is for exactly one
   // Item. Brain Coral is created as an `armor` so it occupies the helm slot and
@@ -534,7 +549,7 @@ export async function cureAffliction(actor, key)
   // own exit condition — recurrence-data.js's clauses "stop on a cure rather
   // than on a date".
   for(const e of entriesOf(actor))
-    if(e.kind === "recurrence" && e.recurrenceKey === entry.recurrenceKey && entry.recurrenceKey)
+    if(e.kind === "recurrence" && e.recurrenceKey === report.overTime.recurrenceKey && report.overTime.recurrenceKey)
       await stopRecurrence(actor, e.id);
   await setEntries(actor, entriesOf(actor).filter(e => e.afflictionKey !== key));
 
@@ -593,6 +608,7 @@ export function formatElapsed(seconds)
  * runs on for its own thresholds. Reaching one is reported and the Referee
  * decides.
  */
+// `entry` is anything with the stages - afflictionOverTimeOf's read since chunk 4.
 export function stageReached(entry, boardEntry, now = null)
 {
   if(!entry?.stages?.length) return null;
@@ -634,7 +650,8 @@ export function stageReached(entry, boardEntry, now = null)
 export async function applyManualEffect(actor, key)
 {
   const entry = afflictionByKey(key);
-  const spec = entry?.manualEffect;
+  // Its manual-effect sentence since Wounds and Afflictions chunk 4 (2026-10-06).
+  const spec = afflictionOverTimeOf(actor, key).manualEffect;
   if(!spec) return { error: `${entry?.name ?? key} has no onset effect to apply.` };
 
   const board = entriesOf(actor);

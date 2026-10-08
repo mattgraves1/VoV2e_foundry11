@@ -1,14 +1,16 @@
 import { upgradeDie } from "./usage-die.js";
 import { isExotica, valueLabelOf } from "./xp-value.js";
 import { kindLabelOf } from "./item-kind.js";
-import { conditionalValueOf } from "./tag-modifiers.js";
+import { emitsLight } from "./weapon-tags.js";
 import { hiddenFrom, STAND_IN_NAME, STAND_IN_IMG } from "./identification.js";
 import { recipesForDisplay, recipeFromItem, addRecipe, updateRecipe, removeRecipe,
          blankRecipe } from "./crucible-recipes.js";
-import { qualityReadout } from "./trade-good-quality.js";
 import { saleSpanOf, openSaleDialog } from "./false-sale.js";
-import { effectsOf, addEffect, updateEffect, removeEffect, blankEffect, suggestionsFor, effectSummary,
+import { giftEntryOf, addEffect, updateEffect, removeEffect, blankEffect, suggestionsFor, effectSummary,
          EFFECT_KINDS, CONDITION_CHOICES, DAMAGE_TYPE_CHOICES } from "./gift-effects.js";
+import { sentencesOf } from "../effects/interpret.js";
+import { effectRows, bindEffectsTab } from "./effect-builder.js";
+import { usageDieOf, statNotesOf, sentenceUsageSize, tradeBuyersOf, qualityReadout } from "../effects/item-stats.js";
 
 /**
  * Extend the basic ItemSheet with some very simple modifications
@@ -73,9 +75,12 @@ export class KnaveItemSheet extends ItemSheet {
     // cannot be baked into tradeValue the way the unconditional ones are.
     // Suppressed for Exotica — those are not fungible with trade goods at
     // all, so 'worth double to Mystics' would be a category error.
-    data.conditionalValue = data.isExotica
-      ? null
-      : conditionalValueOf(this.item.system?.tradeValue, this.item.system?.tags ?? []);
+    // Weapon Tags chunk 5b (2026-10-05): a weapon that sheds light offers its colour.
+    data.emitsLight = emitsLight(this.item);
+    data.lightColor = this.item.flags?.vaarn?.lightColor ?? "#cfe0ff";
+    // One line per buyer a live trade-value sentence names - a tag's or a GM's
+    // (Stats as Sentences chunk 2c, ruling C).
+    data.buyerValues = data.isExotica ? [] : tradeBuyersOf(this.item);
 
     // Units per Slot (Treasure Cache Generation, RULED 2026-09-19): a
     // friendlier face on the Slots field, not a second setting. A fractional
@@ -118,14 +123,14 @@ export class KnaveItemSheet extends ItemSheet {
     // has run down to "None" is still a usage-die item with an empty die, and
     // item.js prints "No usage die tracked." for exactly that state. Gating on
     // `die` alone would delete the controls out from under it.
-    const usage = this.item.system?.usageDie;
-    data.hasUsageDie = !!(usage && (usage.die || usage.max));
+    // Through the sentences since Stats as Sentences chunk 2a: a die sized by a
+    // sentence is a usage-die Item whatever its field holds.
+    const usage = usageDieOf(this.item);
+    data.hasUsageDie = !!(usage.die || usage.max);
+    data.statNotes = statNotesOf(this.item);
 
-    // With the block gone there is no way back to it from the sheet, so one
-    // link starts a die. GM-ONLY, RULED 2026-09-20 (Matt): rating an item is
-    // the Referee's call, not something a player does to their own gear. A UI
-    // gate and not a boundary, on the same terms as the readout above.
-    data.canAddUsageDie = data.isGM && !data.hasUsageDie;
+    // The GM-only '+ Add usage die' link is RETIRED (Stats as Sentences chunk
+    // 2e-i, ruled 2026-10-05): the builder's Stats section gives any Item a die.
 
     data.standInName = STAND_IN_NAME;
     data.standInImg = STAND_IN_IMG;
@@ -134,7 +139,10 @@ export class KnaveItemSheet extends ItemSheet {
     // carries its kind as booleans so the template shows only its own fields.
     if(this.item.type === "gift")
     {
-      data.giftEffects = effectsOf(this.item).map((e, index) => ({
+      // Interpreter chunk 4 (RULED 2026-10-05): the rows are the Gift's
+      // sentences - its own, or an old list read through the translator - shown
+      // in the tab's fields; one the fields cannot say is read-only (custom).
+      data.giftEffects = sentencesOf(this.item).map(giftEntryOf).map((e, index) => ({
         ...e, index, summary: effectSummary(e),
         isDamage: e.kind === "damage", isHealing: e.kind === "healing",
         isCondition: e.kind === "condition", isNamed: e.kind === "condition" && !e.condition,
@@ -145,6 +153,11 @@ export class KnaveItemSheet extends ItemSheet {
       data.conditionChoices = CONDITION_CHOICES;
       data.damageTypeChoices = DAMAGE_TYPE_CHOICES;
     }
+
+    // GM Effect Builder chunk 2 (ruled 2026-10-05): the Effects tab on every
+    // Item sheet - its sentences as plain lines, read-only for players.
+    data.isGM = game.user.isGM && this.isEditable;
+    data.effectRows = effectRows(this.item, data.isGM);
 
     return data;
   }
@@ -198,27 +211,21 @@ export class KnaveItemSheet extends ItemSheet {
     html.find('.usage-die-step').click(() =>
     {
       const die = html.find('select[name="system.usageDie.die"]').val();
-      const max = html.find('select[name="system.usageDie.max"]').val() || "d20";
+      // A size a sentence sets wins over the field's select (Stats as Sentences chunk 2a, ruling B).
+      const max = sentenceUsageSize(this.item) || html.find('select[name="system.usageDie.max"]').val() || "d20";
       this.item.update({"system.usageDie.die": upgradeDie(die, 1, max)});
     });
 
     html.find('.usage-die-refill').click(() =>
     {
-      const max = html.find('select[name="system.usageDie.max"]').val();
+      const max = sentenceUsageSize(this.item) || html.find('select[name="system.usageDie.max"]').val();
       if(max) this.item.update({"system.usageDie.die": max});
     });
 
-    // Usage Die Field Visibility (2026-09-20). Writes the die AND its max
-    // together: `max` is what Refill to Max reads, and a die started without
-    // one would refill to the d20 fallback on line 174 rather than to its own
-    // rating. d8 because it is the die most of the gear table's "(UdN)"
-    // entries carry; the selects are right there to change it. Only the GM's
-    // sheet draws this link — see canAddUsageDie in getData.
-    html.find('.usage-die-add').click(() =>
-      this.item.update({ "system.usageDie.die": "d8", "system.usageDie.max": "d8" }));
 
     if(this.item.type === "crucible") this._activateRecipeListeners(html);
     if(this.item.type === "gift") this._activateGiftEffectListeners(html);
+    bindEffectsTab(this, html);
   }
 
   /**

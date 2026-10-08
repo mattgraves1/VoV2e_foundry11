@@ -72,6 +72,11 @@ import { ANCESTRY_RULE_ITEMS } from "./ancestry-rules-data.js";
 import { d } from "./chargen-app.js";
 import { gmHP } from "./hidden-hp.js";
 import { noHealRule } from "./deprived.js";
+import { maxHpChange } from "../effects/max-hp.js";
+import { bodySentences, liveBodyBonusesOf } from "../effects/body.js";
+
+/** The level-up trades an on-level-up sentence can name (chunk 6). */
+const TRADES = new Set(["proteus", "bloomboon"]);
 
 /**
  * NO MAXIMUM HP FROM LEVELS (RULED 2026-09-28, Matt: a Lithling "shouldn't get
@@ -157,27 +162,40 @@ export function levelUpAvailable(actor)
  * there is nothing to trade away but a single point of HP, and the book's own
  * "they are considered complete" is the reason.
  *
- * Keyed off system.ancestry rather than an Item, because Cacogen has no
- * ancestry rule Items at all — Corrupted Blood and Proteus live in
- * chargen-data.js as special_rules text. Neobloom does have one, and using the
- * same signal for both keeps this a single question with a single answer.
+ * Read from the body's on-level-up sentence since Mutations and Ancestry Rules
+ * chunk 6 (RULED 2026-10-06): Proteus's, and Bloomboons'. A rule Item says it,
+ * or - a character made before its rule Items (every Cacogen until 2c) - the
+ * ancestry text does (ruling B). Was keyed off system.ancestry.
  */
 export function tradeFor(actor)
 {
   const attained = Number(actor.system.level?.value ?? 1) + 1;
   if(attained > COMPLETE_AT) return null;
-  if(actor.system.ancestry === "Cacogen") return "proteus";
-  if(actor.system.ancestry === "Neobloom") return "bloomboon";
-  return null;
+  const trade = bodySentences(actor, "on-level-up").map(p => p.sentence.do?.handler).find(h => TRADES.has(h));
+  return trade ?? null;
 }
 
 /* -------------------------------------------- */
 /* The dialog                                    */
 /* -------------------------------------------- */
 
+/**
+ * An ability as the sheet shows it before wound damage - the stored value plus the
+ * live creation bonuses, at most +10 (Stats as Sentences chunk 2d-iii): what the
+ * stored value alone said while those bonuses were baked into it.
+ */
+function shownAbility(actor, key, value = actor.system.abilities[key].value)
+{
+  return Math.min(ABILITY_CAP, Number(value) + Number(liveBodyBonusesOf(actor).abilities[key] || 0));
+}
+
 function eligibleAbilities(actor)
 {
-  return ABILITY_KEYS.filter(k => Number(actor.system.abilities[k].value) < ABILITY_CAP);
+  // A live creation bonus counts against the cap (Stats as Sentences chunk 2d-iii,
+  // RULED 2026-10-07), as the bake's clamped stored value did; a temporary bonus
+  // (an elixir) does not, as before.
+  const live = liveBodyBonusesOf(actor).abilities;
+  return ABILITY_KEYS.filter(k => Number(actor.system.abilities[k].value) + Number(live[k] || 0) < ABILITY_CAP);
 }
 
 /**
@@ -196,7 +214,7 @@ function promptLevelUp(actor, state, eligible, trade)
 
   const abilityOptions = sel => [`<option value="">—</option>`].concat(
     eligible.map(k =>
-      `<option value="${k}"${k === sel ? " selected" : ""}>${ABILITY_LABEL[k]} (${actor.system.abilities[k].value})</option>`)
+      `<option value="${k}"${k === sel ? " selected" : ""}>${ABILITY_LABEL[k]} (${shownAbility(actor, k)})</option>`)
   ).join("");
 
   const tradeRow = trade
@@ -271,7 +289,7 @@ function promptLevelUp(actor, state, eligible, trade)
             const taken = chosen.filter((v, j) => j !== i && v);
             s.html([`<option value="">—</option>`].concat(
               eligible.filter(k => k === mine || !taken.includes(k)).map(k =>
-                `<option value="${k}">${ABILITY_LABEL[k]} (${actor.system.abilities[k].value})</option>`)
+                `<option value="${k}">${ABILITY_LABEL[k]} (${shownAbility(actor, k)})</option>`)
             ).join(""));
             s.val(mine || "");
           });
@@ -424,8 +442,7 @@ export async function applyLevelUp(actor, state)
   else if(beyond)
   {
     entry.hp = BEYOND_HP;
-    updates["system.health.max"] = Number(actor.system.health.max) + BEYOND_HP;
-    updates["system.health.value"] = Number(actor.system.health.value) + BEYOND_HP;
+    Object.assign(updates, maxHpChange(actor, { add: BEYOND_HP }));
     lines.push(`<li>Maximum HP +${BEYOND_HP} — complete at Level ${COMPLETE_AT}, so nothing else.</li>`);
   }
   else if(entry.branch === "standard")
@@ -437,7 +454,7 @@ export async function applyLevelUp(actor, state)
       if(capped === current) continue;
       updates[`system.abilities.${key}.value`] = capped;
       entry.abilities[key] = capped - current;
-      lines.push(`<li>${ABILITY_LABEL[key]} ${current} &rarr; ${capped}</li>`);
+      lines.push(`<li>${ABILITY_LABEL[key]} ${shownAbility(actor, key, current)} &rarr; ${shownAbility(actor, key, capped)}</li>`);
     }
 
     if(state.hp && !noLevelHP(actor))
@@ -445,8 +462,7 @@ export async function applyLevelUp(actor, state)
       const r = new Roll("1d8");
       await r.evaluate();
       entry.hp = r.total;
-      updates["system.health.max"] = Number(actor.system.health.max) + r.total;
-      updates["system.health.value"] = Number(actor.system.health.value) + r.total;
+      Object.assign(updates, maxHpChange(actor, { add: r.total }));
       lines.push(`<li>Maximum HP +${r.total} (1d8)${gmHP(actor, ` &rarr; ${updates["system.health.max"]}`)}</li>`);
     }
   }
@@ -673,14 +689,13 @@ async function undoEntry(actor, entry)
 
   if(entry.hp)
   {
-    const newMax = Number(actor.system.health.max) - entry.hp;
-    updates["system.health.max"] = newMax;
+    // The max HP verb (Shared Pipelines chunk 5): a loss clamps current.
+    Object.assign(updates, maxHpChange(actor, { add: -entry.hp }));
     // "If max goes down, current only goes down if it would be above max"
     // (Matt, 2026-09-13) — the same half of the rule Baked Effect Reversal
     // already follows. Since the level-up raised current along with max, this
     // normally DOES fire; it is the wounded character, whose current is still
     // below the lowered ceiling, for whom it does not.
-    if(Number(actor.system.health.value) > newMax) updates["system.health.value"] = newMax;
   }
 
   if(entry.xpSpent) updates["system.xp.value"] = Number(actor.system.xp.value) + entry.xpSpent;
@@ -943,11 +958,10 @@ export async function applyCompanionLevelUp(companion)
   };
 
   entry.hp = COMPANION_LEVEL_HP;
-  updates["system.health.max"] = Number(companion.system.health.max) + COMPANION_LEVEL_HP;
-  // Current rises with maximum, which is the one rule for every max-HP change
-  // in this system — see Advancement Automation. A level-up that moved only the
-  // ceiling would leave a healthy companion looking wounded.
-  updates["system.health.value"] = Number(companion.system.health.value) + COMPANION_LEVEL_HP;
+  // Current rises with maximum - the max HP verb (effects/max-hp.js, Shared
+  // Pipelines chunk 5). A level-up that moved only the ceiling would leave a
+  // healthy companion looking wounded.
+  Object.assign(updates, maxHpChange(companion, { add: COMPANION_LEVEL_HP }));
 
   const lines = [`<li>Maximum HP +${COMPANION_LEVEL_HP} &rarr; ${updates["system.health.max"]}</li>`];
 
@@ -1036,12 +1050,10 @@ export async function loseCompanionLevels(companion, count = 1, { reason = "" } 
     {
       "system.level.value": entry.level - 1,
       "system.xp.value": Number(companion.system.xp.value) + (entry.xpSpent ?? 0),
-      "system.health.max": Math.max(0, Number(companion.system.health.max) - (entry.hp ?? 0))
+      // Clamp rather than subtract: a companion damaged since the level-up must
+      // not have the loss taken twice. The max HP verb (chunk 5) does exactly that.
+      ...maxHpChange(companion, { add: -(entry.hp ?? 0) })
     };
-    // Clamp rather than subtract: a companion damaged since the level-up must
-    // not have the loss taken twice. Same reasoning as the character path.
-    updates["system.health.value"] =
-      Math.min(Number(companion.system.health.value), updates["system.health.max"]);
 
     for(const [key, delta] of Object.entries(entry.abilities ?? {}))
       updates[`system.abilities.${key}.value`] =

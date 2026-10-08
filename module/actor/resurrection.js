@@ -440,7 +440,10 @@ export async function becomeMycomorph(actor, originalAncestry)
   // Cacklemaw whose boon was a Gift is Biological and Psychic, and resetting
   // to what a Mycomorph starts with would have dropped Psychic while the Gift
   // it comes from was kept.
-  const creatureTypes = { ...(actor.system.creatureTypes ?? {}) };
+  // The STORED types (_source), not the shown: a live or temporary grant - a Gift's
+  // Psychic, an elixir's type, a live figment's - is not the character's to keep
+  // (Stats as Sentences chunk 2d, RULED 2026-10-07).
+  const creatureTypes = { ...(actor._source?.system?.creatureTypes ?? actor.system.creatureTypes ?? {}) };
   for(const flag of ANCESTRY_CREATURE_TYPES[originalAncestry] ?? []) creatureTypes[flag] = false;
   for(const flag of ANCESTRY_CREATURE_TYPES["Mycomorph"] ?? []) creatureTypes[flag] = true;
 

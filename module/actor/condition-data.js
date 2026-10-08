@@ -38,8 +38,12 @@
  * to vary"), and none of them needs to know about immunity.
  */
 
-export const BLIND = "blind";
-export const ENTANGLED = "entangled";
+import { bodyImmunities, bodyPassives } from "../effects/body.js";
+
+import { BLIND, ENTANGLED } from "./condition-keys.js";
+// A creature's own flags from its actor-level sentences (Effect Engine: Creatures chunk 2d).
+import { creatureActorFlagsOf } from "../item/creature-effects.js";
+export { BLIND, ENTANGLED };
 
 export const CONDITIONS = [
   {
@@ -50,24 +54,18 @@ export const CONDITIONS = [
     // Items whose bearer the condition cannot touch. `why` is the book's own
     // words, or the ruling, so the list can be checked against the page.
     immuneItems: [
-      { type: "mutation", name: "Blind",                   why: "RULED 2026-09-16 (Matt): already blind" },
-      { type: "mutation", name: "Echolocation",            why: "book: You cannot be blinded" },
-      { type: "mutation", name: "Ultravision",             why: "book: You cannot be blinded" },
-      { type: "mutation", name: "Heightened Hearing",      why: "book: You suffer no ill-effects from Blindness" },
-      { type: "implant",  name: "Air Current Microsensor", why: "book: You suffer no navigation/combat penalties from Blindness" },
-      // A helm: loot-builders.js makes it an `armor` Item, so the old
-      // type "exotica" here never matched anything and it granted nothing.
-      // It must be WORN (Matt, 2026-09-19) — immunityTo skips an unequipped one.
-      { type: "armor",    name: "Ultravisor",              why: "book: The wearer has ultravision and can never be blinded" }
+      // The four mutations are their own `immune blind` sentences since
+      // Mutations and Ancestry Rules chunk 2a, and the Air Current Microsensor
+      // implant and the Ultravisor (worn) since Implants, Exotica and Figments
+      // chunk 2 (2026-10-06) - read by immunityTo below.
     ],
     // Items that change the SAVE against this condition — Save-Modifier Effects
     // on the Forgettable Tab, 2026-09-16. Read by conditionSaveModifiers when
     // the compelled-save card rolls, which is the only roll that knows what it
     // is against. The book's words beside each, as with immuneItems.
-    saveModifiers: [
-      { type: "mutation", name: "Bulbous Eyes", mode: "dis", why: "book: DIS on Saves to avoid Blindness" },
-      { type: "mutation", name: "Cyclops",      mode: "dis", why: "book: DIS on Saves vs Blindness" }
-    ]
+    // Bulbous Eyes and Cyclops are their own `dis save vs blind` sentences since
+    // Mutations and Ancestry Rules chunk 2a - read by conditionSaveModifiers.
+    saveModifiers: []
   },
   {
     key: ENTANGLED,
@@ -99,7 +97,7 @@ export function immunityTo(actor, key)
   if (!def) return null;
   // A CREATURE'S OWN RULE - the Blind Crab's "cannot be blinded" (RULED
   // 2026-09-24, Matt). Carried on the actor by bestiary-build.js.
-  if ((actor?.flags?.vaarn?.conditionImmunity ?? []).includes(key))
+  if ((creatureActorFlagsOf(actor).conditionImmunity ?? []).includes(key))
     return { type: "creature", name: actor.name, why: "creature rule: cannot be affected" };
   if (!actor?.items) return null;
   for (const item of actor.items)
@@ -112,6 +110,10 @@ export function immunityTo(actor, key)
     for (const im of def.immuneItems)
       if (item?.type === im.type && item?.name === im.name) return im;
   }
+  // A body's sentence (a mutation, an ancestry rule, a GM's) - not suppressed,
+  // in its item state (Mutations and Ancestry Rules chunk 2a, 2026-10-05).
+  const body = bodyImmunities(actor, key)[0];
+  if (body) return { type: body.item?.type ?? "ancestry", name: body.source, why: body.sentence.text ?? "" };
   return null;
 }
 
@@ -133,6 +135,12 @@ export function conditionSaveModifiers(actor, keys)
       for (const item of actor.items)
         if (item?.type === m.type && item?.name === m.name)
           (m.mode === "adv" ? advSources : disSources).push(m.name);
+  // A body's `adv` / `dis` on saves vs the condition (Mutations and Ancestry
+  // Rules chunk 2a): Bulbous Eyes, Cyclops.
+  const wanted = new Set(keys ?? []);
+  for (const p of bodyPassives(actor))
+    if ((p.sentence.do.verb === "adv" || p.sentence.do.verb === "dis") && p.sentence.do.on === "save" && wanted.has(p.sentence.do.vs))
+      (p.sentence.do.verb === "adv" ? advSources : disSources).push(p.source);
   return { advSources, disSources };
 }
 

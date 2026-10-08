@@ -25,33 +25,35 @@
  * field cannot outlive its timer by one route and not another.
  */
 import { addEntry, expiryFor } from "../time/effect-board.js";
-import { ADVANCED_EXOTICA } from "./advanced-exotica-data.js";
+import { sentencesOf } from "../effects/interpret.js";
 import { hasAnyCreatureType } from "../item/attack-properties.js";
-import { blocksHealing } from "./deprived.js";
-import { healFloor } from "./rest.js";
-import { scaleHealing } from "./healing-multiplier.js";
+import { heal } from "../effects/heal.js";
 import { gmHP } from "./hidden-hp.js";
+import { creatureFlagsOf } from "../item/creature-effects.js";
 
 const SCOPE = "vaarn";
 const REQUEST_FLAG = "healingFieldRequest";
 
 /**
- * The roster entry a field-generating Item comes from, or null - the
- * generator, not the field. Read by name, like the rest of the exotica use
- * path; it is what tells canRoundRemind that this Item's rounds belong to the
- * field it creates and not to itself.
+ * The field a field-generating Item sets down, from its field-generator use
+ * sentence, or null - the generator, not the field. It is what tells
+ * canRoundRemind that this Item's rounds belong to the field it creates and not
+ * to itself. Read from the sentence since Implants, Exotica and Figments chunk 5
+ * (RULED 2026-10-06, Matt), no longer the roster by name.
  */
 export function fieldGeneratorOf(item)
 {
   if (!item?.name) return null;
-  const entry = ADVANCED_EXOTICA.find(e => e.name === item.name);
-  return entry?.targetHeal?.field ? entry : null;
+  const s = sentencesOf(item).find(x => x.do?.verb === "special" && x.do.handler === "field-generator" && x.do.field);
+  return s ? s.do : null;
 }
 
 /** The heal a field Item declares, or null. */
 export function targetHealOf(item)
 {
-  return item?.flags?.[SCOPE]?.targetHeal ?? null;
+  // From its sentence since Effect Engine: Creatures chunk 2b (2026-10-06) - the
+  // Biotic Field's flag reads the same way as a creature's.
+  return creatureFlagsOf(item).targetHeal ?? null;
 }
 
 /**
@@ -158,14 +160,11 @@ export async function healTargets(fieldActor, item)
  */
 export async function applyHeal(target, amount, label)
 {
-  if (blocksHealing(target, label)) return null;
-  const max = Number(target.system.health.max);
-  const before = Number(target.system.health.value);
-  const raw = Math.min(max, healFloor(before) + Number(amount)) - before;
-  const { gained, note } = scaleHealing(target, raw);
-  const after = before + Math.max(0, gained);
-  await target.update({ "system.health.value": after });
-  return `regains <b>${after - before}</b> HP${gmHP(target, ` (now ${after}/${max})`)}.${note}`;
+  // Through the one heal path (effects/heal.js, Shared Pipelines chunk 3),
+  // gated there: a refusal has posted its own line, so this returns null.
+  const { after, gained, max, note, refused } = await heal(target, amount, { label });
+  if (refused) return null;
+  return `regains <b>${gained}</b> HP${gmHP(target, ` (now ${after}/${max})`)}.${note}`;
 }
 
 export function registerHealingFieldButtons()

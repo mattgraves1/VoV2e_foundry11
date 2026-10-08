@@ -24,7 +24,7 @@
  * What each hazard does is data, in trap-data.js.
  */
 
-import { TRAPS } from "./trap-data.js";
+import { trapOf } from "../item/remaining-effects.js";
 import { postMetalReachCard } from "./metal-cards.js";
 import { postSaveCardsToTargets, postSaveCard, postToxSave, failDamageFor } from "./compelled-save.js";
 import { startAbilityTick } from "./apply-to-target.js";
@@ -32,8 +32,9 @@ import { addEntry, entriesOf, updateEntry } from "../time/effect-board.js";
 import { hasAnyCreatureType } from "../item/attack-properties.js";
 import { startRecurrence, applyTickLosses, alreadyActioned } from "../time/recurrence.js";
 import { applyNamedWound } from "../actor/named-wound.js";
+import { dealDamage } from "../effects/deal.js";
 import { POISON_EFFECTS } from "../actor/poison-data.js";
-import { applyPoison } from "../actor/poison.js";
+import { postPoison } from "../actor/poison.js";
 import { AFFLICTIONS, afflictionByKey } from "../actor/affliction-data.js";
 import { postExposure } from "../actor/affliction-card.js";
 import { spawnBeside } from "../actor/bestiary-spawn.js";
@@ -56,14 +57,14 @@ const DONE_FLAG = "trapRolled";
  */
 const LABEL = /(?<![A-Za-z] )(Hazard|Obstacle|Fauna \/ Flora):\s*(?:<\/(?:b|strong)>|\*\*)?\s*(?:<(?:b|strong)>|\*\*)?\s*([^<*\n]+)/g;
 
-/** Every TRAPS key a message's text names, in order, each once. */
+/** Every trap label a message's text names, in order, each once - a label is a trap when it has sentences (Remaining Sources chunk 2b). */
 export function trapsIn(content)
 {
   const found = [];
   for (const m of String(content ?? "").matchAll(LABEL))
   {
     const key = `${m[1]}: ${m[2].trim()}`;
-    if (TRAPS[key] && !found.includes(key)) found.push(key);
+    if (trapOf(key) && !found.includes(key)) found.push(key);
   }
   return found;
 }
@@ -161,7 +162,7 @@ function systemButtonsFor(key, trap, message)
 /** The buttons for one hazard. */
 function buttonsFor(key, message = null)
 {
-  const trap = TRAPS[key];
+  const trap = trapOf(key);
   const k = Handlebars.escapeExpression(key);
   const system = systemButtonsFor(key, trap, message);
   const saves = (trap.saves ?? []).map((s, i) =>
@@ -205,7 +206,7 @@ function warnNoCombat(name)
  */
 export async function onTrapTick(key)
 {
-  const trap = TRAPS[key];
+  const trap = trapOf(key);
   const tick = trap?.tick;
   if (!tick) return null;
   const name = nameOf(key);
@@ -250,7 +251,7 @@ export async function onTrapTick(key)
  */
 export async function onTrapProjector(key)
 {
-  const p = TRAPS[key]?.projector;
+  const p = trapOf(key)?.projector;
   if (!p) return null;
   const projector = await Actor.create({
     name: p.name, type: "npc", img: "icons/svg/lightning.svg",
@@ -330,7 +331,7 @@ function targetsOr(name)
 /** One save card per targeted token, posted in the hazard's own name. */
 export async function onTrapSave(key, index)
 {
-  const trap = TRAPS[key];
+  const trap = trapOf(key);
   const save = trap?.saves?.[index];
   if (!save) return null;
   if (!targetsOr(nameOf(key))) return null;
@@ -344,7 +345,7 @@ export async function onTrapSave(key, index)
  */
 export async function onTrapDamage(key)
 {
-  const trap = TRAPS[key];
+  const trap = trapOf(key);
   if (!trap?.damage) return null;
   const name = nameOf(key);
   const tokens = targetsOr(name);
@@ -358,17 +359,18 @@ export async function onTrapDamage(key)
   {
     const actor = token.actor;
     if (!actor) continue;
-    let total = 0;
+    // Each part through the whole HP pipeline (Shared Pipelines chunk 2,
+    // 2026-10-05): the shared raw roll, its own type, no attacker. The lines
+    // failDamageFor writes stay on the card as the preview.
     for (const { part, roll } of rolls)
     {
       const r = await failDamageFor(actor, part, name, roll);
-      total += r.amount;
       lines.push(r.line + (part.type ? ` <i>(${part.type})</i>` : ""));
-    }
-    if (total > 0)
-    {
-      const hp = Number(actor.system?.health?.value ?? 0);
-      await actor.sheet?._resolveHPChange(actor, hp, hp - total);
+      if (r.amount > 0)
+      {
+        const min = (await new Roll(String(part.dice)).evaluate({ minimize: true })).total;
+        dealDamage(actor, roll.total, { types: [part.type ?? "kinetic"], min, name });
+      }
     }
   }
 
@@ -387,7 +389,7 @@ export async function onTrapDamage(key)
  */
 export async function onTrapTurnStart(key)
 {
-  const trap = TRAPS[key];
+  const trap = trapOf(key);
   const p = trap?.projector;
   const turn = trap?.turn ?? p?.turn;
   if (!turn) return null;
@@ -428,7 +430,7 @@ export async function onTrapTurnStart(key)
  */
 export async function onTrapVortex(key)
 {
-  const v = TRAPS[key]?.vortex;
+  const v = trapOf(key)?.vortex;
   if (!v) return null;
   const d2 = (await new Roll("1d2").evaluate()).total;
   const first = d2 === 1 ? "draw" : "spit";
@@ -463,7 +465,7 @@ function gmOr()
 /** The Toxic Liquid Pool: a TOX card per targeted token, in the pool's name. */
 export async function onTrapTox(key)
 {
-  const trap = TRAPS[key];
+  const trap = trapOf(key);
   const name = nameOf(key);
   const tokens = gmOr() && targetsOr(name);
   if (!tokens || !trap?.tox) return null;
@@ -474,7 +476,7 @@ export async function onTrapTox(key)
 /** Sentry Turrets: roll the count and create them, once per card. */
 export async function onTrapSpawn(key, message)
 {
-  const spec = TRAPS[key]?.spawn;
+  const spec = trapOf(key)?.spawn;
   if (!spec || !gmOr()) return null;
   if (doneOn(message, key)) return ui.notifications.warn(`This card has already created its ${spec.creature}s.`);
   const roll = await new Roll(spec.dice).evaluate();
@@ -510,13 +512,9 @@ export async function onTrapPoison(key, message)
   {
     const actor = token.actor;
     if (!actor) continue;
-    const { target, passed, lines, after } = await applyPoison(actor, effect, { label: name });
-    // Awaited, and `after` posted once it has landed - generate-poison.js's reason.
-    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }),
-      content: `<p><b>${name}</b> - <i>${effect.text}</i></p>`
-             + `<p>CON Save vs ${target}: <b>${passed ? "passed" : "failed"}</b>.</p>`
-             + `<ul>${lines.map(l => `<li>${l}</li>`).join("")}</ul>` });
-    for (const content of after ?? []) await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content });
+    // A save card each drinker rolls; the poison lands with the roll (Shared
+    // Pipelines chunk 7, RULED 2026-10-05).
+    await postPoison(actor, effect, { label: name });
   }
   return effect;
 }
@@ -524,7 +522,7 @@ export async function onTrapPoison(key, message)
 /** Disease or Nanomachine Infection: one for the card, an exposure card each. */
 export async function onTrapAffliction(key, message)
 {
-  const kind = TRAPS[key]?.affliction;
+  const kind = trapOf(key)?.affliction;
   if (!kind || !gmOr()) return null;
   const tokens = targetsOr(nameOf(key));
   if (!tokens) return null;
@@ -582,7 +580,7 @@ export async function onTrapTurn(btn)
   const claim = await claimTick(btn);
   if (!claim) return null;
   const { actor, entry, ticks } = claim;
-  const trap = TRAPS[entry.trapKey];
+  const trap = trapOf(entry.trapKey);
   const turn = trap?.turn ?? trap?.projector?.turn;
   if (!turn) return null;
   for (let i = 0; i < (turn.applies ? 0 : ticks); i++)
@@ -607,7 +605,7 @@ export async function onTrapVortexDraw(btn)
   if (!game.user.targets?.size) return ui.notifications.warn("Target the one the vortex tries to draw in, then click again.");
   const claim = await claimTick(btn);
   if (!claim) return null;
-  const v = TRAPS[claim.entry.trapKey]?.vortex;
+  const v = trapOf(claim.entry.trapKey)?.vortex;
   const draws = Math.max(1, Number(btn.dataset.draws) || 1);
   for (let i = 0; i < draws; i++) await postSaveCardsToTargets(null, v.name, [v.draw]);
   return claim.entry;

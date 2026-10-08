@@ -12,10 +12,13 @@
  *
  * THREE SOURCES, ONE ROW SHAPE:
  *
- *  - A HELD ITEM. The Item carries `flags.vaarn.gmReminder`, written at
- *    creation from its roster row (RULED 2026-09-23, Matt: a flag, not a name
- *    match — it survives a rename, and a hand-made or already-existing Item
- *    gets no row, which is the no-backfill rule). The row appears when the
+ *  - A HELD ITEM. The Item carries `flags.vaarn.gmReminder` (RULED 2026-09-23,
+ *    Matt: a flag, not a name match — it survives a rename, and a hand-made or
+ *    already-existing Item gets no row, which is the no-backfill rule), OR a
+ *    gm-reminder sentence of its own: since Implants, Exotica and Figments
+ *    chunk 5 (RULED 2026-10-06, Matt) the Watchful Ferret's row is its
+ *    sentence and loot-builders.js no longer copies the roster's gmReminder,
+ *    so a Ferret made before keeps its flag and gets one row either way. The row appears when the
  *    Item lands on a character or creature and goes when it leaves. A
  *    transfer is a delete plus a create carrying the Item's flags, so the row
  *    follows the Item to its new holder with nothing extra.
@@ -45,8 +48,12 @@
  * deleting it.
  */
 
+import { sentencesOf } from "../effects/interpret.js";
+
 import { entriesOf, setEntries } from "./effect-board.js";
 import { ownerOf } from "../actor/companion.js";
+// A creature's own flags from its actor-level sentences (Effect Engine: Creatures chunk 2d).
+import { creatureActorFlagsOf } from "../item/creature-effects.js";
 
 /** The actor types that hold an Item as its bearer. A container is storage. */
 const HOLDER_TYPES = new Set(["character", "npc"]);
@@ -115,10 +122,17 @@ export function reminderSpan(entry)
  * created the Item — they already had the right to change that actor, and
  * one writer avoids the two-GM double row (the dedupe above is the margin).
  */
+/** Does this Item put a GM reminder row on its holder - its flag, or its own gm-reminder sentence? */
+export function holdsGmReminder(item)
+{
+  if (item?.flags?.vaarn?.gmReminder) return true;
+  return sentencesOf(item).some(s => s.do?.verb === "special" && s.do.handler === "gm-reminder");
+}
+
 export async function onReminderItemCreate(item, options, userId)
 {
   if (userId !== game.user.id) return;
-  if (!item?.getFlag?.("vaarn", "gmReminder")) return;
+  if (!holdsGmReminder(item)) return;
   const actor = item.parent;
   if (!actor || !HOLDER_TYPES.has(actor.type)) return;
   await addGmReminder(actor, {
@@ -168,7 +182,7 @@ export async function writeAncestryReminders(actor, defs, { animalForm = null } 
 export async function syncCompanionReminders(companion)
 {
   if (!companion) return;
-  const defs = companion.getFlag?.("vaarn", "ownerReminders") ?? [];
+  const defs = creatureActorFlagsOf(companion).ownerReminders ?? [];
   const owner = defs.length ? ownerOf(companion) : null;
   for (const actor of game.actors?.filter(a => a.type === "character") ?? [])
   {

@@ -35,6 +35,7 @@ import { rollOnTable } from "../actor/roll-range.js";
 import { THIRD_OF_A_SLOT } from "../actor/rest.js";
 import { qualityByRoll, qualityFlag, slotsWithQuality } from "./trade-good-quality.js";
 import { flavorIsMetal } from "./metal.js";
+import { exoticaArmourAv } from "../actor/exotica-effects-data.js";
 
 /** A plain NdM or flat-integer formula. Every trade-goods formula is one. */
 export function rollFormula(formula)
@@ -60,13 +61,13 @@ export function stripWikilinks(text)
  */
 export async function buildWeapon(quality, baseChoice = null, basicTag = null, advancedTag = null, exoticTag = null, forceKind = null)
 {
-  const { name, type, system, baseNote, altForm } =
+  const { name, type, system, flags, baseNote, altForm } =
     await rollWeapon(quality, baseChoice, basicTag, advancedTag, exoticTag, forceKind);
-  const main = { name, type, system };
+  const main = { name, type, system, flags };
   const out = [main];
   if(altForm)
   {
-    main.flags = { vaarn: { polymorphicPairName: altForm.name } };
+    main.flags = { vaarn: { ...flags.vaarn, polymorphicPairName: altForm.name } };
     out.push({ name: altForm.name, type: altForm.type, system: altForm.system, flags: { vaarn: { polymorphicPairName: name } } });
   }
   out.baseNote = baseNote ?? "";
@@ -95,7 +96,6 @@ export function armourItemData(entry, quality = null)
     system:
     {
       slots: entry.slots ?? 1,
-      defense: entry.av ?? 11,
       armorSlot: "body",
       avBonus: (entry.av ?? 11) - 10,
       description: entry.special ? `<p>${entry.special}</p>` : "",
@@ -118,7 +118,7 @@ export function buildArmour()
 export function helmItemData(name)
 {
   return [{ name, type: "armor",
-    system: { slots: 1, defense: 11, armorSlot: "helm", avBonus: 1, description: "<p>+1 AV while worn.</p>" } }];
+    system: { slots: 1, armorSlot: "helm", avBonus: 1, description: "<p>+1 AV while worn.</p>" } }];
 }
 
 /** A Helm, named off HELM_TABLE. */
@@ -131,7 +131,7 @@ export function buildHelm()
 export function shieldItemData(name)
 {
   return [{ name, type: "armor",
-    system: { slots: 1, defense: 11, armorSlot: "shield", avBonus: 1,
+    system: { slots: 1, armorSlot: "shield", avBonus: 1,
       description: "<p>+1 AV while carried. Must be actively carried — lost if you drop it or are disarmed.</p>" } }];
 }
 
@@ -211,13 +211,14 @@ export async function advancedExoticaData(entry)
       description: `<p>${entry.description}</p><p><b>Uses:</b> ${entry.uses}</p>`,
       ...spanFieldFrom(entry),
       armorSlot: entry.armorType.armorSlot,
-      avBonus: entry.armorType.avBonus
+      // From its sentence (Stats as Sentences chunk 2b, ruling C) - one source in the data.
+      avBonus: exoticaArmourAv(entry.name)
     };
     if(entry.armorType.liveAbilityBonus) system.liveAbilityBonus = entry.armorType.liveAbilityBonus;
     if(entry.usageDie) system.usageDie = entry.usageDie;
     // An armour-shaped Exotica is still Exotica: without the flag it shows a
     // Trade Value, when Exotica are the advancement currency worth 1 XP.
-    const out = [{ name: entry.name, type: "armor", system, flags: { vaarn: { exotica: true, ...reminderFlag(entry) } } }];
+    const out = [{ name: entry.name, type: "armor", system, flags: { vaarn: { exotica: true } } }];
     out.exoticaEntry = entry;
     return out;
   }
@@ -233,7 +234,9 @@ export async function advancedExoticaData(entry)
                      description: `<p>${entry.description}</p><p><b>Uses:</b> ${entry.uses}</p>`, ...spanFieldFrom(entry) };
     if(entry.usageDie) system.usageDie = { ...entry.usageDie };
     const out = [{ name: entry.name, type: "weaponMelee", system,
-                   flags: { vaarn: { exotica: true, abilityDamage: [{ ...entry.abilityDamage }], ...reminderFlag(entry) } } }];
+                   // The loss is the Exotica's sentence since Implants, Exotica and
+                   // Figments chunk 3b-ii (2026-10-06), read through the weapon translator.
+                   flags: { vaarn: { exotica: true } } }];
     out.exoticaEntry = entry;
     return out;
   }
@@ -250,7 +253,8 @@ export async function advancedExoticaData(entry)
                      description: `<p>${entry.description}</p><p><b>Uses:</b> ${entry.uses}</p>`, ...spanFieldFrom(entry) };
     if(entry.usageDie) system.usageDie = { ...entry.usageDie };
     const out = [{ name: entry.name, type: w.type, system,
-                   flags: { vaarn: { exotica: true, ...(entry.reload ? { reload: { ...entry.reload } } : {}), ...reminderFlag(entry) } } }];
+                   // The reload is the Exotica's refill sentence since chunk 3b-ii (reloadOf).
+                   flags: { vaarn: { exotica: true } } }];
     out.exoticaEntry = entry;
     return out;
   }
@@ -258,21 +262,14 @@ export async function advancedExoticaData(entry)
   const system = { slots: entry.slots, description: `<p>${entry.description}</p><p><b>Uses:</b> ${entry.uses}</p>`, ...spanFieldFrom(entry) };
   if(entry.usageDie) system.usageDie = entry.usageDie;
   if(entry.usesRemaining) system.usesRemaining = entry.usesRemaining;
-  const out = [{ name: entry.name, type: "exotica", system, flags: { vaarn: { ...reminderFlag(entry) } } }];
+  const out = [{ name: entry.name, type: "exotica", system, flags: { vaarn: {} } }];
   out.exoticaEntry = entry;
   return out;
 }
 
-/**
- * Standing GM Reminder (2026-09-23): a row marked `gmReminder` puts the flag on
- * its Item, and knave.js's createItem hook turns the flag into a GM-only board
- * row on whoever holds it. Written in every branch above that makes a named
- * Exotica, so a marked row cannot lose it by being armour- or weapon-shaped.
- */
-function reminderFlag(entry)
-{
-  return entry?.gmReminder ? { gmReminder: true } : {};
-}
+// Standing GM Reminder: the Watchful Ferret's row is its own gm-reminder sentence since
+// Implants, Exotica and Figments chunk 5 (RULED 2026-10-06, Matt); the roster's
+// gmReminder is no longer copied onto the Item as a flag (time/gm-reminder.js).
 
 /** An Advanced Cybernetic Implant. */
 export function buildAdvancedImplant()
@@ -393,7 +390,7 @@ export function buildTradeGood()
   // Face Armour Slot, RULED 2026-09-27 (Matt): a good that is worn - the
   // Masks - is an armour Item, still ONE stack of the rolled count. Its AV is
   // per Item, not per unit, so a stack of five worn is still +1.
-  const worn = entry.armorType ? { defense: 11, armorSlot: entry.armorType.armorSlot, avBonus: entry.armorType.avBonus } : {};
+  const worn = entry.armorType ? { armorSlot: entry.armorType.armorSlot, avBonus: entry.armorType.avBonus } : {};
 
   return [{
     name: lot > 1 ? `${entry.name} (lots of ${lot})` : entry.name,
@@ -633,7 +630,7 @@ export function startingExoticaData(entry)
 {
   if(entry.armorType)
   {
-    const system = { slots: 1, description: `<p>${entry.description}</p>`, armorSlot: entry.armorType.armorSlot, avBonus: entry.armorType.avBonus };
+    const system = { slots: 1, description: `<p>${entry.description}</p>`, armorSlot: entry.armorType.armorSlot, avBonus: exoticaArmourAv(entry.name) };
     if(entry.armorType.liveAbilityBonus) system.liveAbilityBonus = entry.armorType.liveAbilityBonus;
     // flags.vaarn.exotica, 2026-09-20. xp-value.js isExotica() reads the
     // flag, the `exotica` TYPE, or an Exotic weapon tag - and an armour-shaped

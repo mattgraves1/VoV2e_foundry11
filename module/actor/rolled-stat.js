@@ -1,3 +1,5 @@
+// Creature flags from their sentences (Effect Engine: Creatures chunk 2c-i).
+import { creatureFlagsOf } from "../item/creature-effects.js";
 /**
  * ROLLED CREATURE STATS — a stat the book prints as dice, rolled when the
  * creature is put on the table rather than averaged when it is transcribed.
@@ -80,7 +82,7 @@ export function rolledStatItems(entry)
 /** The declaration an Item carries, or null. */
 export function rolledStatSpecOf(item)
 {
-  const spec = item?.flags?.vaarn?.rolledStat;
+  const spec = creatureFlagsOf(item).rolledStat;
   return spec && ROLLED_STATS[spec.stat] && spec.dice ? spec : null;
 }
 

@@ -24,6 +24,9 @@
 
 import { spawnNamedCreature } from "./bestiary-spawn.js";
 import { postApplyCard } from "../combat/apply-to-target.js";
+import { heal } from "../effects/heal.js";
+// Creature flags from their sentences (Effect Engine: Creatures chunk 2c-i).
+import { creatureFlagsOf } from "../item/creature-effects.js";
 
 export const SPIRIT_NAME = "Unquiet Spirit";
 export const SPIRIT_TARGET = 16;
@@ -92,16 +95,18 @@ function card(actor, body)
  */
 export async function useAbility(actor, item)
 {
-  const u = item?.flags?.vaarn?.usable;
+  const u = creatureFlagsOf(item).usable;
   if(!u || !actor) return null;
 
   if(u.restoreHp === "full")
   {
-    const max = Number(actor.system.health.max);
-    const before = Number(actor.system.health.value);
-    await actor.update({ "system.health.value": max });
-    await card(actor, `<p><b>${actor.name}</b> — <b>${item.name}</b>: HP restored to full (${before} → ${max}). No rations.</p>`);
-    return { restored: max - before };
+    // A heal to full through the one heal path (Shared Pipelines chunk 3,
+    // RULED 2026-10-05, Matt: "I'd rather everything go through the same
+    // pipeline"). A refused heal has posted why.
+    const { before, after, gained, note, refused } = await heal(actor, Number(actor.system.health.max), { label: `<b>${item.name}</b>` });
+    if(refused) return { restored: 0 };
+    await card(actor, `<p><b>${actor.name}</b> — <b>${item.name}</b>: HP restored ${note ? "" : "to full "}(${before} → ${after}). No rations.${note}</p>`);
+    return { restored: gained };
   }
 
   if(u.hpCost)

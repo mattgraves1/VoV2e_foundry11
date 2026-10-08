@@ -27,6 +27,10 @@
  *    The caster's player or the Referee may press it - whoever could spend
  *    that character's HP anywhere else.
  */
+// Effect Engine: Interpreter and Mystic Gifts, chunk 3 (2026-10-05): a Gift
+// use now posts effects/effect-card.js's card, the general form of this one.
+// The button handler here stays so a Gift card already in a world's chat
+// still applies once.
 import { applyHeal } from "../actor/healing-field.js";
 import { reboundsAttack } from "../item/attack-properties.js";
 

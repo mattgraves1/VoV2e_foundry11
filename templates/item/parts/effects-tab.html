@@ -1,0 +1,26 @@
+{{!-- The Effects tab on every Item sheet - GM Effect Builder chunk 2 (ruled 2026-10-05).
+      Players read it; only a GM adds, edits or removes (ruling 3). --}}
+<div class="tab item-effects" data-group="primary" data-tab="effects">
+    {{#each effectRows as |r|}}
+    <div class="flexrow effect-row" data-row="{{r.row}}">
+        <span>{{r.line}}{{#if r.readOnlyNote}} <span class="notes">({{r.readOnlyNote}})</span>{{/if}}</span>
+        {{#if r.editable}}<a class="effect-edit" title="Edit this effect" style="flex: 0 0 1.5em;"><i class="fas fa-edit"></i></a>{{/if}}
+        {{#if r.removable}}<a class="effect-delete" title="Remove this effect" style="flex: 0 0 1.5em;"><i class="fas fa-trash"></i></a>{{/if}}
+    </div>
+    {{else}}
+    <p class="notes"><i>No effects.</i></p>
+    {{/each}}
+    {{#if isGM}}
+    <button type="button" class="effect-add"><i class="fas fa-plus"></i> Add effect</button>
+    {{/if}}
+    {{#if isGM}}{{#if giftSuggestions.length}}
+    <h4>Suggestions</h4>
+    <p class="notes">Not from the book - ideas to start from. Click one to add it, then change anything.</p>
+    {{#each giftSuggestions as |s|}}
+    <div class="flexrow gift-suggestion">
+        <span>{{s.summary}} <span class="notes">({{s.from}})</span></span>
+        <button type="button" class="gift-effect-suggest" data-suggestion="{{s.index}}" style="flex: 0 0 5em;">Add</button>
+    </div>
+    {{/each}}
+    {{/if}}{{/if}}
+</div>

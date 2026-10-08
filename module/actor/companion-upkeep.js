@@ -51,6 +51,8 @@
 import { companionsOf, companionKindOf, clearOwner, COMPANION_KINDS } from "./companion.js";
 import { FOOD_RATION, WATER_RATION, applyHeal } from "./rest.js";
 import { noHealRule } from "./deprived.js";
+// A creature's own flags from its actor-level sentences (Effect Engine: Creatures chunk 2d).
+import { creatureActorFlagsOf } from "../item/creature-effects.js";
 
 /** Per kind: what one day costs, how many unfed days in a row it takes, and
  *  the book's own verb for leaving. */
@@ -67,7 +69,7 @@ const UNFED_FLAG = "unfedDays";
 /** The rule that says this creature neither eats nor drinks, or null. */
 export function companionRationFree(actor)
 {
-  const rule = actor?.flags?.vaarn?.rationFree;
+  const rule = creatureActorFlagsOf(actor).rationFree;
   return (typeof rule === "string" && rule.trim()) ? rule.trim() : null;
 }
 
@@ -80,7 +82,7 @@ export function companionRationFree(actor)
  */
 export function companionDiet(actor)
 {
-  const item = actor?.flags?.vaarn?.dietRation;
+  const item = creatureActorFlagsOf(actor).dietRation;
   return (typeof item === "string" && item.trim()) ? item.trim() : null;
 }
 

@@ -64,8 +64,13 @@
  */
 
 import { magneticFieldHtml } from "./metal-cards.js";
+import { floraSpanOf } from "../item/consumable-effects.js";
+// Creature flags from their sentences (Effect Engine: Creatures chunk 2b).
+import { creatureFlagsOf, roundWordingOf } from "../item/creature-effects.js";
+import { PER_ROUND_WORDING, formulaFrom } from "../effects/round-wording.js";
 import { actorRef, nameOf, tokenCopies, entriesOf, setEntries, addEntry, removeEntry, collectAll, sweepExpired,
-         expiryFor, formatSpan, removeActorAndTokens, removeGrantedItem, grantedItemIdsOf, endedLabel } from "../time/effect-board.js";
+         expiryFor, formatSpan, removeActorAndTokens, endEntryEffects, endedLabel,
+         turnsLeftLabel } from "../time/effect-board.js";
 // isActivity and isRecurrence were imported here for clearAll's survival test
 // until 2026-09-20. The inverted predicate names no entry kind at all, so the
 // imports went with the list — and their absence is the point: a new entry
@@ -156,8 +161,9 @@ import { actorRef, nameOf, tokenCopies, entriesOf, setEntries, addEntry, removeE
 // that mention a round are one-off spans ("a whole combat round", "one combat
 // round", "the next combat round") and a loose article would arm several.
 // Measured the same day: no other text under module/ contains the phrase.
-export const PER_ROUND_WORDING =
-  /(?:per|each|every|the|its|their) (?:combat )?rounds?\b|start of a (?:combat )?round\b|rounds? of\b|for \[INT\][^.]{0,20}rounds?\b/i;
+// DEFINED IN effects/round-wording.js since Effect Engine: Creatures chunk 2c-ii
+// (2026-10-06) - the creature translator reads it too - and re-exported here.
+export { PER_ROUND_WORDING, formulaFrom };
 
 /** Flag scope, shared with the board. */
 const SCOPE = "vaarn";
@@ -183,27 +189,7 @@ export function isRoundEffectActive(item)
   return !!roundEffectOf(item);
 }
 
-/**
- * The first dice expression in an item's own text, or null.
- *
- * A CONVENIENCE, NOT A CONTRACT. It decides only whether the card offers a
- * roll button, so a miss costs the GM one manual roll and a false hit costs
- * one ignored button. Deliberately not used for anything that would be wrong
- * rather than merely absent.
- *
- * Two shapes get no button on purpose, and neither is a failure of this
- * function: a rule whose per-round event is a SAVE (the players roll those,
- * and a button on a GM-whispered card cannot), and a rule whose amount scales
- * with board state — the Nightmare Herald heals d6 per sleeping creature
- * nearby, and "d6" alone would be a wrong answer rather than a partial one.
- */
-export function formulaFrom(item)
-{
-  const text = `${item?.system?.description ?? ""} ${item?.system?.effect ?? ""}`;
-  if (/\bsave\b/i.test(text) && !/\bdamage\b/i.test(text)) return null;
-  const m = text.match(/\b(\d*d\d+(?:\s*\+\s*\d*d?\d+)*)\b/i);
-  return m ? m[1].replace(/\s+/g, "") : null;
-}
+// formulaFrom: effects/round-wording.js (Creatures chunk 2c-ii), re-exported above.
 
 /**
  * Turn a reminder on. `rounds` is the single number from activation; leave it
@@ -225,32 +211,35 @@ export async function activate(item, { rounds = null, unit = "round", note = "",
   // Direct HP Adjustment (2026-09-23): a creature rule carries its HP change
   // as a flag; an elixir's comes from its roster row via the caller. Either
   // way the entry ticks - the button is on the round card or nowhere.
-  hpTick = hpTick ?? item.flags?.vaarn?.hpTick ?? null;
+  hpTick = hpTick ?? creatureFlagsOf(item).hpTick ?? null;
   if (hpTick) perRound = true;
   // A per-round spawn (the Brood Mother's Brood, 2026-09-24) rides the rule
   // Item's flag the same way, and ticks for the same reason.
-  const spawn = item.flags?.vaarn?.spawn ?? null;
+  const spawn = creatureFlagsOf(item).spawn ?? null;
   if (spawn) perRound = true;
   // A per-round rule's SAVE rides to the round card's save button (Multi-
   // Target wiring, RULED 2026-09-25 by Matt): the Gravity Tyrant's Accretion,
   // "Each round, all creatures must DEX Save", and the Magneticrab's field in
   // the same words. One card per targeted token, as the Vortex's. The rule
   // Item's flag is the list saveFlag wrote; a rule declares one save.
-  const save = item.flags?.vaarn?.roundSave ? (item.flags.vaarn.save?.[0] ?? null) : null;
+  const save = creatureFlagsOf(item).roundSave ? (creatureFlagsOf(item).save?.[0] ?? null) : null;
   // What an Item declares its span puts on the board - the Ickbulb's scent
   // (To-Hit Resolution Override wiring, 2026-09-25). A caller's resolved
   // deltas win, since those were measured against the actor.
-  applied = applied ?? item.flags?.vaarn?.spanApplied ?? null;
+  // A plant's span reads its sentences since Effect Engine: Consumables chunk 3c
+  // (2026-10-06, ruling B), not the flags buildFlora used to write.
+  const flora = floraSpanOf(item);
+  applied = applied ?? flora?.applied ?? null;
   // A save the span's END card offers, and what a success grants - the
   // Godsbreath Star's PSY Save for a new Mystic Gift (Grant-a-Roll on Another
   // Table, RULED 2026-09-26 by Matt).
-  const endGrant = item.flags?.vaarn?.endGrant ?? null;
+  const endGrant = flora?.endGrant ?? null;
   // A poison the span's end strips from the Item - the Avern Bloom's "only
   // retains its poison for a day" (Toxin Die wiring, RULED 2026-09-26).
-  const toxLapses = !!item.flags?.vaarn?.toxLapses;
+  const toxLapses = !!flora?.toxLapses;
   // The Magneticrab's field (Metal Item Property Part B, 2026-09-27): the line
   // names who holds metal and who is pulled, read when the card posts.
-  const magnetField = !!item.flags?.vaarn?.magnetField;
+  const magnetField = !!creatureFlagsOf(item).magnetField;
 
   const round = game.combat?.round ?? null;
   const now = game.time?.worldTime ?? 0;
@@ -265,8 +254,9 @@ export async function activate(item, { rounds = null, unit = "round", note = "",
     // ticks each combat round and lasts six Exploration Turns, and a
     // 4-Exploration-Turn AV boost ticks not at all. Caller may state it; the
     // item's own wording is the fallback.
-    perRound: perRound === null ? PER_ROUND_WORDING.test(textOf(item)) : !!perRound,
-    formula: formulaFrom(item),
+    // A creature rule Item's words from its sentence since Creatures chunk 2c-ii; any other's from its text.
+    perRound: perRound === null ? roundWordingOf(item).perRound : !!perRound,
+    formula: roundWordingOf(item).formula,
     clearFlag,
     // Stateful Effect Application (2026-09-09): the resolved deltas, or null
     // for a reminder that changes no value. Passed through untouched — this
@@ -302,11 +292,6 @@ export async function activate(item, { rounds = null, unit = "round", note = "",
   return entry;
 }
 
-/** Everything this item's own text says, for the wording tests. */
-function textOf(item)
-{
-  return `${item?.system?.description ?? ""} ${item?.system?.effect ?? ""}`;
-}
 
 /** Turn an item's effect off. Removing the entry is what stops it. */
 export async function deactivate(item)
@@ -351,7 +336,10 @@ function lineFor({ actor, entry }, round)
 {
   const elapsed = round - (entry.startRound ?? round);
   const bits = [];
-  if (entry.expiresAtRound)
+  // Turn-Counted Round Duration (2026-10-04): counted on the holder's turns.
+  if (entry.turnCount)
+    bits.push(turnsLeftLabel(entry.turnCount, nameOf(actor)));
+  else if (entry.expiresAtRound)
     bits.push(`${Math.max(0, entry.expiresAtRound - round)} round(s) left`);
   else if (elapsed > 0)
     bits.push(`round ${elapsed} of this effect`);
@@ -564,7 +552,7 @@ export async function onRoundChange(round)
   // effect whose time ran out while the party was mid-fight is reported the
   // moment the next round turns, rather than waiting for someone to advance
   // the clock afterwards.
-  const expired = await sweepExpired({ now: game.time?.worldTime ?? 0, round });
+  const expired = await sweepExpired({ now: game.time?.worldTime ?? 0, round, endOfRound: true });
 
   const { gm, open } = collectActive();
   await postCard(gm,   round, true,  expired.filter(e => e.entry.origin === "npc"));
@@ -660,8 +648,10 @@ export async function clearAll()
     {
       // Elixir-Granted Ability Item (2026-09-23): a round-scale span that
       // timed an Item takes the Item with it, as expiry and removal do.
-      for (const e of drop)
-        for (const id of grantedItemIdsOf(e)) await removeGrantedItem(actor, id);
+      // EVERY UNDO, not the granted Items alone (Shared Pipelines chunk 6,
+      // 2026-10-05): a named flag, an HP reversal and a lapse card end with
+      // the fight as they do on expiry and removal.
+      for (const e of drop) await endEntryEffects(actor, e);
       await setEntries(actor, keep);
     }
   }

@@ -49,6 +49,7 @@
  */
 
 import { companionKindOf, companionLedger } from "./companion.js";
+import { statOf } from "../effects/item-stats.js";
 
 /**
  * The Item flag that says a thing is STOWED rather than carried.
@@ -73,9 +74,10 @@ export function isCargo(item)
  */
 export function slotCostOf(item)
 {
-  const perUnit = Number(item?.system?.slots) || 0;
+  // Through the sentences since Stats as Sentences chunk 2c (RULED 2026-10-07).
+  const perUnit = Number(statOf(item, "slots")) || 0;
   if(perUnit <= 0) return 0;
-  const units = Number(item?.flags?.vaarn?.units ?? item?.system?.quantity ?? 1);
+  const units = Number(statOf(item, "units") ?? item?.system?.quantity ?? 1);
   return perUnit * (Number.isFinite(units) && units > 0 ? units : 1);
 }
 

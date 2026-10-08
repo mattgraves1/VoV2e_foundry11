@@ -29,10 +29,14 @@
  * goes stale when tags are hand-edited.
  */
 
+import { hitSaveSpecs, hitAbilityDamage, offersArmourChoiceFromSentences } from "./weapon-tags.js";
+import { remainingActorSentencesOf } from "./remaining-effects.js";
+import { WEAPON_TAG_EFFECTS } from "./weapon-tag-effects-data.js";
 import { activeDeltas } from "../time/stateful-effect.js";
-import { woundItemsNamed } from "../time/recurrence.js";
-import { BASIC_TAGS, ADVANCED_TAGS, EXOTIC_TAGS } from "../actor/chargen-data.js";
 import { wearsMetalArmour } from "./metal.js";
+import { bearerProperties } from "../effects/body.js";
+// Creature attack flags from their sentences (Effect Engine: Creatures chunk 2a).
+import { creatureAttackOf, creatureFlagsOf, creatureActorFlagsOf, namedWoundPerSlot } from "./creature-effects.js";
 
 /** The book's Common Damage Types — the named subset. */
 export const COMMON_DAMAGE_TYPES = ["kinetic", "beam", "blast", "flame", "electrical", "tox"];
@@ -69,6 +73,13 @@ const AS_PROPERTY = {
   // halved by Fungal, floored by Gelationous. A property rather than a flag
   // so the immunity rows below answer to it the way they answer to a weapon.
   gift: "gift", "mystic gift": "gift",
+  // Effect Engine: Shared Pipelines chunk 3, RULED 2026-10-05 (Matt): a heal
+  // asks this table as `healing`, and NO WILDCARD ROW REACHES IT (see
+  // attackMatches) - "healing is never reduced/magnified by some property
+  // that reduces or magnifies damage, like Incorporeal. modifying heal
+  // effects is its own thing." Only a row naming `healing` would bite; none
+  // exists.
+  healing: "healing",
   // Breathing and Suffocation, RULED 2026-09-27 (Matt): two properties.
   // Choking is the book's other word for suffocation (Stolen Breath, the
   // Fungal Growths room); drowning stays apart because Gills answers to it
@@ -158,6 +169,21 @@ const GRANTS = {
 const normalise = (t) => AS_PROPERTY[String(t).trim().toLowerCase()] ?? null;
 
 /**
+ * What a NAME means as damage properties, read by name: the property it is,
+ * plus any it grants. The weapon tags' properties come from their sentences
+ * since Effect Engine: Weapon Tags chunk 3; this is the name-based answer
+ * tools/test-weapon-tags.mjs holds those sentences to, and what any other
+ * name (a base tag, a damage-type word) still gets.
+ */
+export function propertiesOfName(name)
+{
+  const out = [...(GRANTS[String(name).trim().toLowerCase()] ?? [])];
+  const n = normalise(name);
+  if (n && !out.includes(n)) out.push(n);
+  return out;
+}
+
+/**
  * Every attack property an item carries: lowercase, deduplicated,
  * order-stable. Reads CUMULATIVELY — a later source adds to the set rather
  * than replacing it, because a Laser Rifle with the Electrical tag is both.
@@ -187,7 +213,25 @@ export function attackPropertiesOf(item) {
   };
   if (Array.isArray(sys.damageTypes)) sys.damageTypes.forEach(push);
   if (sys.damageType) push(sys.damageType);
-  for (const t of sys.tags ?? []) push(t);
+  // A weapon tag's properties come from its sentences (Weapon Tags chunk 3,
+  // 2026-10-05) - Flaming is `modify damage-types +flame`, Extra-Dimensional
+  // grants two - and any other name (a base tag: Slashing, Beam) is read by
+  // name as before.
+  // An Item carrying its own sentences (GM Effect Builder chunk 2, 2026-10-05)
+  // is read from them instead: a property a GM added counts, and a tag's row
+  // the GM removed no longer does. Base tags are still read by name.
+  const own = item?.flags?.vaarn?.effects;
+  for (const t of sys.tags ?? [])
+  {
+    const known = WEAPON_TAG_EFFECTS[t]?.effects;
+    if (!known) { push(t); continue; }
+    if (Array.isArray(own)) continue;
+    for (const s of known)
+      if (s.do?.stat === "damage-types") push(String(s.do.amount).replace(/^\+/, ""));
+  }
+  if (Array.isArray(own))
+    for (const s of own)
+      if (s?.do?.stat === "damage-types" && !s.baked && (s.when === "stat" || s.when?.trigger === "stat")) push(String(s.do.amount).replace(/^\+/, ""));
   for (const t of sys.base_tags ?? []) push(t);
   return found;
 }
@@ -315,6 +359,12 @@ export const DAMAGE_INTERACTIONS = [
   // simply was not a word.
   { attack: "slashing",          target: "exposedOrgans",  mult: 2, label: "mutated with Exposed Organs", note: "Exposed Organs: double damage from slashing attacks" },
   { attack: "stabbing",          target: "exposedOrgans",  mult: 2, label: "mutated with Exposed Organs", note: "Exposed Organs: double damage from piercing attacks" },
+  // Ruling C (Matt, 2026-10-05): four mutations that were reminders.
+  { attack: "bludgeoning",       target: "skeletal",        mult: 2,   label: "mutated with a Skeletal Frame", note: "Skeletal Frame: double damage from bludgeoning and crushing attacks" },
+  { attack: "bludgeoning",       target: "malleable",       mult: 0.5, label: "mutated with a Malleable Body", note: "Malleable Body: half damage from bludgeoning attacks" },
+  { attack: "beam",              target: "transparentSkin", mult: 2,   label: "mutated with Transparent Skin", note: "Transparent Skin: double damage from beam attacks" },
+  { attack: "flame",             target: "insulated",       mult: 0.5, label: "mutated with Insulated Skin", note: "Insulated Skin: half damage from extreme temperatures (heat)" },
+  { attack: "freezing",          target: "insulated",       mult: 0.5, label: "mutated with Insulated Skin", note: "Insulated Skin: half damage from extreme temperatures (cold)" },
 
   // Synth's Synthetic Flesh, the extreme-temperatures clause ONLY - an
   // EDITION-DISAGREEMENT STOPGAP, isolated on purpose (Matt, 2026-09-23). The
@@ -347,6 +397,13 @@ export const DAMAGE_INTERACTIONS = [
   // 2026-09-25 (Matt): immunity at the damage step, not an attack that cannot
   // land, and only while the armour is worn. See wearsMirrorArmour.
   { attack: "beam",              target: "mirrorArmour",   mult: 0,   label: "wearing Mirror Armour", note: "Mirror Armour: immune to Beam attacks" },
+  // Implants, Exotica and Figments ruling C (RULED 2026-10-06, Matt): Dazzleskin
+  // Filaments' 'laser beams and energy weapons' is beam; Subdermal Insulation's
+  // 'flames, cold, and electricity' is flame, freezing and electrical.
+  { attack: "beam",              target: "dazzleskin",     mult: 0,   label: "Dazzleskin Filaments", note: "Dazzleskin Filaments: immune to laser beams and energy weapons" },
+  { attack: "flame",             target: "subdermalInsulation", mult: 0, label: "Subdermal Insulation", note: "Subdermal Insulation: immune to flames" },
+  { attack: "freezing",          target: "subdermalInsulation", mult: 0, label: "Subdermal Insulation", note: "Subdermal Insulation: immune to cold" },
+  { attack: "electrical",        target: "subdermalInsulation", mult: 0, label: "Subdermal Insulation", note: "Subdermal Insulation: immune to electricity" },
 
   { attack: "bludgeoning",       target: HALF_FROM_BLUDGEONING, mult: 0.5, label: "infected with Jellybones", note: "Jellybones: halved damage from bludgeoning attacks" },
 
@@ -571,19 +628,22 @@ function creatureInteractions(targetActor) {
   // A PER-ACTOR immunity - a Glittersludge born of a damage type, and every
   // descendant (Actor Spawning wiring, 2026-09-25). Stored on the Actor by
   // performSplit, since two Glittersludges can differ.
-  const own = (targetActor?.flags?.vaarn?.immuneTo ?? []).map((p) => ({ attack: p, mult: 0,
-    target: targetActor.flags.vaarn.immuneToRule ?? "Adapted", note: "born of this damage type" }));
+  // From its sentences since Remaining Sources chunk 2d (2026-10-07); the rule's name is the sentences' words.
+  const born = remainingActorSentencesOf(targetActor).filter((s) => s.do?.from === "immuneTo");
+  const own = born.map((s) => ({ attack: s.do.value, mult: 0, target: s.text || "Adapted", note: "born of this damage type" }));
   // A generated creature's rolled Special Defense (Mystic Gift Damage to a
   // Target, RULED 2026-09-26 by Matt) - written on the Actor by
   // monster-generator.js from the Attacks row's `damageRule`, already in this
   // row shape, since no two generated creatures share a name.
-  const rolled = (targetActor?.flags?.vaarn?.damageRules ?? []).map((r) => ({ ...r, target: r.rule }));
+  const rolled = (creatureActorFlagsOf(targetActor).damageRules ?? []).map((r) => ({ ...r, target: r.rule }));
   return [...(entry?.interactions ?? []).map((i) => ({ ...i, target: entry.rule })), ...own, ...rolled];
 }
 
 /** Does this row bite on an attack carrying `props`? */
 function attackMatches(rule, props) {
   if ((rule.unless ?? []).some((p) => props.includes(p))) return false;
+  // A heal is never "every attack" (Shared Pipelines chunk 3, RULED 2026-10-05).
+  if (rule.attack === "*" && props.includes("healing")) return false;
   return rule.attack === "*" || props.includes(rule.attack);
 }
 
@@ -624,11 +684,13 @@ export function ignoresEvenDamage(targetActor) {
  * as one shared property with several sources.
  */
 export function isFlat(actor) {
-  if (actor?.system?.ancestry === "Planeyfolk") return true;
+  // Flat's sentence since Mutations and Ancestry Rules chunk 2a (an Item, or the
+  // ancestry text - ruling B); the flag below is Planeyfication's, unchanged.
+  if (bearerProperties(actor).has("flat")) return true;
   // Flatten, Planeyfied, and the bestiary Planeyfolk, which is set at build
   // time. A flag rather than a system field so no schema change is needed and
   // a timed effect can set and clear it.
-  return !!actor?.flags?.vaarn?.flat;
+  return !!creatureActorFlagsOf(actor).flat;
 }
 
 /**
@@ -665,10 +727,14 @@ export function actorProperties(actor) {
   // from the actor type - Eroding's vehicles clause reads it (2026-09-23).
   if (actor?.type === "vehicle") props.vehicle = true;
   if (hasExposedOrgans(actor)) props.exposedOrgans = true;
-  if (wearsMirrorArmour(actor)) props.mirrorArmour = true;
+  // Mirror Armour's and Starskin's properties are their sentences since
+  // Implants, Exotica and Figments chunk 2 (2026-10-06), worn - bearerProperties below.
   if (hasGills(actor)) props.gills = true;
-  if (wearsArmourNamed(actor, "Starskin")) props.starskin = true;
-  if (wearsArmourNamed(actor, "Oxygen Mask")) props.oxygenMask = true;
+  // Every other property a body sentence gives - ruling C's Skeletal Frame,
+  // Malleable Body, Transparent Skin, Insulated Skin (2026-10-05).
+  for (const p of bearerProperties(actor)) props[p] = true;
+  // The Oxygen Mask is its sentence since Remaining Sources chunk 2c-ii (2026-10-07):
+  // bearerProperties above gives oxygenMask while it is worn - never its name (ruling F).
   // Metal Item Property (2026-09-27): body armour that is metal and worn, a
   // heavy implant, or a creature's flag - see metal.js wearsMetalArmour.
   if (wearsMetalArmour(actor)) props.metalArmour = true;
@@ -701,7 +767,7 @@ export function actorProperties(actor) {
 export const FLAMMABLE_BURN = { name: "Burning", dice: "1d8" };
 
 export function isFlammable(actor) {
-  return actor?.system?.ancestry === "Neobloom";
+  return bearerProperties(actor).has("flammable");
 }
 
 /**
@@ -711,7 +777,7 @@ export function isFlammable(actor) {
  * reaches it.
  */
 export function isSynthFleshThermal(actor) {
-  return actor?.system?.ancestry === "Synth";
+  return bearerProperties(actor).has("synthFleshThermal");
 }
 
 /**
@@ -730,8 +796,7 @@ export function isSynthFleshThermal(actor) {
  * out right. The two are not alternatives and neither supersedes the other.
  */
 export function hasExposedOrgans(actor) {
-  return (actor?.items ?? []).some(
-    (i) => i.type === "mutation" && i.name === "Exposed Organs");
+  return bearerProperties(actor).has("exposedOrgans");
 }
 
 /**
@@ -759,7 +824,7 @@ export function wearsArmourNamed(actor, name) {
  * Item, the Exposed Organs shape (Breathing and Suffocation, 2026-09-27).
  */
 export function hasGills(actor) {
-  return (actor?.items ?? []).some((i) => i.type === "mutation" && i.name === "Gills");
+  return bearerProperties(actor).has("gills");
 }
 
 /** The two properties that stop a creature breathing. */
@@ -899,9 +964,9 @@ export function incomingDamageMultiplier(targetActor) {
  * wound Item on the actor; "one slot a day" is Long-Clock Recurrence deleting
  * one, and this count follows it for free.
  */
-export const DAMAGE_TAKEN_MULTIPLIERS = [
-  { wound: "Deathblight", perSlot: 2 }
-];
+// SINCE Effect Engine: Creatures chunk 2e (2026-10-07) the factor is the wound's own
+// sentence (damage-taken-per-slot), read by its key through namedWoundPerSlot - the
+// name table that stood here is gone.
 
 /**
  * Weapon tags that EAT THE TARGET'S ARMOUR on a hit, tag name to points of AV
@@ -950,7 +1015,9 @@ export const CORROSIVE_TAG = "Corrosive";
 /** Does this item offer the Corrosive choice at all? */
 export function offersArmourChoice(item)
 {
-  return (item?.system?.tags ?? []).includes(CORROSIVE_TAG);
+  // From the sentences since Weapon Tags chunk 3: a hit gated on the roller's
+  // targets-armour answer, which the toggle gives (ruling D).
+  return offersArmourChoiceFromSentences(item);
 }
 
 /** Has the attacker declared they are going for the armour? */
@@ -997,12 +1064,9 @@ export async function clearArmourChoice(actor)
 export function woundDamageMultiplier(actor) {
   let factor = 1;
   const named = [];
-  for (const m of DAMAGE_TAKEN_MULTIPLIERS) {
-    const slots = woundItemsNamed(actor, m.wound)
-      .reduce((n, i) => n + Math.max(1, Number(i.system?.slots) || 1), 0);
-    if (!slots) continue;
-    factor *= Math.pow(m.perSlot, slots);
-    named.push(`<b>${m.wound}</b> (${slots} slot${slots === 1 ? "" : "s"})`);
+  for (const m of namedWoundPerSlot(actor, "damage-taken-per-slot")) {
+    factor *= Math.pow(m.perSlot, m.slots);
+    named.push(`<b>${m.name}</b> (${m.slots} slot${m.slots === 1 ? "" : "s"})`);
   }
   return { factor, named };
 }
@@ -1031,7 +1095,7 @@ export function outgoingDamageMultiplier(attackerActor) {
  * built before then still answers by name, which is what the fallback is for.
  */
 export function damageRuleKey(actor) {
-  return actor?.flags?.vaarn?.damageRuleKey ?? actor?.name;
+  return creatureActorFlagsOf(actor).damageRuleKey ?? actor?.name;
 }
 
 /** The per-creature override, if any bites. Returns null when nothing applies. */
@@ -1190,7 +1254,7 @@ export function targetDisadvantage(item, targetActors, hasCond)
  */
 export function advantageVsTargets(attacker, targetActors)
 {
-  const declared = attacker?.flags?.vaarn?.advantageVs ?? [];
+  const declared = creatureActorFlagsOf(attacker).advantageVs ?? [];
   const targets = (targetActors ?? []).filter(Boolean);
   if (!declared.length || !targets.length) return [];
   // `metalArmour` (2026-09-27): the Voltworm's "ADV to hit Synths or metal
@@ -1207,9 +1271,6 @@ export function advantageVsTargets(attacker, targetActors)
 // roster row. Both reach the damage click through this one reader, so a tag
 // and a creature attack cannot disagree about the shape.
 
-/** Every tag roster row, by name. */
-const TAG_ROWS = new Map([...BASIC_TAGS, ...ADVANCED_TAGS, ...EXOTIC_TAGS]
-  .filter((t) => t?.name).map((t) => [t.name, t]));
 
 /**
  * The ability damage an Item deals to each target it hits:
@@ -1218,17 +1279,22 @@ const TAG_ROWS = new Map([...BASIC_TAGS, ...ADVANCED_TAGS, ...EXOTIC_TAGS]
  */
 export function abilityDamageSpecsOf(item)
 {
-  const own = (item?.flags?.vaarn?.abilityDamage ?? []).map((s) => ({ ...s, source: item.name }));
-  const fromTags = (item?.system?.tags ?? [])
-    .map((t) => TAG_ROWS.get(t))
-    .filter((row) => row?.abilityDamage)
+  // An Exotica weapon's loss is its sentence since Implants, Exotica and
+  // Figments chunk 3b-ii (2026-10-06), read below: its stored flag is not
+  // read too. A creature's attack keeps its flag (bestiary-build.js).
+  const own = item?.flags?.vaarn?.exotica === true ? []
+    : (creatureAttackOf(item).abilityDamage ?? []).map((s) => ({ ...s, source: item.name }));
+  // Effect Engine: Weapon Tags chunk 3 (2026-10-05): from the weapon's
+  // sentences - its tags through the translator - not the roster rows.
+  const fromTags = hitAbilityDamage(item)
     // `property` when the tag is itself a damage type - Freezing, and
     // Ultra-Corrosive (corrosive/acid, which nothing is immune to yet): the
     // loss rides that type, so a target immune to it takes none (RULED
     // 2026-09-23, Matt - "immune includes immunity to the dex loss"). A tag
     // that is only an ability loss (Lithifying, Necrotic) gets no property
     // and is never blocked this way; nor is a creature's own attack.
-    .map((row) => ({ ...row.abilityDamage, source: row.name, property: normalise(row.name) || null }));
+    // Only a weapon TAG names a damage type; an Exotica's name does not (chunk 3b-ii).
+    .map(({ tag, ...spec }) => ({ ...spec, property: tag && WEAPON_TAG_EFFECTS[tag] ? (normalise(tag) || null) : null }));
   return [...own, ...fromTags];
 }
 
@@ -1242,10 +1308,9 @@ export function abilityDamageSpecsOf(item)
  */
 export function tagSaveSpecsOf(item)
 {
-  return (item?.system?.tags ?? [])
-    .map((t) => TAG_ROWS.get(t))
-    .filter((row) => row?.save?.length)
-    .map((row) => ({ source: row.name, saves: row.save }));
+  // Effect Engine: Weapon Tags chunk 3 (2026-10-05): the resisted sentences a
+  // hit carries, grouped by tag, each with the condition a failure applies.
+  return hitSaveSpecs(item);
 }
 
 /**
@@ -1266,7 +1331,7 @@ export function immuneToAttackProperty(targetActor, property) {
  */
 export function abilityTickSpecsOf(item)
 {
-  return (item?.flags?.vaarn?.abilityTick ?? []).map((s) => ({ ...s, source: item.name }));
+  return (creatureFlagsOf(item).abilityTick ?? []).map((s) => ({ ...s, source: item.name }));
 }
 
 /**
@@ -1275,5 +1340,5 @@ export function abilityTickSpecsOf(item)
  */
 export function escalatingSpecsOf(item)
 {
-  return (item?.flags?.vaarn?.escalating ?? []).map((s) => ({ ...s, source: item.name }));
+  return (creatureFlagsOf(item).escalating ?? []).map((s) => ({ ...s, source: item.name }));
 }

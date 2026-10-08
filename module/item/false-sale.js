@@ -24,12 +24,14 @@
  * Scrolls", and the 4 is not the number sold.
  */
 import { qualityOf } from "./trade-good-quality.js";
+import { qualitySpanOf } from "./remaining-effects.js";
 import { addEntry, expiryFor } from "../time/effect-board.js";
 
 /** The span a sale starts, or null when this Item has none to start. */
 export function saleSpanOf(item)
 {
-  const span = qualityOf(item)?.declaredSpan;
+  // From the quality's sentence since Remaining Sources chunk 2c-ii (2026-10-07).
+  const span = qualitySpanOf(item);
   if(!span) return null;
   if(!(item?.parent instanceof Actor)) return null;
   return span;

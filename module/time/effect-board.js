@@ -141,6 +141,67 @@ export function roundsRemaining(entry, round)
 }
 
 /**
+ * TURN-COUNTED ROUND DURATION (foundry-system-index.csv row of that name,
+ * RULED 2026-10-04 by Matt). In combat, "N rounds" lasts until the end of the
+ * HOLDER's Nth turn that starts after the effect lands, so the holder spends
+ * exactly N of its own turns under it whatever the initiative method - three
+ * of Vaarn's four reorder every round, which can leave a round-boundary or
+ * fixed-index count with zero or two turns under a 1-round effect.
+ *
+ * The holder is the actor the entry sits on: the creature an effect was put
+ * on, or, for a rule a creature runs from its own sheet (a Black Cloud), that
+ * creature - which is the ruling's "count the initiator's turns" for an effect
+ * with no single affected creature.
+ *
+ * { left, armed }: a turn of the holder's that STARTS after landing arms the
+ * count; that turn's end takes one off. An effect that lands during the
+ * holder's own turn therefore skips that turn. Stamped only when the holder is
+ * in the running combat's tracker; anything else keeps expiresAtRound.
+ */
+export function newTurnCount(amount)
+{
+  const n = Number(amount);
+  return Number.isFinite(n) && n > 0 ? { left: n, armed: false } : null;
+}
+
+/** The count after one of the holder's turns starts or ends. Never mutates. */
+export function stepTurnCount(count, phase)
+{
+  if (!count) return count;
+  if (phase === "start") return count.armed ? count : { ...count, armed: true };
+  if (phase === "end" && count.armed) return { left: count.left - 1, armed: false };
+  return count;
+}
+
+/** "ends at the end of the Mole's turn", or how many of its turns are left. */
+export function turnsLeftLabel(count, holderName)
+{
+  if (!count) return "";
+  // No name where the row already names the holder (the board): "their".
+  const whose = holderName ? `${holderName}'s` : "their";
+  if (count.left <= 1)
+    return count.armed ? `ends at the end of ${whose} turn` : `ends after ${whose} next turn`;
+  return `${count.left} of ${whose} turns left`;
+}
+
+/** The running combat's combatants that ARE this actor (an unlinked token by its token). */
+export function holderCombatants(actor, combat)
+{
+  if (!actor || !combat) return [];
+  return combat.combatants.filter(c => actor.isToken
+    ? c.tokenId === actor.token?.id
+    : c.actorId === actor.id && c.token?.actorLink !== false);
+}
+
+/** In the tracker, not defeated, and (for a creature) above 0 HP. */
+export function holderLive(actor, combat)
+{
+  const cs = holderCombatants(actor, combat);
+  if (!cs.length || cs.every(c => c.isDefeated)) return false;
+  return !(actor.type === "npc" && Number(actor.system?.health?.value) <= 0);
+}
+
+/**
  * Has this entry run out? An entry carrying both scales expires on whichever
  * lands first, which is the behaviour Regeneration Serum needs: a fight long
  * enough to burn its rounds ends it even though no world time has passed.
@@ -153,6 +214,8 @@ export function hasExpired(entry, { now = 0, round = null } = {})
 {
   const t = clockRemaining(entry, now);
   if (t !== null && t <= 0) return true;
+  // A turn-counted span ends on its holder's turns, never on a round boundary.
+  if (entry?.turnCount) return entry.turnCount.left <= 0;
   if (round !== null)
   {
     const r = roundsRemaining(entry, round);
@@ -351,6 +414,20 @@ export async function setEntries(actor, entries)
   return actor.setFlag(SCOPE, KEY, entries);
 }
 
+/**
+ * The turn count a new entry starts with, or null. Only a real round count
+ * (a finite expiresAtRound and an amount), only while a combat is running, and
+ * only for a holder in that combat's tracker: a creature never added (a fresh
+ * spawn, a bystander) takes no turns, so it keeps the round-boundary rule.
+ */
+function turnCountAtLanding(actor, data)
+{
+  if (data.unit !== "round" || !Number.isFinite(data.expiresAtRound)) return null;
+  const combat = game.combat;
+  if (!combat?.started || !holderCombatants(actor, combat).length) return null;
+  return newTurnCount(data.amount);
+}
+
 /** Add one entry. Returns the entry as stored, id included. */
 export async function addEntry(actor, data)
 {
@@ -384,6 +461,11 @@ export async function addEntry(actor, data)
     // Adjustment, 2026-09-23): { to, heal, dice?, full?, perCount?,
     // damageTypes? }. Named here for the escalating reason above.
     hpTick: data.hpTick ?? null,
+    // A state that lasts while an ability stays at or below a value (Effect
+    // Engine: Weapon Tags chunk 3, 2026-10-05): { ability, atMost } - Freezing's
+    // "frozen solid" at 0 DEX, ended by value-reaches.js when it recovers.
+    // Named here for the escalating reason above.
+    whileAbility: data.whileAbility ?? null,
     // A per-round SPAWN the round card's button performs (Actor Spawning
     // from Bestiary, 2026-09-24): { creature, dice }. The Brood Mother's
     // Brood. Named here for the escalating reason above.
@@ -429,6 +511,11 @@ export async function addEntry(actor, data)
     startRound: data.startRound ?? null,
     expiresAtTime: data.expiresAtTime ?? null,
     expiresAtRound: data.expiresAtRound ?? null,
+    // Turn-Counted Round Duration (2026-10-04): a round span landing in a
+    // running combat on a holder in its tracker counts the holder's turns.
+    // expiresAtRound stays set, because it is what marks the entry as
+    // belonging to the fight (round-effects.js survivesCombatEnd).
+    turnCount: data.turnCount ?? turnCountAtLanding(actor, data),
     unit: data.unit ?? null,
     amount: data.amount ?? null,
     // Character Split/Clone (2026-09-18): the Bifurcating Brew's second
@@ -446,6 +533,10 @@ export async function addEntry(actor, data)
     // Several at once (Biothermal Amplifier Tonic's two gifts, 2026-09-24).
     // The single field above stays for the entries already written.
     grantedItemIds: Array.isArray(data.grantedItemIds) ? [...data.grantedItemIds] : [],
+    // A borrowed hand (the Usurper Arm, Shared Pipelines chunk 6, RULED B
+    // 2026-10-05): how many hands this entry's end takes away, so the end
+    // can say when the character is now carrying too much.
+    lapseHands: Number(data.lapseHands) || 0,
     // A per-target hit count (Hit-Count Progression, 2026-09-27): { key, count }.
     // The Desiccator's Desiccate. Named here for the escalating reason above.
     hitCount: data.hitCount ?? null,
@@ -480,12 +571,28 @@ export async function addEntry(actor, data)
  */
 async function undoEntryEffects(actor, entry)
 {
+  // The over-capacity card READS the hand before its flag goes (RULED B,
+  // 2026-10-05). Imported when needed: save-gated.js reaches the Bestiary.
+  if (entry?.lapseHands > 0)
+  {
+    const { handsLapseCard } = await import("../combat/save-gated.js");
+    const card = handsLapseCard(actor, entry.lapseHands);
+    if (card) await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: card });
+  }
   await clearNamedFlag(actor, entry);
   if (entry?.applied) await reverseExpiryHp(actor, entry.applied);
   for (const id of grantedItemIdsOf(entry)) await removeGrantedItem(actor, id);
   if (entry?.removesActor) await removeActorAndTokens(actor);
   if (entry?.toxLapses) await stripTox(actor, entry.itemId);
 }
+
+/**
+ * The same undo for the THIRD path out, round-effects.js clearAll at combat
+ * end (Shared Pipelines chunk 6, 2026-10-05). It took granted Items only, so an
+ * entry's named flag outlived the fight - a Flatten for N rounds left its
+ * creature flat. Exported so all three paths share one undo.
+ */
+export const endEntryEffects = undoEntryEffects;
 
 /**
  * The poison is spent: take TOX off the Item's damage types and drop its
@@ -634,10 +741,15 @@ export function collectAll()
  * removed. The two readings look identical in the log and mean opposite
  * things — the same ordering point round-effects.js already makes.
  */
-export async function sweepExpired({ now = null, round = null } = {})
+export async function sweepExpired({ now = null, round = null, endOfRound = false } = {})
 {
   const t = now === null ? (game.time?.worldTime ?? 0) : now;
   const expired = [];
+  // Turn-Counted Round Duration: a holder that died or left the tracker before
+  // its count ran out takes no more turns, so its count ends with the round
+  // (agreed 2026-10-04). Only the round hook passes endOfRound.
+  const orphaned = (actor, entry) => endOfRound && entry?.turnCount && !holderLive(actor, game.combat);
+  const done = (actor, entry) => hasExpired(entry, { now: t, round }) || orphaned(actor, entry);
   for (const actor of game.actors)
   {
     const entries = entriesOf(actor);
@@ -645,7 +757,7 @@ export async function sweepExpired({ now = null, round = null } = {})
     const keep = [];
     for (const entry of entries)
     {
-      if (hasExpired(entry, { now: t, round })) expired.push({ actor, entry });
+      if (done(actor, entry)) expired.push({ actor, entry });
       else keep.push(entry);
     }
     if (keep.length !== entries.length)
@@ -659,7 +771,7 @@ export async function sweepExpired({ now = null, round = null } = {})
   for (const { actor, own } of tokenCopies())
   {
     const entries = entriesOf(actor);
-    const gone = entries.filter(e => own(e) && hasExpired(e, { now: t, round }));
+    const gone = entries.filter(e => own(e) && done(actor, e));
     if (!gone.length) continue;
     await setEntries(actor, entries.filter(e => !gone.includes(e)));
     for (const entry of gone)
@@ -668,6 +780,56 @@ export async function sweepExpired({ now = null, round = null } = {})
       await undoEntryEffects(actor, entry);
     }
   }
+  return expired;
+}
+
+/**
+ * Turn-Counted Round Duration: the turn order moved. The combatant whose turn
+ * ENDED takes one off each armed count it holds, and an emptied count ends
+ * its entry now, announced at once rather than on the next round card. The
+ * combatant whose turn STARTED arms its counts. Only forward moves count: a
+ * GM stepping back a turn undoes nothing (agreed 2026-10-04). Call from the
+ * single activeGM only.
+ */
+export async function onTurnAdvance(combat)
+{
+  const prev = combat?.previous, cur = combat?.current;
+  if (!prev || !cur || !prev.combatantId) return [];
+  const forward = cur.round > prev.round || (cur.round === prev.round && cur.turn > prev.turn);
+  if (!forward) return [];
+
+  const expired = [];
+  const step = async (combatantId, phase) =>
+  {
+    const actor = combat.combatants.get(combatantId)?.actor;
+    if (!actor) return;
+    // An unlinked token inherits its world actor's entries; only its own
+    // are its to count (the tokenCopies rule).
+    const inherited = actor.isToken
+      ? new Set(entriesOf(game.actors.get(actor.id)).map(e => e.id)) : new Set();
+    const entries = entriesOf(actor);
+    let changed = false;
+    const keep = [], gone = [];
+    for (const entry of entries)
+    {
+      if (!entry.turnCount || inherited.has(entry.id)) { keep.push(entry); continue; }
+      const turnCount = stepTurnCount(entry.turnCount, phase);
+      if (turnCount === entry.turnCount) { keep.push(entry); continue; }
+      changed = true;
+      const next = { ...entry, turnCount };
+      (turnCount.left <= 0 ? gone : keep).push(next);
+    }
+    if (!changed) return;
+    await setEntries(actor, keep);
+    for (const entry of gone)
+    {
+      expired.push({ actor, entry });
+      await undoEntryEffects(actor, entry);
+    }
+  };
+  await step(prev.combatantId, "end");
+  if (cur.combatantId) await step(cur.combatantId, "start");
+  await announceExpired(expired, game.time?.worldTime ?? 0);
   return expired;
 }
 
