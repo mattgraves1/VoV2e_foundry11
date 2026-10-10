@@ -23,4 +23,31 @@
     </div>
     {{/each}}
     {{/if}}{{/if}}
+    {{!-- A generated Exotica's suggestions from its four words (Exotica Generator Items, 2026-10-09):
+          each the sentence the builder would write, added whole with Add, then changed in the builder. --}}
+    {{#if isGM}}{{#if builtSuggestions.length}}
+    <h4>Suggestions</h4>
+    <p class="notes">Not from the book - ideas from its words, to start from. Click one to add it, then change anything, and give it a cost.</p>
+    {{#each builtSuggestions as |s|}}
+    <div class="flexrow gift-suggestion">
+        <span>{{s.summary}} <span class="notes">({{s.from}})</span></span>
+        <button type="button" class="effect-suggest" data-suggestion="{{s.index}}" style="flex: 0 0 5em;">Add</button>
+    </div>
+    {{/each}}
+    {{/if}}{{/if}}
+    {{!-- The Gift Effect Library (Gift Effect Library, RULED 2026-10-09): Matt's picks as sentences at the die
+          chosen when used, grouped, the Gift's own Quality first; Add writes one onto this Gift to change in the builder. --}}
+    {{#if isGM}}{{#if giftLibrary.length}}
+    <h4>Library</h4>
+    <p class="notes">Effects a Gift can carry, each priced the book's way: the die chosen when it is used, by the targets' Level for anything but damage and healing. Click Add, then change anything in the builder.</p>
+    {{#each giftLibrary as |g|}}
+    <h5 style="margin: 6px 0 2px;">{{g.label}}</h5>
+    {{#each g.entries as |e|}}
+    <div class="flexrow gift-suggestion library-entry{{#if e.matches}} library-match{{/if}}">
+        <span><b>{{e.name}}</b>{{#if e.matches}} <span class="notes">(this Gift's Quality)</span>{{/if}} - {{e.summary}} <span class="notes">{{e.note}}</span></span>
+        <button type="button" class="library-add" data-entry="{{e.index}}" style="flex: 0 0 5em;">Add</button>
+    </div>
+    {{/each}}
+    {{/each}}
+    {{/if}}{{/if}}
 </div>

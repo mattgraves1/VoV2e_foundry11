@@ -28,6 +28,7 @@ import { suppressesDeath } from "./fatality.js";
 import { wouldBeLethal } from "./watchdog.js";
 import { creatureFlagsOf } from "../item/creature-effects.js";
 
+import { bodyPassives } from "../effects/body.js";
 export const PROTECTOR_RULE_FLAG = "protector";
 export const PROTECTING_FLAG = "protecting";
 export const HELD_BLOW_FLAG = "heldBlow";
@@ -38,7 +39,9 @@ export function hasProtectorRule(actor)
   const items = actor?.items?.contents ?? actor?.items ?? [];
   // From the Item's sentence (Effect Engine: Creatures, chunk 2c-i - this read was
   // missed there behind the constant and moved in the proving pass, 2026-10-07).
-  return items.some(i => !!creatureFlagsOf(i)[PROTECTOR_RULE_FLAG]);
+  // Or the rule as a passive sentence on any Item the actor carries - a bestowed one for a
+  // span (Gift Effect Library chunk 4c, RULED 2026-10-09).
+  return items.some(i => !!creatureFlagsOf(i)[PROTECTOR_RULE_FLAG]) || bodyPassives(actor, { verb: "protector" }).length > 0;
 }
 
 /** What a protector records about the token it guards. */

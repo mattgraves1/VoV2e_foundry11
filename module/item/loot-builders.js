@@ -27,6 +27,7 @@ import * as chargenData from "../actor/chargen-data.js";
 import { d, gearItemData, KnaveCharacterCreator } from "../actor/chargen-app.js";
 import { rollWeapon } from "../actor/weapon-roller.js";
 import { ADVANCED_EXOTICA } from "../actor/advanced-exotica-data.js";
+import { ROLLTABLES } from "../actor/rolltable-data.js";
 import { spanFieldFrom } from "../time/declared-span.js";
 import { ADVANCED_IMPLANTS, ADVANCED_IMPLANT_SLOTS } from "../actor/advanced-implants-data.js";
 import { TRADE_GOODS } from "../actor/trade-goods-data.js";
@@ -36,6 +37,7 @@ import { THIRD_OF_A_SLOT } from "../actor/rest.js";
 import { qualityByRoll, qualityFlag, slotsWithQuality } from "./trade-good-quality.js";
 import { flavorIsMetal } from "./metal.js";
 import { exoticaArmourAv } from "../actor/exotica-effects-data.js";
+import { MUTATION_TABLE } from "../actor/mutation-data.js";
 
 /** A plain NdM or flat-integer formula. Every trade-goods formula is one. */
 export function rollFormula(formula)
@@ -59,10 +61,10 @@ export function stripWikilinks(text)
  * in the data rather than after creation so it survives landing on an actor
  * — see generate-weapon.js for why a name link and not an id.
  */
-export async function buildWeapon(quality, baseChoice = null, basicTag = null, advancedTag = null, exoticTag = null, forceKind = null)
+export async function buildWeapon(quality, baseChoice = null, basicTag = null, advancedTag = null, exoticTag = null, forceKind = null, faithChoice = null)
 {
   const { name, type, system, flags, baseNote, altForm } =
-    await rollWeapon(quality, baseChoice, basicTag, advancedTag, exoticTag, forceKind);
+    await rollWeapon(quality, baseChoice, basicTag, advancedTag, exoticTag, forceKind, faithChoice);
   const main = { name, type, system, flags };
   const out = [main];
   if(altForm)
@@ -157,6 +159,22 @@ export function buildDrug()
   }];
 }
 
+/**
+ * A rolled mutation (Generate Mutation): d100 on the Mutation table. Moved here
+ * 2026-10-08 so the Follow-Up Roll Button's "Induces Mutations" makes the same
+ * Item as the macro.
+ */
+export function buildMutation()
+{
+  const roll = d(100);
+  const entry = MUTATION_TABLE[roll - 1];
+  return [{
+    name: entry.name,
+    type: "mutation",
+    system: { slots: 0, roll, description: `<p><b>d100 roll:</b> ${roll}</p><p>${entry.effect}</p>` }
+  }];
+}
+
 /** A Source of Random Gift: quality and form each from a random column. */
 export function buildGift()
 {
@@ -171,6 +189,53 @@ export function buildGift()
       source: `${quality} / ${form}`,
       description: "<p>Random Gift — players and referee must collectively agree on the specific effect.</p>"
     }
+  }];
+}
+
+/**
+ * THE EXOTICA GENERATOR'S FOUR COLUMNS - foundry-system-index.csv "Exotica
+ * Generator Items", RULED 2026-10-09 (Matt). Read from the shipped RollTable's
+ * rows (rolltable-data.js, Treasure/Exotica Generator.md), one object per d100
+ * row, so the macro and the table can never disagree.
+ */
+export const EXOTICA_GENERATOR = (() =>
+{
+  const table = ROLLTABLES.find(t => t.name === "Exotica Generator");
+  const word = (text, k) => (new RegExp(`\\*\\*${k}:\\*\\* ([^\\n]+)`).exec(text)?.[1] ?? "").trim();
+  return (table?.results ?? []).map(r => ({ n: r.range[0], material: word(r.text, "Material"), form: word(r.text, "Form"),
+                                              theme: word(r.text, "Theme"), action: word(r.text, "Action") }));
+})();
+
+/**
+ * A wholly new Exotica from the generator: d100 on each column, independently.
+ * RULED 2026-10-09 (Matt): named Material + Form ("Coral Anchor"), the Theme
+ * and the Action in the description with all four words listed; one slot; NO
+ * usage die - unlimited until the GM gives it one through the builder, which
+ * is also where its cost lives; worth 1 XP by its type, as every Exotica is;
+ * made only by the Generate Exotica macro, so a GM adds curated things where
+ * and when they want. `source` keeps the four words for the Effects tab's
+ * suggestions (exotica-generator-suggestions.js), as a Gift's Quality / Form.
+ */
+export function buildGeneratedExotica()
+{
+  const pick = key => EXOTICA_GENERATOR[d(100) - 1]?.[key] ?? "";
+  return generatedExoticaData({ material: pick("material"), form: pick("form"), theme: pick("theme"), action: pick("action") });
+}
+
+export function generatedExoticaData({ material, form, theme, action })
+{
+  const article = /^[aeiou]/i.test(material) ? "An" : "A";
+  return [{
+    name: `${material} ${form}`,
+    type: "exotica",
+    system: {
+      slots: 1,
+      source: `${material} / ${form} / ${theme} / ${action}`,
+      description: `<p>${article} ${material.toLowerCase()} ${form.toLowerCase()} of ${theme.toLowerCase()}, for ${action.toLowerCase()}.</p>`
+        + `<p><b>Material:</b> ${material} &middot; <b>Form:</b> ${form} &middot; <b>Theme:</b> ${theme} &middot; <b>Action:</b> ${action}</p>`
+        + `<p>From the Exotica Generator. What it does is the table's to agree: the Effects tab offers suggestions from its words, and the Referee sets its cost there.</p>`
+    },
+    flags: { vaarn: { exotica: true, generated: true } }
   }];
 }
 

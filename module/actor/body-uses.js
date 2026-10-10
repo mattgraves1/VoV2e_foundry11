@@ -61,6 +61,19 @@ for (const handler of ["stateful", "grant-ability", "clone", "bifurcate", "set-h
 // A Bloomboon's growth (Consumables chunk 3b, 2026-10-06): the sentence's spec to
 // the sheet's growth and retainer code, as the table row used to be.
 registerUseHandler("grow", ({ actor, item, params, sentence }) => actor.sheet._bloomboonGrow(item, params, sentence));
+// A jinx on each target (Gift Effect Library chunk 4a, 2026-10-09): the Quantum
+// Daemon's curse, started by the curse path on whoever is targeted.
+registerUseHandler("jinx", async ({ actor, item, targets }) =>
+{
+  const { startCurse } = await import("../time/curse.js");
+  const list = (targets ?? []).map(t => t?.actor ?? t).filter(Boolean);
+  if (!list.length) { ui.notifications.warn(`${item.name}: no target is selected to jinx.`); return { keep: true }; }
+  for (const t of list)
+  {
+    await startCurse(t, "jinxed");
+    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content: `<b>${item.name}</b> jinxes <b>${t.name}</b>.` });
+  }
+});
 registerUseHandler("permanent-ability", ({ actor, item, params, event, sentence }) => item.type === "item"
   ? actor.sheet._elixirOneOff("permanent-ability", item, params, sentence)
   : actor.sheet._exoticaOneOff("permanent-ability", item, params, event));

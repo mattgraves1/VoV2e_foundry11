@@ -23,6 +23,11 @@
  *   a location page    "Make an NPC here" runs Generate NPC, "Other..." the other
  *                      Actor makers and the character creator; the next Actor
  *                      the GM makes is linked under "People here" (step D)
+ *   a Settlement page  "Build this settlement" makes its whole settlement - journal
+ *                      and map - from the overview on the page (settlement-controls.js,
+ *                      Settlement Creation chunk 7, 2026-10-08)
+ *   Follow-up rolls    a button for each result that names something the module
+ *                      makes (follow-up.js, Follow-Up Roll Button row, 2026-10-08)
  *   Spawn buttons      "Spawn one ..." for each Bestiary creature a page's
  *                      details name (its regionSpawns flag), into Generated
  *                      Creatures, as vault rooms do; its sheet's Roll Encounter
@@ -31,6 +36,8 @@
 
 import { rollColumns, detailsHtml } from "./region-details.js";
 import { spawnsOf } from "./region-journal.js";
+import { followUpBox } from "./follow-up.js";
+import { settlementBuildBox } from "../settlement/settlement-controls.js";
 
 // Redraw a page where the GM sees it: inside its open journal, or its own sheet.
 const rerender = page => page.parent?.sheet?.rendered ? page.parent.sheet.render(false) : page.sheet?.render(false);
@@ -280,7 +287,8 @@ export async function linkActor(page, actor, label)
 
 function npcBox(page)
 {
-  if(!page.getFlag("vaarn", "regionLocation")) return null;
+  // a settlement's location pages too (Settlement Creation chunk 2, 2026-10-08: Make an NPC here on each)
+  if(!page.getFlag("vaarn", "regionLocation") && !page.getFlag("vaarn", "settlementLocation")) return null;
   const box = $(`<div class="vaarn-trap-card vaarn-vault-controls"></div>`);
   if(waiting?.page === page.uuid)
   {
@@ -328,7 +336,7 @@ export function registerRegionControls()
   {
     if(!game.user.isGM || sheet.isEditable) return;
     const page = sheet.document;
-    if(!page.parent?.getFlag("vaarn", "region")) return;
+    if(!page.parent?.getFlag("vaarn", "region") && !page.parent?.getFlag("vaarn", "settlement")) return;
     routeEyes(page, html);
     const content = html.filter(".journal-page-content").add(html.find(".journal-page-content"));
     const target = content.length ? content : html.last();
@@ -336,7 +344,7 @@ export function registerRegionControls()
     // the GM is looking (Matt, 2026-10-03: at the bottom they appeared below the visible page)
     const sec = sectionBox(page);
     if(sec) target.prepend(sec);
-    for(const box of [vaultBox(page), routeBox(page), spawnBox(page), npcBox(page)].filter(Boolean)) target.append(box);
+    for(const box of [vaultBox(page), settlementBuildBox(page), routeBox(page), spawnBox(page), followUpBox(page), npcBox(page)].filter(Boolean)) target.append(box);
   });
   // A section's RollTable rolled straight from Foundry's own table window (Matt, 2026-10-04: some GMs roll tables
   // directly and would be frustrated without it): a creature result's card gets Spawn one, GM only, as page rolls do.

@@ -397,7 +397,12 @@ export function itemFlagSentencesFrom(flags, text = "")
 export const ACTOR_STATE_TRIGGERS = {
   immuneTo: "passive",            // a split-born Glittersludge's immunity to the type that split it (bestiary-spawn.js)
   withersAtDayStart: "each-day",  // a spawn that withers at the next dawn (bestiary-spawn.js)
-  autoHitAttacks: "attack-roll"   // an actor's attacks auto-hit while the state holds (actor-sheet.js)
+  autoHitAttacks: "attack-roll",  // an actor's attacks auto-hit while the state holds (actor-sheet.js)
+  // GM Effect Builder: Widening chunk 3c (RULED 2026-10-09): an actor's attacks hit as though
+  // the target were unarmoured while the state holds (actor-sheet.js _effectiveTargetAV).
+  ignoreArmourAttacks: "attack-roll",
+  // Gift Effect Library chunk 4c (RULED 2026-10-09): the next attack is a natural 20, spent by it.
+  nextAttackCrit: "attack-roll"
 };
 /** Actor states that are lists: one sentence per element. */
 export const ACTOR_STATE_LIST_FIELDS = new Set(["immuneTo"]);
@@ -421,7 +426,10 @@ export const ACTOR_STATE_NOT_TRANSLATED = {
 export const ACTOR_STATE_VERBS = {
   immuneTo:          { do: v => ({ verb: "immune", to: v }) },
   withersAtDayStart: { do: () => ({ verb: "special", handler: "withers" }) },
-  autoHitAttacks:    { do: () => ({ verb: "auto-hit" }), if: v => [{ gate: "attack-kind", is: v }] }
+  autoHitAttacks:    { do: () => ({ verb: "auto-hit" }), if: v => [{ gate: "attack-kind", is: v }] },
+  // "any" is every attack: no kind gate (Widening chunk 3c).
+  ignoreArmourAttacks: { do: () => ({ verb: "ignore-armour" }), if: v => v && v !== "any" ? [{ gate: "attack-kind", is: v }] : null },
+  nextAttackCrit: { do: () => ({ verb: "auto-hit", next: true }) }
 };
 
 /** An actor's play-written states as sentences. */

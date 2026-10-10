@@ -70,14 +70,16 @@ export async function rollReaction(npc, speaker, { communicate = true, faction =
   // and Ancestry Rules chunk 2b, ruling B). [{ name, s }]
   const sources = [];
   for (const item of speaker?.items ?? [])
-    if (!isSuppressed(item)) for (const s of reactionSentences(item)) sources.push({ name: item.name, s });
+    if (!isSuppressed(item)) for (const s of reactionSentences(item)) sources.push({ name: item.name, s, faith: item.flags?.vaarn?.faith?.name ?? null });
   for (const s of ancestryTextSentences(speaker))
     if ((typeof s.when === "string" ? s.when : s.when?.trigger) === "on-reaction-roll") sources.push({ name: s.tag, s });
-  for (const { name, s } of sources)
+  for (const { name, s, faith } of sources)
   {
     // The gate asks about THIS creature and names the weapon (`is`), so two
     // groups or two weapons never share an answer.
-    const gates = (s.if ?? []).map(g => g.gate === "followers" ? { ...g, is: name } : g);
+    // The weapon's faith named too since Faith-Named Religious Weapon Tags (2026-10-09):
+    // "... blessed or cursed Sacred Mace (the Spider of Mutants)?"
+    const gates = (s.if ?? []).map(g => g.gate === "followers" ? { ...g, is: faith ? `${name} (${faith})` : name } : g);
     const r = await settleGates(gates, { actor: speaker, target: npc, title: `${npc.name}: reaction` });
     lines.push(...r.lines);
     if (!r.pass) continue;

@@ -22,10 +22,14 @@ import { sentencesOf, bookCountOf, hasTranslator, EFFECTS_ADDED_FLAG } from "../
 import { validate, EFFECTS_FLAG } from "../effects/sentence.js";
 import { itemStateDefault } from "../effects/vocabulary.js";
 import {
-  recipesFor, recipeById, whensFor, gatesFor, assemble, disassemble, summarise, stateChoices,
-  TARGET_CHOICES, DURATION_CHOICES, COST_DIE_CHOICES, SECTION_CHOICES, POLARITY_CHOICES,
+  recipesFor, recipeById, whensFor, gatesFor, assemble, disassemble, summarise, stateChoices, costKindChoices, durationChoices,
+  TARGET_CHOICES, costDieChoices, SECTION_CHOICES, POLARITY_CHOICES,
   CREATURE_TYPE_CHOICES, STATE_GATE_CHOICES
 } from "../effects/builder-recipes.js";
+import { perDaySizeOf } from "../effects/sentence.js";
+import { PRICE_BY_CHOICES } from "./gift-effects.js";
+import { exoticaSuggestionsFor } from "./exotica-generator-suggestions.js";
+import { giftLibraryEntry } from "./gift-library.js";
 
 const SCOPE = "vaarn";
 
@@ -81,6 +85,12 @@ function ownIndex(item, row)
   return i >= 0 ? i : null;
 }
 
+/** Append a sentence the builder could have written - a suggestion the GM clicked (Exotica Generator Items, 2026-10-09). */
+export async function addSentence(item, sentence)
+{
+  return saveSentence(item, null, sentence);
+}
+
 export async function removeEffectRow(item, row)
 {
   const i = ownIndex(item, row);
@@ -98,13 +108,18 @@ async function saveSentence(item, row, sentence, itemFlags = {})
   else list[i] = sentence;
   const extra = {};
   for (const [k, v] of Object.entries(itemFlags)) extra[`flags.${SCOPE}.${k}`] = v;
+  // A per-day cost written on an Item already on an actor (Widening chunk 1):
+  // its pool arrives full, as item.js _preCreate fills a new Item's - an empty
+  // pool would refuse the use until the next Long Rest.
+  const size = perDaySizeOf(sentence, item.parent?.system?.level?.value);
+  if (size !== null && Number(item.system?.usesRemaining ?? 0) <= 0) extra["system.usesRemaining"] = size;
   return writeList(item, list, extra);
 }
 
 /* ---------------- The dialog ---------------- */
 
-const blankCommon = itemType => ({ gates: [], target: "", n: 2, duration: "", amount: 1, costDie: "", state: itemStateDefault(itemType),
-                                   label: "", text: "", section: "", polarity: "" });
+const blankCommon = itemType => ({ gates: [], target: "", n: 2, duration: "", amount: 1, escapeBy: "", cost: "", costDie: "1d6", costN: 1,
+                                   state: itemStateDefault(itemType), label: "", text: "", section: "", polarity: "" });
 
 function defaultsOf(recipe, item)
 {
@@ -174,9 +189,16 @@ export class EffectBuilder extends FormApplication
                  creatureChoices: sel(CREATURE_TYPE_CHOICES, g.value), stateChoices: sel(STATE_GATE_CHOICES, g.value) };
       }),
       hasTarget: has("target"), targets: sel(TARGET_CHOICES, c.target), isUpToN: c.target === "up-to-n", n: c.n,
-      hasDuration: has("duration") || has("duration-optional"), durationOptional: has("duration-optional"),
-      durations: sel(DURATION_CHOICES, c.duration), durationAmount: !!c.duration && c.duration !== "until-referee", amount: c.amount,
-      hasCost: has("cost"), costs: sel(COST_DIE_CHOICES, c.costDie),
+      hasDuration: has("duration") || has("duration-optional") || has("duration-until-referee"),
+      // A blank duration means a chat line, or - for a stat change (Widening chunk 3b) - until the Referee ends it.
+      durationBlank: has("duration-optional") ? "Not at all (a chat line)" : has("duration-until-referee") ? "Until the Referee ends it (the default)" : null,
+      durations: sel(durationChoices(recipe), c.duration),
+      durationAmount: !!c.duration && !["until-referee", "until-combat-ends", "until-saved"].includes(c.duration), amount: c.amount,
+      durationSaved: c.duration === "until-saved", escapeBy: c.escapeBy,
+      hasCost: has("cost"), costKinds: sel(costKindChoices(type), c.cost), costIsHp: c.cost === "hp", costIsPool: c.cost === "per-day",
+      costDice: sel(costDieChoices(type), c.costDie), costN: c.costN,
+      // A Gift's chosen die may be priced by a table (Library chunk 5).
+      costByChoices: c.cost === "hp" && c.costDie === "chosen" ? sel(PRICE_BY_CHOICES, c.costBy) : null,
       hasState: has("state"), states: sel(stateChoices(type), c.state),
       hasLabel: has("label") || has("tab"), label: c.label,
       hasTab: has("tab"), sections: sel(SECTION_CHOICES, c.section || "Always Active"), polarities: sel(POLARITY_CHOICES, c.polarity || "Benefit"),
@@ -217,7 +239,7 @@ export class EffectBuilder extends FormApplication
       this.state.values[f.key] = f.kind === "check" ? !!raw : (raw ?? this.state.values[f.key]);
     }
     const c = this.state.common;
-    for (const k of ["target", "n", "duration", "amount", "costDie", "state", "label", "text", "section", "polarity"])
+    for (const k of ["target", "n", "duration", "amount", "escapeBy", "cost", "costDie", "costN", "costBy", "state", "label", "text", "section", "polarity"])
       if (data[`c.${k}`] !== undefined) c[k] = data[`c.${k}`];
     c.gates = c.gates.map((g, i) => ({
       gate: data[`g.${i}.gate`] ?? g.gate, value: data[`g.${i}.value`] ?? "", not: !!data[`g.${i}.not`],
@@ -247,6 +269,20 @@ export function bindEffectsTab(sheet, html)
   if (!game.user.isGM) return;
   const item = sheet.item;
   html.find(".effect-add").click(ev => { ev.preventDefault(); new EffectBuilder(item, null).render(true); });
+  // A generated Exotica's suggestion (exotica-generator-suggestions.js): the sentence as written, added whole.
+  html.find(".effect-suggest").click(ev =>
+  {
+    ev.preventDefault();
+    const s = exoticaSuggestionsFor(item)[Number(ev.currentTarget.dataset.suggestion)];
+    if (s) addSentence(item, s.sentence);
+  });
+  // A Gift Effect Library entry (gift-library.js): the sentence as written, at the die chosen when used.
+  html.find(".library-add").click(ev =>
+  {
+    ev.preventDefault();
+    const e = giftLibraryEntry(Number(ev.currentTarget.dataset.entry));
+    if (e?.sentence) addSentence(item, e.sentence);
+  });
   html.find(".effect-edit").click(ev => { ev.preventDefault(); new EffectBuilder(item, Number(ev.currentTarget.closest("[data-row]").dataset.row)).render(true); });
   html.find(".effect-delete").click(ev => { ev.preventDefault(); removeEffectRow(item, Number(ev.currentTarget.closest("[data-row]").dataset.row)); });
 }

@@ -1,0 +1,7 @@
+{{!-- Broken Item State (RULED 2026-10-06, Matt): any Item can be marked broken - it
+      cannot be equipped and refuses every use until the Referee clears this. Weapons
+      draw their own checkbox beside Hands. --}}
+<div class="resource broken-block">
+  <label class="resource-label" title="Broken: cannot be equipped and refuses every use until fixed. The Referee clears it.">Broken</label>
+  <input type="checkbox" name="system.broken" {{checked data.system.broken}}/>
+</div>

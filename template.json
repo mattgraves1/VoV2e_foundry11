@@ -169,15 +169,12 @@
         "suppressedBy": [],
       "attuned": false,
       "declaredSpan": null,
-      "metal": false
+      "metal": false,
+      "broken": false
       },
       "quality":
       {
         "quality": { "value":1, "min":0, "max":1}
-      },
-      "broken":
-      {
-        "broken": false
       },
       "weapon":
       {
@@ -201,11 +198,11 @@
     },
     "weaponMelee":
     {
-      "templates":["base", "broken", "weapon", "equippable"]
+      "templates":["base", "weapon", "equippable"]
     },
     "weaponRanged":
     {
-      "templates":["base", "broken", "weapon", "usageDie", "equippable"]
+      "templates":["base", "weapon", "usageDie", "equippable"]
     },
     "armor":
     {
@@ -295,7 +292,8 @@
       "rule": "",
       "ancestry": "",
       "variant": "",
-      "roll": 0
+      "roll": 0,
+      "usesRemaining": null
     }
   }
 }

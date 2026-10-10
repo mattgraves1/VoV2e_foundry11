@@ -22,6 +22,7 @@
 import { getWound } from "../actor/wounds-data.js";
 import { woundEffectsOf, woundTableKind } from "../item/wound-affliction-effects.js";
 import { itemAtSlot } from "../actor/item-slots.js";
+import { CARRIED_TYPES } from "../combat/corrosion-card.js";
 import { entriesOf } from "../time/effect-board.js";
 import { rollAbilityBonus } from "../actor/chargen-app.js";
 import { resolveDamageInteractions, damageOverride, hasAttackProperty, attackPropertiesOrKinetic, FLAMMABLE_BURN, isFlammable,
@@ -1001,8 +1002,14 @@ export async function applyWound(sheet, actor, newHP, depth = 0, { setHP = true 
     const r = new Roll(fx.damagedItem);
     r.evaluate({async: false});
     const hit = itemAtSlot(actor.items, r.total);
-    msgLines.push(hit ? `Slot ${r.total} (${fx.damagedItem}): <b>${hit.name}</b> is damaged and unusable until fixed.`
-                      : `Slot ${r.total} (${fx.damagedItem}): an empty slot — nothing is damaged.`);
+    // Broken Item State (RULED 2026-10-06 and 2026-10-09, Matt): the card marks
+    // the item broken itself - carried gear only; a wound or a mutation in the
+    // slot is named, and nothing is damaged.
+    const gear = hit && CARRIED_TYPES.includes(hit.type);
+    if(gear) await hit.update({ "system.broken": true });
+    msgLines.push(gear ? `Slot ${r.total} (${fx.damagedItem}): <b>${hit.name}</b> is damaged — <b>broken</b>, and unusable until fixed.`
+                : hit ? `Slot ${r.total} (${fx.damagedItem}): <b>${hit.name}</b>, which is not gear — nothing is damaged.`
+                : `Slot ${r.total} (${fx.damagedItem}): an empty slot — nothing is damaged.`);
   }
 
   // Personality Nexus Scrambled (chunk 2b, RULED 2026-10-06, Matt): new base

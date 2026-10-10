@@ -16,8 +16,15 @@
                 <label>Variant</label>
                 <input type="text" name="system.variant" value="{{data.system.variant}}" placeholder="Toxic Spores"/>
             </div>
+            {{#if (hasAncestryUsePool item)}}
+            <div class="form-group">
+                <label>Uses Remaining</label>
+                <input type="number" name="system.usesRemaining" value="{{usesLeft item}}"/>
+            </div>
+            {{/if}}
         </div>
         {{> "systems/vaarn/templates/item/parts/usage-die.html"}}
+        {{> "systems/vaarn/templates/item/parts/broken.html"}}
     </header>
 
     {{!-- Sheet Tab Navigation --}}

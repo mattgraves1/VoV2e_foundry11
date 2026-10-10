@@ -1,63 +1,30 @@
 /**
  * Vaarn: Generate Settlement
  *
- * GM-only tool: rolls a settlement's core flavor (Water Source/
- * Complication, Size, Majority/Minority Population — each independently —
- * Location/Houses/Industry, Government, Dominant Faith, Praises/Despises/
- * Lacks, In Fashion/Festival/Entertainment), then a Major Asset, 4 Major
- * Buildings, and a Landmark, per Settlements.md's own "Mapping a
- * Settlement" procedure (step 3: "Take a d20 and 4d6... the d20
- * represents the settlement's major asset, the d6s represent notable
- * buildings"; step 4: "Generate a local landmark") as far as it goes
- * without physical mapping — the Landmark reuses The Desert/Landmark.md's
- * table since vaults/settlements/deserts all draw from the same landmark
- * pool (confirmed from the source tool's own comment, not guessed). Ported
- * from npc-generator.html's renderSettlementOverviewContent.
+ * GM-only tool: makes a settlement by the book's Mapping a Settlement procedure (Settlements, JADE IBIS) and
+ * writes it as a journal in the "Settlements" folder - an Overview page and a page per marked location (the
+ * seat of power, water source, major assets, the major problem, notable buildings and landmark), each location
+ * with Make an NPC here. Settlement Creation, foundry-system-index.csv; the generator is
+ * module/settlement/settlement-generator.js and the journal module/settlement/settlement-journal.js.
  *
- * Found late during work-queue.txt item 1 Phase 3 — mis-filed originally
- * as needing Phase 3's Bestiary-spawn helper; it doesn't, it's pure
- * RollTable composition (module/actor/settlement-overview-data.js's
- * groups, rolled via module/actor/composite-roller.js's rollSingleTable,
- * plus Settlement Assets/Building Types read straight from Phase 2's
- * already-built rolltable-data.js via module/actor/rolltable-picker.js —
- * no Actor involved at all). Same correction as macros/generate-gift.js
- * and macros/generate-room-contents.js.
+ * REPLACED 2026-10-08, and this CHANGED what the macro does: until then it posted a GM-whispered chat card of
+ * the overview, a major asset, four buildings and a landmark. RULED 2026-10-03 (Matt): the macro keeps its name
+ * and runs Settlement Creation instead, so a GM who already uses it finds it still works. The settings are
+ * Matt's ruled defaults. Since chunk 5 (2026-10-08) it opens the preview window first (settlement-window.js), where
+ * the GM changes them, drags places and renames the town, then presses Create settlement.
+ * Since chunk 3 (2026-10-08) it also makes the map Scene in Settlement Scenes (settlement-scene.js): the town's
+ * layout painted, every place a hidden icon and label for the GM to reveal, and a GM pin per place.
  *
- * Posts a chat message (narrative content, not a physical object or an
- * Actor — same category as macros/generate-narrative.js's Phase 2
- * generators). No dialog — nothing to configure, so this macro runs
- * immediately, same as Generate Starting Gear/Crucible/Drug/Armour/Gift.
+ * A settlement's name never repeats one already in the world's Settlements (by what the name is built on), and
+ * a founder who already founded one is linked both ways.
  *
- * WHISPERED TO THE GM SINCE 2026-09-19, and this CHANGED existing behaviour:
- * the card used to be public despite the "GM-only tool" line above, which
- * nobody had noticed because nothing on it was secret. Local Value
- * Fluctuations made it secret — a settlement's prized and despised goods are
- * trade intelligence, and Matt ruled the block belongs on this card rather
- * than in a second message, so the card became a whisper. Everything already
- * on it (Size, Population, Industry, Landmark and the rest) is GM-only as a
- * consequence. That is the intended reading: this is a Referee's prep tool,
- * and the settlement is revealed by play rather than by a chat card.
- *
- * Ships in the Vaarn Macros compendium: import it (Import Entry) or drag it
- * to the hotbar. Run it to roll and post the result.
+ * Ships in the Vaarn Macros compendium: import it (Import Entry) or drag it to the hotbar.
  */
 
 async function generateSettlement()
 {
-  const { SETTLEMENT_GROUPS } = await import("/systems/vaarn/module/actor/settlement-overview-data.js");
-  const { rollSingleTable } = await import("/systems/vaarn/module/actor/composite-roller.js");
-  const { pickRandomResultHtml } = await import("/systems/vaarn/module/actor/rolltable-picker.js");
-  const { fluctuationHtml } = await import("/systems/vaarn/module/actor/settlement-fluctuation.js");
-
-  const { html: coreHtml } = rollSingleTable({ groups: SETTLEMENT_GROUPS });
-
-  const assetHtml = await pickRandomResultHtml("Settlement Assets");
-  const buildingLines = [];
-  for(let i = 0; i < 4; i++) buildingLines.push(`<p><b>Building ${i + 1}:</b> ${await pickRandomResultHtml("Building Types")}</p>`);
-  const landmarkHtml = await pickRandomResultHtml("Landmark Table (d100)");
-
-  const content = `<h3>Generate Settlement</h3>${coreHtml}<hr><p><b>Major Asset:</b> ${assetHtml}</p>${buildingLines.join("")}<p><b>Landmark:</b> ${landmarkHtml}</p><hr>${fluctuationHtml()}`;
-  ChatMessage.create({ user: game.user._id, content, whisper: ChatMessage.getWhisperRecipients("GM") });
+  const { openSettlementWindow } = await import("/systems/vaarn/module/settlement/settlement-window.js");
+  return openSettlementWindow();
 }
 
 generateSettlement();

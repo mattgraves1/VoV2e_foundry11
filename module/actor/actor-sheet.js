@@ -37,8 +37,9 @@ import { ANCESTRY_RULE_ITEMS, ANCESTRY_KILL_REACTIONS } from "./ancestry-rules-d
 import { saveSentence } from "./bestiary-build.js";
 import { postCompelledSave, postSaveCard, postSaveCardsToTargets, postToxSave, postToxSaves, toxSaveApplies } from "../combat/compelled-save.js";
 import { useFieldGenerator, healTargets, applyHeal } from "./healing-field.js";
-import { levelOf, costDieForLevels, OTHER_USE } from "../item/gift-effects.js";
-import { useSentences, sentenceLabel, optionsOf } from "../effects/interpret.js";
+import { levelOf, costDieForLevels, OTHER_USE, priceTableOf } from "../item/gift-effects.js";
+import { useSentences, sentenceLabel, optionsOf, usesCost } from "../effects/interpret.js";
+import { normalise as normaliseSentence } from "../effects/sentence.js";
 import { runUse, activePassives } from "../effects/interpreter.js";
 import { builtReminders, effectUses, askedAutoHitLine } from "../effects/item-readers.js";
 import { bodyForbids, helmRefusal, bodySentences, attackKindHolds, bodyTabReminders } from "../effects/body.js";
@@ -48,8 +49,8 @@ import { statOf, usageDieOf, armourSlotOf } from "../effects/item-stats.js";
 import { BITE_WORDS } from "../item/attack-properties.js";
 import { hitArmourLoss, hitTargetAv, valueReachesSentences, toHitAbility, damageAbilityBonus, ignoresArmour, reflectsMisses,
          naturalRollSentences, itemForbids, autoHitSentences, attackForbids, equipForbids, drawSentences, tabReminders,
-         hitReminders, reloadOf } from "../item/weapon-tags.js";
-import { healsOnKill } from "../effects/weapon-heals.js";
+         hitReminders, reloadOf, toHitOffers, bodyReflects } from "../item/weapon-tags.js";
+import { healsOnKill, hitHealSourceOf, killHealSourceOf } from "../effects/weapon-heals.js";
 import { openReactionDialog } from "./reaction-roll.js";
 import { computeGate } from "../effects/gates.js";
 import { isTargetGate } from "../effects/interpret.js";
@@ -111,6 +112,7 @@ import { needsAttunement, needsAttunementToUse, refusalFor, startAttunement } fr
 import { antidoteDieOf, antidoteOutcome, applyAntidote } from "../item/antidote.js";
 import { ingestionRefusal } from "../item/ingestion.js";
 import { isSuppressed, suppressorsOf } from "../item/suppression.js";
+import { isBroken, brokenLine } from "../item/broken.js";
 import { resolveSave, SAVE_TARGET } from "../combat/saves.js";
 import { hiddenFrom, markUnidentified, appraise, openIdentifySave, trackItemUse } from "../item/identification.js";
 import { NO_GIFTS, afflictionByKey } from "./affliction-data.js";
@@ -147,6 +149,16 @@ import { graftHostOf, splitForHost } from "./grafted-arm.js";
 import { creatureAttackOf, creatureFlagsOf, roundWordingOf, creatureActorFlagsOf, namedWoundEffectsOf } from "../item/creature-effects.js";
 
 /**
+ * Every use control a broken Item refuses (Broken Item State, RULED 2026-10-06,
+ * Matt: every one). The attack and damage icons are not here: the attack path
+ * already asks _itemIsBroken, and a broken weapon is unequipped.
+ */
+const BROKEN_GATED_CONTROLS = [".gift-use", ".effect-use", ".usable-use", ".codex-read", ".ancestry-use",
+  ".usage-die-roll", ".weapon-reload", ".exotica-charge-use", ".exotica-use", ".sealed-implant-install",
+  ".mutation-use", ".save-gated-use", ".figment-target-save", ".implant-use", ".generic-item-use",
+  ".consumable-use", ".item-light-toggle", ".item-activity-start"].join(", ");
+
+/**
  * Extend the basic ActorSheet with some very simple modifications
  * @extends {ActorSheet}
  */
@@ -155,6 +167,8 @@ export class KnaveActorSheet extends ActorSheet
 
   #_hitTargets = new Set();
   #_criticalWeapons = new Set();
+  // This attack is an Unerring strike (chunk 4c): set by _checkWeaponCrit, read by _checkToHitTargets.
+  #_unerring = false;
 
   /** @override */
   static get defaultOptions()
@@ -621,6 +635,22 @@ export class KnaveActorSheet extends ActorSheet
     // Inherited by the npc and vehicle sheets.
     trackItemUse(html[0], this.actor);
 
+    // Broken Item State (RULED 2026-10-06, Matt): EVERY use control refuses a
+    // broken Item. One capture-phase gate ahead of every binding below, so a
+    // control added later is covered by adding its class here, not by
+    // remembering a check in its handler. runUse refuses too, for uses that do
+    // not come from this sheet. Inherited by the npc and vehicle sheets.
+    html[0].addEventListener("click", ev =>
+    {
+      const control = ev.target.closest?.(BROKEN_GATED_CONTROLS);
+      if(!control) return;
+      const item = this.actor.items.get($(control).parents(".item").data("itemId"));
+      if(!item || !isBroken(item)) return;
+      ev.stopImmediatePropagation();
+      ev.preventDefault();
+      this._itemIsBroken(item);
+    }, true);
+
     // Encounter Composition from ENC (RULED 2026-09-27). Bound ABOVE the
     // editable gate on purpose: creatures live in the Bestiary compendium,
     // whose sheets open read-only, and that is where the GM rolls from. It
@@ -1006,6 +1036,14 @@ export class KnaveActorSheet extends ActorSheet
     // code-enforced (Matt's ruling) — this button just does the arithmetic
     // when they decide it's warranted.
     html.find('.mutation-refresh').click(ev =>
+    {
+      const li = $(ev.currentTarget).parents(".item");
+      const item = this.actor.items.get(li.data("itemId"));
+      this._onMutationRefresh(item);
+    });
+
+    // The same for a once-a-day Bloomboon (Bloomboon Daily Use, 2026-10-09).
+    html.find('.ancestry-refresh').click(ev =>
     {
       const li = $(ev.currentTarget).parents(".item");
       const item = this.actor.items.get(li.data("itemId"));
@@ -1482,10 +1520,35 @@ export class KnaveActorSheet extends ActorSheet
    */
   _toHitAbilityKey(item)
   {
+    return this._toHitChoice(item).key;
+  }
+
+  /**
+   * Which ability this attack rolls with, and why - GM Effect Builder:
+   * Widening chunk 2 (RULED 2026-10-09, Matt). A to-hit ability on the weapon
+   * says what the attack IS (Psionic's PSY): it replaces the default and
+   * ignores the body. One on a worn or carried Item is an OFFER: the attack
+   * rolls with the highest bonus among the weapon's default and every offer,
+   * computed now, the card naming the source. No prompt (honor system).
+   */
+  _toHitChoice(item)
+  {
     // A to-hit ability from the weapon's sentences (Psionic's PSY), Weapon Tags chunk 4.
     const own = toHitAbility(item);
-    if(own) return own;
-    return item.type === "weaponRanged" ? "dex" : "str";
+    if(own) return { key: own, note: null };
+    const fallback = item.type === "weaponRanged" ? "dex" : "str";
+    const bonus = k => Number(this.actor.system.abilities?.[k]?.effective ?? 0);
+    let best = { key: fallback, source: null };
+    for(const o of toHitOffers(item))
+      if(bonus(o.ability) > bonus(best.key)) best = { key: o.ability, source: o.source };
+    return { key: best.key, note: best.source ? `<b>${best.source}</b> — rolls to hit with ${best.key.toUpperCase()} (applied).` : null };
+  }
+
+  /** The chat note naming a body Item's to-hit ability the attack took. */
+  _toHitNotes(item)
+  {
+    const n = this._toHitChoice(item).note;
+    return n ? [n] : [];
   }
 
   _onAbility_Clicked(ability, event, forceDis = false, forceAdv = false)
@@ -1851,7 +1914,7 @@ export class KnaveActorSheet extends ActorSheet
 
           this._checkToHitTargets(roll, item, asked);
           this._checkTooHotToHold(item);
-          this._postRollNotes(this.actor, [...advVs, ...this._bodyAttackNotes(asked), ...tDis.notes, ...this._attackNotes(), ...this._tagNotes(item, TO_HIT_NOTES), ...this._stormNotes(item), ...this._followUpNotes(item)]);
+          this._postRollNotes(this.actor, [...advVs, ...this._bodyAttackNotes(asked), ...this._toHitNotes(item), ...this._ignoreArmourNotes(item), ...tDis.notes, ...this._attackNotes(), ...this._tagNotes(item, TO_HIT_NOTES), ...this._stormNotes(item), ...this._followUpNotes(item)]);
           // A condition the weapon inflicts - a creature attack's declared
           // effect (2026-09-16). A PC weapon's Entangling / Blinding tag no
           // longer posts here: since 2026-09-24 its save card follows each HIT,
@@ -1923,12 +1986,11 @@ export class KnaveActorSheet extends ActorSheet
       // a matching implant), so this sums rather than replacing.
       let psionicBonus = null;
       // An ability added to damage, from the sentences (Psionic's EGO), Weapon Tags chunk 4.
-      const abilityBonus = damageAbilityBonus(item)[0];
-      if(abilityBonus)
-      {
-        const egoAmount = Number(this.actor.system.abilities[abilityBonus.ability]?.effective || 0);
-        if(egoAmount) psionicBonus = { amount: egoAmount, name: abilityBonus.tag };
-      }
+      // Every one - the weapon's and the body's (Widening chunk 2) - summed and named.
+      const abilityBonuses = damageAbilityBonus(item)
+        .map(b => ({ amount: Number(this.actor.system.abilities[b.ability]?.effective || 0), name: b.tag })).filter(b => b.amount);
+      if(abilityBonuses.length)
+        psionicBonus = { amount: abilityBonuses.reduce((n, b) => n + b.amount, 0), name: abilityBonuses.map(b => b.name).join(", ") };
       const totalBonus = (implantBonus?.amount || 0) + (psionicBonus?.amount || 0);
       const formula = totalBonus ? `${statOf(item, "damage-dice")}+${totalBonus}` : statOf(item, "damage-dice");
 
@@ -2091,10 +2153,11 @@ export class KnaveActorSheet extends ActorSheet
           if(res.dealt > 0 && creatureAttackOf(item).woundOnDamage && target.actor)
             applyNamedWound(target.actor, creatureAttackOf(item).woundOnDamage, { source: `${this.actor.name}'s ${item.name}` });
         });
+        // Named for what gives the heal - the tag, or a body Item's name (Widening chunk 2).
         const attackHeals = [
-          { verb: "drains", label: "Vampiric", amount: vampiricTotal, victims: vampiricDrained },
+          { verb: "drains", label: hitHealSourceOf(item), amount: vampiricTotal, victims: vampiricDrained },
           { verb: "drains", label: item.name, amount: drainTotal, victims: drainVictims },
-          { verb: "feeds on the death of", label: "Blood-Rapturous", amount: rapturousTotal, victims: rapturousKills },
+          { verb: "feeds on the death of", label: killHealSourceOf(item), amount: rapturousTotal, victims: rapturousKills },
         ];
         // THE LEVEL FIRST, THEN THE HEAL (the Hagfluke's Siphon, RULED 2026-09-27,
         // Matt): its +4 max HP is room the heal can then fill. One Level per
@@ -2776,7 +2839,20 @@ export class KnaveActorSheet extends ActorSheet
    */
   _checkWeaponCrit(item, roll)
   {
-    const total = roll.dice[0].total;
+    let total = roll.dice[0].total;
+    // UNERRING STRIKE (Gift Effect Library chunk 4c, RULED 2026-10-09): the
+    // actor state nextAttackCrit makes this attack a natural 20 - it hits
+    // (_checkToHitTargets reads #_unerring) and its damage doubles - and is
+    // spent by it: the flag unset and its board entry removed.
+    this.#_unerring = false;
+    if(remainingActorFlagsOf(this.actor).nextAttackCrit)
+    {
+      total = 20; this.#_unerring = true;
+      const entry = entriesOf(this.actor).find(e => e.clearFlag === "vaarn.nextAttackCrit");
+      this.actor.unsetFlag("vaarn", "nextAttackCrit");
+      if(entry) removeEffectEntry(this.actor, entry.id);
+      this._postWoundMsg(this.actor, `strikes unerringly — <b>${entry?.name ?? "an effect"}</b> makes this attack a natural 20.`);
+    }
     if(total !== 20) this.#_criticalWeapons.delete(item.id);
 
     // WHAT THE NATURAL ROLL SETS OFF, from the weapon's sentences (Effect
@@ -2892,14 +2968,14 @@ export class KnaveActorSheet extends ActorSheet
 
   _itemIsBroken(item)
   {
-    if(item.system.broken)
+    // Any Item since Broken Item State (2026-10-09), armour at quality 0 included.
+    if(isBroken(item))
     {
-      let content = '<span class="knave-ability-crit knave-ability-critFailure"><b>' + item.name + "</b> is broken!</span>";
-        ChatMessage.create({
-          user: game.user._id,
-          speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-          content: content
-        });
+      ChatMessage.create({
+        user: game.user._id,
+        speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+        content: brokenLine(item.name)
+      });
       return true;
     }
 
@@ -3016,7 +3092,7 @@ export class KnaveActorSheet extends ActorSheet
     this._checkWeaponCrit(item, roll);
 
     this._checkToHitTargets(roll, item, asked);
-    this._postRollNotes(this.actor, [...advVs, ...this._bodyAttackNotes(asked), ...tDis.notes, ...this._attackNotes(), ...this._tagNotes(item, TO_HIT_NOTES), ...this._stormNotes(item), ...this._followUpNotes(item)]);
+    this._postRollNotes(this.actor, [...advVs, ...this._bodyAttackNotes(asked), ...this._toHitNotes(item), ...this._ignoreArmourNotes(item), ...tDis.notes, ...this._attackNotes(), ...this._tagNotes(item, TO_HIT_NOTES), ...this._stormNotes(item), ...this._followUpNotes(item)]);
     // A condition the weapon inflicts - a creature attack's declared effect,
     // or a PC weapon's Entangling / Blinding tag (2026-09-16).
     this._postConditionCards(creatureFlagsOf(item).applies ?? [], item.name);
@@ -3162,6 +3238,15 @@ export class KnaveActorSheet extends ActorSheet
   _openGiftCostDialog(item, sentence)
   {
     const freeform = sentence === OTHER_USE;
+    // A generic use a GM composed on the Gift (GM Effect Builder: Widening
+    // chunk 1, RULED 2026-10-09): its cost is fixed by the sentence - a set HP
+    // die, or none - so there is no die to choose and the dialog is skipped.
+    if(!freeform)
+    {
+      const hp = (normaliseSentence(sentence).cost ?? []).find(c => c.kind === "hp");
+      const chosen = hp ? (hp.die === "chosen" || !hp.die) : usesCost(sentence);
+      if(!chosen) return this._resolveGiftUse(item, null, 0, false, sentence);
+    }
     const options = optionsOf(sentence);
     const verbs = options.map(o => o.verb);
     // RULED 2026-09-28 (Matt): the table's two uses. To damage or heal, the
@@ -3177,8 +3262,10 @@ export class KnaveActorSheet extends ActorSheet
       { die: "1d20", faces: 20, label: "d20 — d20 + PSY, or Levels 9+" },
     ];
 
+    // A sentence's own price table (Gift Effect Library chunk 5): its tiers and words instead of the Level's.
+    const table = freeform ? null : priceTableOf(sentence);
     const buttons = {};
-    for(const tier of tiers)
+    for(const tier of (table?.tiers ?? tiers))
       buttons[tier.die] = {
         label: tier.label,
         // Gift Sustained Use Cost. A CHECKBOX rather than five more buttons:
@@ -3195,9 +3282,11 @@ export class KnaveActorSheet extends ActorSheet
     const rolled = verbs.every(v => v === "damage" || v === "heal");
     const targets = Array.from(game.user?.targets ?? []);
     const levels = targets.reduce((n, t) => n + levelOf(t.actor), 0);
-    const byLevel = rolled ? null : costDieForLevels(levels);
+    const byLevel = table ? table.tiers[0].die : rolled ? null : costDieForLevels(levels);
     const label = sentenceLabel(sentence);
-    const intro = freeform
+    const intro = table
+      ? `<p><b>${label}</b>: the cost is set by ${table.label} - pick the die that fits. The Referee has the final say.</p>`
+      : freeform
       ? `<p>Choose the HP cost die. <b>To damage or heal</b>, pick the effect you want: the die you pay is the die you roll, plus PSY. <b>For any other effect</b>, pick by the targets' combined Level (nine Level 1 targets cost a d20). The Referee has the final say; the baseline is d6.</p>`
       : rolled
         ? `<p><b>${label}</b>: choose the die - you pay it in HP and roll it, plus PSY, as the ${verbs[0] === "damage" ? "damage" : "healing"}. The Referee has the final say.</p>`
@@ -4740,13 +4829,14 @@ export class KnaveActorSheet extends ActorSheet
     const spec = levelDrainSpecOf(item);
     if(!spec) return;
 
+    // An NPC too since Level Drain Without a Ledger (RULED 2026-10-09, Matt).
     const targets = Array.from(game.user.targets)
       .map(t => t.actor)
-      .filter(a => a && a.type === "character");
+      .filter(a => a && (a.type === "character" || a.type === "npc"));
 
     if(!targets.length)
       return ui.notifications.warn(
-        `Target the character ${this.actor.name} is draining, then click again.`);
+        `Target the character or creature ${this.actor.name} is draining, then click again.`);
 
     const lines = [];
     for(const victim of targets)
@@ -5043,6 +5133,11 @@ export class KnaveActorSheet extends ActorSheet
   {
     const actor = this.actor;
 
+    // Broken Item State (RULED 2026-10-06, Matt): a broken Item cannot be
+    // equipped. Unequipping is never refused (the preUpdate hook in broken.js
+    // unequips it on breaking anyway).
+    if(!item.system.equipped && this._itemIsBroken(item)) return;
+
     // Exotica Identification: equipping is using, and a PLAYER cannot use an
     // unidentified item (Matt, 2026-09-19). The GM can, to adjudicate it —
     // revised the same day. The control is withheld from players as well;
@@ -5300,12 +5395,14 @@ export class KnaveActorSheet extends ActorSheet
     // The Ultravisor's activated auto-hit, until the combat ends (Implants,
     // Exotica and Figments ruling C 10): every target of an attack of that kind.
     const kindAuto = remainingActorFlagsOf(this.actor).autoHitAttacks;
-    if(kindAuto && kindAuto === (item?.type === "weaponRanged" ? "ranged" : "melee"))
+    // "any" since GM Effect Builder: Widening chunk 3c (2026-10-09): every attack.
+    if(kindAuto && (kindAuto === "any" || kindAuto === (item?.type === "weaponRanged" ? "ranged" : "melee")))
     {
       // The Item that switched it on, from its board entry ("Ultravisor: ranged attacks auto-hit").
       const entry = entriesOf(this.actor).find(e => e.clearFlag === "vaarn.autoHitAttacks");
       const source = entry?.name ? String(entry.name).split(":")[0] : null;
-      const reason = { text: `${source ? `the ${source}` : "its activation"} makes every ${kindAuto} attack hit until the combat ends` };
+      const span = entry?.endsWithCombat ? "until the combat ends" : entry?.expiresAtRound || entry?.expiresAtTime ? "while it lasts" : "until the Referee ends it";
+      const reason = { text: `${source ? `the ${source}` : "its activation"} makes every ${kindAuto === "any" ? "" : kindAuto + " "}attack hit ${span}` };
       for(const t of Array.from(game.user?.targets ?? [])) out.autoHit.set(t, reason);
     }
     if(!forbids.length && !autos.length) return out;
@@ -5383,9 +5480,29 @@ export class KnaveActorSheet extends ActorSheet
             ...(asked?.bodyDis ?? []).map(n => `<b>${n}</b> — DIS on this attack (applied).`)];
   }
 
+  /**
+   * Is the attacker in the ignore-armour state for this attack - GM Effect
+   * Builder: Widening chunk 3c (RULED 2026-10-09)? The actor state
+   * ignoreArmourAttacks (remaining-effects-data.js), set by a use's board entry
+   * and cleared when it ends; "any", or the attack's kind. The entry, for the note.
+   */
+  _ignoreArmourState(attackerItem)
+  {
+    const kind = remainingActorFlagsOf(this.actor).ignoreArmourAttacks;
+    if(!kind || !(kind === "any" || kind === (attackerItem?.type === "weaponRanged" ? "ranged" : "melee"))) return null;
+    return entriesOf(this.actor).find(e => e.clearFlag === "vaarn.ignoreArmourAttacks") ?? { name: "its state" };
+  }
+
+  /** The chat note naming the ignore-armour state an attack used. */
+  _ignoreArmourNotes(item)
+  {
+    const e = this._ignoreArmourState(item);
+    return e ? [`<b>${String(e.name).split(":")[0]}</b> — hits as though the target were unarmoured (applied).`] : [];
+  }
+
   _effectiveTargetAV(targetActor, attackerItem)
   {
-    if(!ignoresArmour(attackerItem))
+    if(!ignoresArmour(attackerItem) && !this._ignoreArmourState(attackerItem))
       return targetActor.system.armor.effective ?? targetActor.system.armor.value;
 
     // A warding field is not armour: a held weapon's passive AV (Aegis-
@@ -5432,7 +5549,7 @@ export class KnaveActorSheet extends ActorSheet
     // the hit branch below, so each hit's cards and notes still fire.
     const declaredAutoHit = !roll && !!creatureAttackOf(item).autoHit;
     if(!roll && !declaredAutoHit) return;
-    const natural20 = roll?.dice?.[0]?.total === 20;
+    const natural20 = roll?.dice?.[0]?.total === 20 || this.#_unerring;
 
     // "Hits as if target has -5 AV" - the Titan Acolyte's Vibro-Dagger (Live
     // AV Computation wiring, 2026-09-25). The HIT TEST only, never the target's
@@ -5756,13 +5873,17 @@ export class KnaveActorSheet extends ActorSheet
     // other is the kind of split that reads as a bug later.
     if(this._isIncorporeal(defenderActor)) return;
 
-    // A held weapon whose sentences strike a miss back (Weapon Tags chunk 4).
+    // A held weapon whose sentences strike a miss back (Weapon Tags chunk 4),
+    // or a worn or carried Item's (Widening chunk 2).
     const hasReflecting = defenderActor.items.some(i =>
       (i.type === "weaponMelee" || i.type === "weaponRanged") &&
-      i.system.equipped && reflectsMisses(i));
+      i.system.equipped && reflectsMisses(i)) || bodyReflects(defenderActor).length > 0;
     if(!hasReflecting) return;
 
     const attackerActor = this.actor;
+    // What strikes back, for the card: the Reflecting weapon, or the body Item by name (Widening chunk 2).
+    const reflector = defenderActor.items.some(i => (i.type === "weaponMelee" || i.type === "weaponRanged") && i.system.equipped && reflectsMisses(i))
+      ? "Reflecting weapon" : `<b>${bodyReflects(defenderActor)[0]?.source ?? "body"}</b>`;
     // A formula that reads an actor value (Damage Read from an Actor Value,
     // 2026-09-21) is resolved to numbers HERE: the button's handler in
     // knave.js rolls the string with no roll data, and "@lvl" there would not
@@ -5775,7 +5896,7 @@ export class KnaveActorSheet extends ActorSheet
 
     ChatMessage.create({
       speaker: ChatMessage.getSpeaker({ actor: defenderActor }),
-      content: `<p><b>${defenderActor.name}</b>'s Reflecting weapon punishes <b>${attackerActor.name}</b>'s missed attack — click to deal the reflected damage!</p>
+      content: `<p><b>${defenderActor.name}</b>'s ${reflector} punishes <b>${attackerActor.name}</b>'s missed attack — click to deal the reflected damage!</p>
         <button type="button" class="vaarn-reflect-damage" data-attacker-id="${attackerActor.id}" data-defender-id="${defenderActor.id}" data-item-uuid="${attackerItem.uuid ?? ""}" data-damage-dice="${reflectDice}" data-weapon-name="${attackerItem.name}">Roll Reflected Damage</button>`
     });
   }

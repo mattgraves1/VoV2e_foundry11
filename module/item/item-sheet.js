@@ -10,6 +10,8 @@ import { giftEntryOf, addEffect, updateEffect, removeEffect, blankEffect, sugges
          EFFECT_KINDS, CONDITION_CHOICES, DAMAGE_TYPE_CHOICES } from "./gift-effects.js";
 import { sentencesOf } from "../effects/interpret.js";
 import { effectRows, bindEffectsTab } from "./effect-builder.js";
+import { exoticaSuggestionsFor } from "./exotica-generator-suggestions.js";
+import { giftLibraryFor } from "./gift-library.js";
 import { usageDieOf, statNotesOf, sentenceUsageSize, tradeBuyersOf, qualityReadout } from "../effects/item-stats.js";
 
 /**
@@ -158,6 +160,10 @@ export class KnaveItemSheet extends ItemSheet {
     // Item sheet - its sentences as plain lines, read-only for players.
     data.isGM = game.user.isGM && this.isEditable;
     data.effectRows = effectRows(this.item, data.isGM);
+    // A generated Exotica's suggestions from its four words (Exotica Generator Items, 2026-10-09).
+    data.builtSuggestions = this.item.type === "exotica" ? exoticaSuggestionsFor(this.item) : [];
+    // The Gift Effect Library on every Gift's Effects tab (ruling 2, 2026-10-09).
+    data.giftLibrary = this.item.type === "gift" ? giftLibraryFor(this.item) : [];
 
     return data;
   }

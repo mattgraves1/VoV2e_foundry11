@@ -41,17 +41,26 @@
   <div class="form-group">
     <label>Lasts</label>
     <select name="c.duration">
-      {{#if durationOptional}}<option value="">Not at all (a chat line)</option>{{/if}}
+      {{#if durationBlank}}<option value="">{{durationBlank}}</option>{{/if}}
       {{#each durations as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}
     </select>
     {{#if durationAmount}}<input type="number" name="c.amount" value="{{amount}}" style="flex: 0 0 4em;"/>{{/if}}
   </div>
+  {{#if durationSaved}}
+  <div class="form-group">
+    <label>The target saves to...</label>
+    <input type="text" name="c.escapeBy" value="{{escapeBy}}" placeholder="shake it off"/>
+  </div>
+  {{/if}}
   {{/if}}
 
   {{#if hasCost}}
   <div class="form-group">
     <label>Cost</label>
-    <select name="c.costDie">{{#each costs as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}</select>
+    <select name="c.cost">{{#each costKinds as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}</select>
+    {{#if costIsHp}}<select name="c.costDie" style="flex: 0 0 7em;">{{#each costDice as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}</select>{{/if}}
+    {{#if costByChoices}}<select name="c.costBy" style="flex: 0 0 12em;">{{#each costByChoices as |o|}}<option value="{{o.key}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>{{/each}}</select>{{/if}}
+    {{#if costIsPool}}<input type="text" name="c.costN" value="{{costN}}" title="Uses a day: a number, or @level for one per Level" style="flex: 0 0 5em;"/>{{/if}}
   </div>
   {{/if}}
 

@@ -20,6 +20,7 @@ import { WEAPON_TAG_EFFECTS } from "./weapon-tag-effects-data.js";
 import { EXOTICA_EFFECTS } from "../actor/exotica-effects-data.js";
 import { floraEffects } from "../actor/flora-effects-data.js";
 import { creatureWeaponSentencesOf } from "./creature-effects.js";
+import { bodySentences } from "../effects/body.js";
 
 export const WEAPON_TYPES = ["weaponMelee", "weaponRanged"];
 
@@ -89,10 +90,27 @@ function sentencesFor(item)
   return weaponTagSentences(item).map(normalise);
 }
 
-/** The live sentences an attack-hit runs, for any Item that carries them. */
+/**
+ * THE BEARER'S BODY ON AN ATTACK - GM Effect Builder: Widening chunk 2 (RULED
+ * 2026-10-09, Matt). A worn or carried Item's hit and roll sentences reach
+ * every attack its bearer makes; a weapon's are its own attack's and are never
+ * read from another weapon's (ruling 1) - body.js BODY_TYPES has no weapon.
+ * Each body sentence is tagged by its own Item, so the save card, the ability-
+ * damage line and the note name the monocle, not the dagger. Read from the
+ * attacking Item's owner (an owned Item's parent); an unowned Item has no body.
+ */
+function bodyFor(item, trigger)
+{
+  const actor = item?.parent;
+  if (!actor?.items) return [];
+  return bodySentences(actor, trigger).filter(p => !p.item || p.item.id !== item.id)
+    .map(p => ({ ...p.sentence, tag: p.sentence.tag ?? p.source }));
+}
+
+/** The live sentences an attack-hit runs: the Item's own and the bearer's body's. */
 export function hitSentences(item)
 {
-  return liveSentences(sentencesFor(item)).filter(s => trig(s) === "attack-hit");
+  return [...liveSentences(sentencesFor(item)).filter(s => trig(s) === "attack-hit"), ...bodyFor(item, "attack-hit")];
 }
 
 /** Who a sentence's gates limit it to, in the old spec words. */
@@ -193,10 +211,32 @@ export function valueReachesSentences(item)
 
 const liveOf = item => liveSentences(sentencesFor(item));
 
-/** The attack-roll sentences: the to-hit ability, armour ignored, auto-hits, forbids, natural rolls. */
+/**
+ * The Item's OWN attack-roll sentences: the to-hit ability (what the attack
+ * is), auto-hits, natural rolls - about this attack, not the bearer.
+ */
 export function attackRollSentences(item)
 {
   return liveOf(item).filter(s => trig(s) === "attack-roll");
+}
+
+/** The attack-roll sentences the bearer's body adds to every attack (Widening chunk 2): armour ignored, forbids. */
+export function bearerAttackRollSentences(item)
+{
+  return [...attackRollSentences(item), ...bodyFor(item, "attack-roll")];
+}
+
+/**
+ * The to-hit abilities the bearer's body OFFERS for this attack (Widening
+ * chunk 2, ruling 2): [{ ability, source }]. An offer never makes the attack
+ * worse - the caller rolls with the highest bonus among the weapon's default
+ * and these - and a weapon's own to-hit ability (toHitAbility) replaces the
+ * default and ignores them.
+ */
+export function toHitOffers(item)
+{
+  return bodyFor(item, "attack-roll").filter(s => s.do?.verb === "modify" && s.do.stat === "to-hit-ability")
+    .map(s => ({ ability: s.do.amount, source: s.tag }));
 }
 
 /** The ability the to-hit roll uses instead of STR/DEX (Psionic's PSY), or null. */
@@ -215,7 +255,8 @@ export function damageAbilityBonus(item)
 /** Does the attack hit as though the target were unarmoured (Vibroactive)? */
 export function ignoresArmour(item)
 {
-  return attackRollSentences(item).some(s => s.do?.verb === "ignore-armour");
+  // The weapon's own, or a body Item's (Widening chunk 2, ruling 3: the sentence, not yet an actor state).
+  return bearerAttackRollSentences(item).some(s => s.do?.verb === "ignore-armour");
 }
 
 /** The auto-hit sentences (Heat-Seeking), gated per target. */
@@ -227,7 +268,7 @@ export function autoHitSentences(item)
 /** The sentences that forbid the attack (Flaming underwater / against the submerged). */
 export function attackForbids(item)
 {
-  return attackRollSentences(item).filter(s => s.do?.verb === "forbid" && s.do.what === "attack");
+  return bearerAttackRollSentences(item).filter(s => s.do?.verb === "forbid" && s.do.what === "attack");
 }
 
 /** What the natural roll sets off: item-state breakages and an explosion's damage. */
@@ -248,6 +289,12 @@ export function reflectsMisses(item)
   return liveOf(item).some(s => trig(s) === "when-missed" && s.do?.verb === "reflect");
 }
 
+/** The body Items that strike a miss against the bearer back (Widening chunk 2): [{ item, source }]. */
+export function bodyReflects(actor)
+{
+  return bodySentences(actor, "when-missed").filter(p => p.sentence.do?.verb === "reflect").map(p => ({ item: p.item, source: p.source }));
+}
+
 /** The heal a hit gives the wielder (Vampiric's half the damage dealt), gated per target. */
 export function hitHealSentences(item)
 {
@@ -257,7 +304,7 @@ export function hitHealSentences(item)
 /** The heal a kill gives the wielder (Blood-Rapturous's victim's max HP), gated per victim. */
 export function killHealSentences(item)
 {
-  return liveOf(item).filter(s => trig(s) === "on-kill" && s.do?.verb === "heal");
+  return [...liveOf(item).filter(s => trig(s) === "on-kill" && s.do?.verb === "heal"), ...bodyFor(item, "on-kill").filter(s => s.do?.verb === "heal")];
 }
 
 /* ---------------------------------------------------------------------------
@@ -316,7 +363,8 @@ export function tabReminders(item)
 export function hitReminders(item)
 {
   // A GM's note (no tag) is named by its label or its Item - GM Effect Builder chunk 2.
-  return hitSentences(item).filter(s => s.do?.verb === "reminder").map(s => `${s.tag ?? s.label ?? item?.name ?? ""}: ${s.text ?? ""}`);
+  // A body note (Widening chunk 2) is tagged by its Item; a label the GM gave it heads the line.
+  return hitSentences(item).filter(s => s.do?.verb === "reminder").map(s => `${s.label ?? s.tag ?? item?.name ?? ""}: ${s.text ?? ""}`);
 }
 
 /** A charge's extra damage die (Rocket Boosted's +d12), the charge toggle answering its gate (ruling D). */

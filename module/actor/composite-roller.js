@@ -15,6 +15,21 @@ function stripMultiplierLabel(col)
 }
 
 /**
+ * DICE-SUM COLUMN ROLL (foundry-system-index.csv row of that name, 2026-10-07).
+ * A group may carry `dice: "2d6"` when the book rolls its table on a SUM of
+ * dice; its rows then run from the lowest sum up (row 0 is a 2 on 2d6), and
+ * the sum, not an even pick, chooses the row. Settlements' Population is the
+ * one such table today. A group without `dice` rolls every row evenly.
+ */
+function diceSumIndex(dice)
+{
+  const [, count, faces] = /^(\d+)d(\d+)$/.exec(dice).map(Number);
+  let sum = 0;
+  for(let i = 0; i < count; i++) sum += 1 + Math.floor(Math.random() * faces);
+  return sum - count;
+}
+
+/**
  * Rolls one table entry (one of a "list"-type generator's `tables` array)
  * and returns {html, values} — `values` is a flat {colName: rolledValue}
  * map across every group (last-roll-wins for a repeated column, which only
@@ -31,7 +46,7 @@ export function rollSingleTable(table)
     for(let i = 0; i < group.rolls; i++)
     {
       const pool = group.data[cols[0]];
-      const idx = Math.floor(Math.random() * pool.length);
+      const idx = group.dice ? diceSumIndex(group.dice) : Math.floor(Math.random() * pool.length);
       for(const col of cols)
       {
         const label = stripMultiplierLabel(col);

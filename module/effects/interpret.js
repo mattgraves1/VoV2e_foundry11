@@ -28,7 +28,21 @@ export const HANDLED = {
   triggers: new Set(["use", "passive"]),
   // `toxin` since Implants, Exotica and Figments chunk 3b (2026-10-06): a use that
   // posts TOX saves (Mord-Red's Grail).
-  verbs: new Set(["damage", "heal", "condition", "reminder", "toxin"]),
+  // GM Effect Builder: Widening chunk 3a and 3d (RULED 2026-10-09): ability damage
+  // and a kill on a use without a save (the effect card's Apply), a compulsion
+  // (a board entry), and the four said-to-the-targets verbs.
+  verbs: new Set(["damage", "heal", "condition", "reminder", "toxin", "ability-damage", "kill", "compel", "teleport", "forced-move", "reveal", "conceal",
+                  // Chunk 3b: a stat change for a while on a use - a board entry's applied deltas (statDeltas).
+                  "modify",
+                  // Chunk 3c: an attack state for a while on a use - a board entry that sets and clears the actor flag (stateSpec).
+                  "auto-hit", "ignore-armour",
+                  // Chunk 3e: a natural weapon for a while - a board entry that grants the Item and removes it (grantedWeapon).
+                  "grant-attack",
+                  // Gift Effect Library chunk 3: a passive effect for a while - the same, the Item carrying the sentences (bestowedItem).
+                  "bestow",
+                  // Gift Effect Library chunk 4a: the effect card's Apply - temp HP, a cure (tox, an affliction, burning),
+                  // a wound closed, a Level drained; armour erosion and the escalating beam ride modify and damage.
+                  "temp-hp", "cure", "remove-wound", "level"]),
   // Mutations and Ancestry Rules chunk 4 (RULED 2026-10-05/06): the per-day
   // pool (Ink Ducts, Gas Glands), a use that reaches everyone in range, a hold
   // until the holder saves (Silk Production), a save on a use, and the named
@@ -52,7 +66,9 @@ export const HANDLED = {
                      "stateful", "grant-ability", "clone", "bifurcate", "set-hp", "spawn", "grant-pick", "grant-roll",
                      "baked-item", "grant-fixed", "permanent-change",
                      // Chunk 3b (2026-10-06): a Bloomboon's growth - a part, a fruit, retainers.
-                     "grow"]),
+                     "grow",
+                     // Gift Effect Library chunk 4a (2026-10-09): the jinx curse on each target (time/curse.js).
+                     "jinx"]),
   // Weapon Tags chunk 1 (RULED 2026-10-05): the computed gates the system can
   // read today, and every standing or asked gate - those are answered by a
   // person or a named default, so none needs a reader of its own.
@@ -167,8 +183,134 @@ export function verbLabel(d)
     case "heal":      return "Healing";
     case "condition": return d.name || stateByKey(d.state)?.label || "Condition";
     case "reminder":  return d.name || "";
+    // Widening chunk 3a and 3d (2026-10-09).
+    case "ability-damage": return `${String(d.ability ?? "").toUpperCase()} damage`;
+    case "kill":      return "Death";
+    case "compel":    return d.command ? `Compelled: ${d.command}` : "Compelled";
+    case "teleport":  return d.to ? `Teleported to ${d.to}` : "Teleported";
+    case "forced-move": return d.how ? `Forced to ${d.how}` : "Forced move";
+    case "reveal":    return d.what ? `Reveals ${d.what}` : "Reveals";
+    case "conceal":   return d.what ? `Conceals ${d.what}` : "Conceals";
+    // Chunk 3b: "+2 AV", "-1 STR", "+3 max HP".
+    case "modify":    return `${amountWords(d.amount)} ${STAT_LABELS[d.stat] ?? d.stat}`;
+    // Chunk 3c: "melee attacks auto-hit", "attacks ignore armour".
+    case "auto-hit":  return d.next ? "Next attack a natural 20" : `${kindWords(d.kind)}auto-hit`;
+    case "ignore-armour": return `${kindWords(d.kind)}ignore armour`;
+    // Chunk 3e: "Claws (1d6 slashing)".
+    case "grant-attack": return `${d.name || "An attack"} (${d.dice}${d.type ? " " + d.type : ""})`;
+    case "bestow":    return d.name || "A bestowed effect";
+    // Chunk 4a.
+    case "temp-hp":   return "Temporary HP";
+    case "cure":      return d.what === "tox" ? "Cure poison" : d.what === "burning" ? "Extinguish" : "Cure an affliction";
+    case "remove-wound": return "Close a wound";
+    case "level":     return `${amountWords(d.amount)} Level`;
+    case "special":   return d.handler === "jinx" ? "Jinx" : "";
     default:          return "";
   }
+}
+
+const STAT_LABELS = { av: "AV", str: "STR", dex: "DEX", con: "CON", int: "INT", psy: "PSY", ego: "EGO" };
+const kindWords = kind => kind && kind !== "any" ? `${kind} attacks ` : "attacks ";
+/** "+2", "+PSY", "+the die paid + PSY": a stat amount as a label says it (chunk 2). */
+export const amountWords = amount =>
+{
+  const a = String(amount ?? "");
+  const signed = /^[+-]/.test(a) ? a : "+" + a;
+  return signed.replace(/@cost/gi, "the die paid").replace(/@psy/gi, "PSY").replace(/\+/g, " + ").replace(/^ \+ /, "+").replace(/-/g, " - ").replace(/^ - /, "-").replace(/\s+/g, " ").trim();
+};
+
+/**
+ * An attack state for a while as a board entry (GM Effect Builder: Widening
+ * chunk 3c, RULED 2026-10-09): the flag the entry sets on whoever it goes on
+ * (setFlag) and clears when it ends (clearFlag) - autoHitAttacks or
+ * ignoreArmourAttacks, read by the attack through remainingActorFlagsOf. The
+ * value is the attack kind, "any" for every attack.
+ */
+export function stateFlags(d)
+{
+  // Unerring strike (Gift Effect Library chunk 4c): the NEXT attack is a natural 20, spent by it.
+  if (d?.verb === "auto-hit" && d.next) return { setFlag: { key: "nextAttackCrit", value: true }, clearFlag: "vaarn.nextAttackCrit" };
+  const key = d?.verb === "auto-hit" ? "autoHitAttacks" : d?.verb === "ignore-armour" ? "ignoreArmourAttacks" : null;
+  if (!key) return null;
+  return { setFlag: { key, value: d.kind || "any" }, clearFlag: `vaarn.${key}` };
+}
+
+/**
+ * A stat change for a while as a board entry's applied deltas (GM Effect
+ * Builder: Widening chunk 3b, RULED 2026-10-09): AV, an ability or max HP,
+ * summed live by stateful-effect.js activeDeltas and gone when the entry is -
+ * nothing is written to the actor. Null for a stat the board cannot carry.
+ */
+/**
+ * A stat change's amount may be a FORMULA (Gift Effect Library chunk 2, RULED
+ * 2026-10-09): "+@psy", "@cost+@psy", "+1d4" - the user's ability bonus, the
+ * die paid, dice. Filled and rolled at the use by resolveStatAmount; a plain
+ * number passes through. `roll` evaluates a dice formula to a number (the
+ * interpreter hands it Foundry's Roll; a test hands it its own).
+ */
+export const STAT_AMOUNT = /^[+-]?(\d+|@psy|@cost|\d*d\d+)([+-](\d+|@psy|@cost|\d*d\d+))*$/i;
+export function statAmountIsFormula(amount)
+{
+  return /[@d]/i.test(String(amount ?? ""));
+}
+export async function resolveStatAmount(d, { cost = null, abilities = {}, roll = null } = {})
+{
+  if (!d || !statAmountIsFormula(d.amount)) return d;
+  const sign = /^-/.test(String(d.amount)) ? -1 : 1;
+  const body = String(d.amount).replace(/^[+-]/, "");
+  const { formula, missing } = fillFormula(body, { cost, abilities });
+  if (missing.length) return { ...d, amount: "+0", missing };
+  const total = /d/i.test(formula) ? await (roll ? roll(formula) : Promise.resolve(0)) : evalSum(formula);
+  const n = sign * Number(total);
+  return { ...d, amount: `${n < 0 ? "" : "+"}${n}` };
+}
+/** "3+2-1" without eval: the filled formula has only numbers and signs once the dice are gone. */
+function evalSum(s)
+{
+  return String(s).match(/[+-]?\d+/g)?.reduce((n, t) => n + Number(t), 0) ?? 0;
+}
+
+export function statDeltas(d)
+{
+  const n = Number(String(d?.amount ?? "").replace(/^\+/, ""));
+  if (!Number.isFinite(n) || !n) return null;
+  if (d.stat === "av") return { av: n };
+  // Not max HP: the board sums applied.maxHp but nothing reads the sum live (Group 613, 2026-10-09).
+  if (["str", "dex", "con", "int", "psy", "ego"].includes(d.stat)) return { abilities: { [d.stat]: n } };
+  return null;
+}
+
+/**
+ * A natural weapon a use grants for a while (GM Effect Builder: Widening chunk
+ * 3e, RULED 2026-10-09): the Item data the entry creates on whoever it goes on
+ * - the shape item-effects.js makes for a mutation's natural weapon: a weapon
+ * of no slots and no hands, equipped, intrinsic, its damage type a base tag.
+ * `source` names the Item the use came from, for the description.
+ */
+export function grantedWeapon(d, source = "an effect")
+{
+  if (d?.verb !== "grant-attack" || !d.dice) return null;
+  const name = d.name || `${source} attack`;
+  return { name, type: d.kind === "ranged" ? "weaponRanged" : "weaponMelee",
+           system: { slots: 0, equipped: true, hands: 0, intrinsic: true, damageDice: String(d.dice),
+                     base_tags: d.type ? [d.type] : [],
+                     description: `<p>Granted by <b>${source}</b> for a while - it goes when that ends.</p>` } };
+}
+
+/**
+ * A passive effect bestowed for a while (Gift Effect Library chunk 3, RULED
+ * 2026-10-09): the Item data the entry creates on whoever it goes on - an
+ * intrinsic Item of no slots carrying the passive sentences, which every
+ * reader of a bearer's Items already reads; the entry's end removes it.
+ */
+export function bestowedItem(d, source = "an effect")
+{
+  if (d?.verb !== "bestow" || !Array.isArray(d.effects) || !d.effects.length) return null;
+  const name = d.name || `${source} (bestowed)`;
+  return { name, type: "item",
+           system: { slots: 0, quantity: 1, tradeValue: 0, intrinsic: true,
+                     description: `<p>Bestowed by <b>${source}</b> for a while - it goes when that ends. Its effects are on its Effects tab.</p>` },
+           flags: { vaarn: { effects: d.effects.map(s => JSON.parse(JSON.stringify(s))), bestowed: true } } };
 }
 
 /** The use's button name. */
@@ -306,7 +448,11 @@ export function optionsOf(s)
   const branches = n.choice ? n.choice.map(b => normalise({ when: n.when?.trigger ?? "use", ...b[0] })) : [n];
   return branches.map(b => ({
     verb: b.do?.verb,
-    expr: b.do?.verb === "damage" ? b.do.dice : b.do?.verb === "heal" ? b.do.amount : null,
+    // Ability damage on a use rolls its dice at the use, as damage does (Widening chunk 3a).
+    expr: b.do?.verb === "damage" ? b.do.dice : b.do?.verb === "heal" ? b.do.amount : b.do?.verb === "ability-damage" ? b.do.dice
+        : b.do?.verb === "temp-hp" ? b.do.amount : null,
+    // The verb's own words (ability, command, to, how, what), for the reader that acts on it.
+    params: b.do ?? null,
     type: b.do?.type ?? null,
     state: b.do?.state ?? null,
     // What a lasting effect writes on the board, and a TOX use's die (chunk 3b).
@@ -314,14 +460,16 @@ export function optionsOf(s)
     die: b.do?.die ?? null,
     // A named one-off (chunk 4): the handler and its parameters, the do as written.
     special: b.do?.verb === "special" ? b.do : null,
-    name: b.do?.name ?? null,
+    // A compulsion's board entry is named for the command, whatever the button is called (Widening chunk 3d, Group 612).
+    name: b.do?.name ?? (b.do?.verb === "compel" ? `Compelled: ${b.do.command}` : null),
     text: b.text ?? n.text ?? "",
     label: b.label ?? verbLabel(b.do),
     mode: b.mode ?? n.mode ?? modeOf(b),
     clock: clockFor(b.for ? b : n),
     // A reminder with a duration lasts: it is a board entry, not a chat line
     // (engine ruling 2026-10-04: every lasting effect is one board entry).
-    lasting: !!(b.for ?? n.for)
+    // A compulsion is a board entry until its span ends, or until the Referee ends it (Widening chunk 3d).
+    lasting: !!(b.for ?? n.for) || ["compel", "modify", "auto-hit", "ignore-armour", "grant-attack", "bestow"].includes(b.do?.verb)
   }));
 }
 
@@ -451,8 +599,21 @@ export function conditionSpec(option, sourceName)
   if (def) return { name: def.label, text: `${def.book}${from}${until}`, ...clock, ...ends, applied: { conditions: [def.key] } };
   const state = stateByKey(option.state);
   const name = option.name || state?.label || option.label || "Effect";
+  // A state that is an actor flag the entry sets and clears (chunk 4b: Berserk).
+  if (state?.flag)
+    return { name, text: `${option.effectText ?? option.text ?? state.note ?? ""}${from}${until}`.trim(), ...clock, ...ends, setFlag: { ...state.flag }, clearFlag: `vaarn.${state.flag.key}` };
+  // A state the board reads by its own key (Gift Effect Library chunk 1): the entry carries it.
+  if (state?.boardKey)
+    return { name, text: `${option.effectText ?? option.text ?? state.note ?? ""}${from}${until}`.trim(), ...clock, ...ends, applied: { conditions: [state.boardKey] } };
+  // A stat change (Widening chunk 3b): the entry carries the deltas the board sums live.
+  const applied = option.verb === "modify" ? statDeltas(option.params) : null;
+  // An attack state (Widening chunk 3c): the flag the entry sets and clears.
+  const flags = stateFlags(option.params) ?? {};
+  // A granted attack (Widening chunk 3e) or a bestowed passive (Library chunk 3): the Item the entry creates and removes.
+  const weapon = grantedWeapon(option.params, sourceName) ?? bestowedItem(option.params, sourceName);
   // A lasting effect's own board text where it names one (chunk 3b), else its sentence's.
-  return { name, text: `${option.effectText ?? option.text ?? ""}${from}${until}`.trim(), ...clock, ...ends };
+  return { name, text: `${option.effectText ?? option.text ?? ""}${from}${until}`.trim(), ...clock, ...ends, ...(applied ? { applied } : {}), ...flags,
+           ...(weapon ? { grantItems: [weapon] } : {}) };
 }
 
 /* ---------------- Gates - Weapon Tags chunk 1 (RULED 2026-10-05) ---------------- */

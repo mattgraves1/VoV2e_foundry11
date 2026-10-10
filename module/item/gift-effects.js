@@ -176,6 +176,29 @@ export function giftConditionSpec(effect, source)
  * (Mystic Gifts). @cost is the die the user chose in the cost dialog.
  */
 export const GIFT_ROLL = "@cost+@psy";
+/**
+ * A Gift sentence's own PRICE TABLE - Gift Effect Library chunk 5 (RULED
+ * 2026-10-09, Matt, from his picks): cost: { kind: "hp", die: "chosen", by }
+ * names which table the cost dialog offers instead of the Level default. The
+ * smallest die is the default; the Referee can still pick any.
+ */
+export const PRICE_TABLES = {
+  distance: { label: "distance", tiers: [
+    { die: "1d6", faces: 6, label: "d6 — the same room" }, { die: "1d8", faces: 8, label: "d8 — the same map" },
+    { die: "1d10", faces: 10, label: "d10 — another level of a vault" }, { die: "1d12", faces: 12, label: "d12 — a neighbouring location" },
+    { die: "1d20", faces: 20, label: "d20 — anywhere in the world" }] },
+  "held-time": { label: "how long it has been held", tiers: [
+    { die: "1d6", faces: 6, label: "d6 — held a day or more" }, { die: "1d8", faces: 8, label: "d8 — held eight hours" },
+    { die: "1d10", faces: 10, label: "d10 — held an hour" }, { die: "1d12", faces: 12, label: "d12 — held one Exploration Turn" },
+    { die: "1d20", faces: 20, label: "d20 — held under a turn" }] }
+};
+export const PRICE_BY_CHOICES = [{ key: "", label: "The targets' Level (the default)" }, { key: "distance", label: "Distance" }, { key: "held-time", label: "How long it has been held" }];
+/** The price table a sentence names, or null. */
+export function priceTableOf(sentence)
+{
+  const cost = [].concat(sentence?.cost ?? []).find(c => c?.kind === "hp");
+  return cost?.by && PRICE_TABLES[cost.by] ? PRICE_TABLES[cost.by] : null;
+}
 export const GIFT_COST = { kind: "hp", die: "chosen" };
 
 /**

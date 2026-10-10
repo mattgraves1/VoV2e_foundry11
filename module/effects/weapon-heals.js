@@ -40,6 +40,20 @@ export function killHealFor(item, victim)
   return s ? Number(victim.system?.health?.max ?? 0) : 0;
 }
 
+/**
+ * What to call the heal on the card (GM Effect Builder: Widening chunk 2,
+ * 2026-10-09): the tag that gives it (Vampiric, Blood-Rapturous) - or, since a
+ * worn or carried Item's heal reaches every attack, that Item's name.
+ */
+export function hitHealSourceOf(item)
+{
+  return hitHealSentences(item).find(x => x.do.amount === "half-dealt")?.tag ?? "Vampiric";
+}
+export function killHealSourceOf(item)
+{
+  return killHealSentences(item).find(x => x.do.amount === "victim-max-hp")?.tag ?? "Blood-Rapturous";
+}
+
 /** Does this weapon heal on a kill at all - the reminder when a kill cannot be told? */
 export function healsOnKill(item)
 {

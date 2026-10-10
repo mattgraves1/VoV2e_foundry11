@@ -51,7 +51,7 @@ export const CORROSION_CARD_FLAG = "corrosionCard";
 export const CORRODED_FLAG = "corroded";
 
 /** Item types a character carries rather than is - the list the card offers. */
-const CARRIED_TYPES = ["item", "weaponMelee", "weaponRanged", "armor", "light", "exotica", "crucible", "codex"];
+export const CARRIED_TYPES = ["item", "weaponMelee", "weaponRanged", "armor", "light", "exotica", "crucible", "codex"];
 
 /**
  * Is this item one the card may offer? Carried, not innate, metal, not
@@ -124,8 +124,9 @@ export async function corrodeItem(message, itemId)
   const item = actor?.items?.get(itemId);
   if (!item) return null;
 
-  // The name as it was: the gear branch renames the item, and the line must
-  // not read "Glove (Corroded) is corroded" (Group 374).
+  // The name as it was. The gear branch renamed the item until Broken Item State
+  // (2026-10-09) marked it broken instead; kept so a line never reads a name an
+  // update changed (Group 374).
   const name = item.name;
   let line;
   // The Yurling EATS it: one from a stack, else the whole item. No broken or
@@ -162,12 +163,15 @@ export async function corrodeItem(message, itemId)
   }
   else
   {
+    // Marked broken like a weapon, not renamed (Broken Item State, RULED
+    // 2026-10-09, Matt): broken unequips it, so a worn item stops protecting
+    // because it is broken, not because a rename broke a name match.
     await item.update({
-      name: `${item.name} (Corroded)`,
-      "system.description": `${item.system.description ?? ""}<p><b>Corroded</b> by ${spec.attackerName}'s ${spec.itemName} — useless.</p>`,
+      "system.broken": true,
+      "system.description": `${item.system.description ?? ""}<p><b>Corroded</b> by ${spec.attackerName}'s ${spec.itemName} — broken.</p>`,
       [`flags.${SCOPE}.${CORRODED_FLAG}`]: true,
     });
-    line = `<b>${actor.name}</b>'s <b>${name}</b> is corroded — <b>useless</b>.`;
+    line = `<b>${actor.name}</b>'s <b>${name}</b> is corroded — <b>broken</b>, useless until repaired.`;
   }
   await message.setFlag(SCOPE, CORROSION_CARD_FLAG, { ...spec, chosen: { itemId, line } });
   return line;

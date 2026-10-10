@@ -131,6 +131,53 @@ Region Generator locations (module/icons/region, CC BY 3.0, recoloured when draw
     simple shapes drawn for this system, not from game-icons.net; they are
     covered by the system's MIT licence. They were made with AI assistance.
 
+Settlement Creation map icons (module/icons/settlement, CC BY 3.0)
+    Each game-icons.net shape below is drawn dark on a coloured disc (the disc
+    marks the kind of place: seat of power, water source, asset, building,
+    landmark). Approved by Matt 2026-10-08.
+    Abandoned Building - https://game-icons.net/1x1/delapouite/broken-wall.html (Delapouite)
+    Residential Building - https://game-icons.net/1x1/delapouite/house.html (Delapouite)
+    Artisanal Building - https://game-icons.net/1x1/lorc/anvil.html (Lorc)
+    Commercial Building - https://game-icons.net/1x1/delapouite/shop.html (Delapouite)
+    Religious Building - https://game-icons.net/1x1/delapouite/church.html (Delapouite)
+    Cultural Building - https://game-icons.net/1x1/delapouite/theater.html (Delapouite)
+    Ancient Building - https://game-icons.net/1x1/delapouite/ancient-columns.html (Delapouite)
+    Criminal Building - https://game-icons.net/1x1/delapouite/robber.html (Delapouite)
+    Agricultural Building - https://game-icons.net/1x1/delapouite/barn.html (Delapouite)
+    Occult Building - https://game-icons.net/1x1/skoll/pentacle.html (Skoll)
+    Military Building - https://game-icons.net/1x1/delapouite/barracks.html (Delapouite)
+    Government Building - https://game-icons.net/1x1/delapouite/scroll-quill.html (Delapouite)
+    Seat of power - https://game-icons.net/1x1/delapouite/throne-king.html (Delapouite)
+    Oasis - https://game-icons.net/1x1/delapouite/oasis.html (Delapouite)
+    Atmospheric Condensation Machines - https://game-icons.net/1x1/delapouite/water-tower.html (Delapouite)
+    Deep Wells - https://game-icons.net/1x1/delapouite/well.html (Delapouite)
+    Underground Aqueduct - https://game-icons.net/1x1/delapouite/aqueduct.html (Delapouite)
+    Secret Reservoir - https://game-icons.net/1x1/delapouite/water-tank.html (Delapouite)
+    Water Recycling Machines - https://game-icons.net/1x1/delapouite/water-recycling.html (Delapouite)
+    Flows From Hypergeometric Gate - https://game-icons.net/1x1/lorc/magic-portal.html (Lorc)
+    Holy Relic Weeps Water - https://game-icons.net/1x1/delapouite/holy-water.html (Delapouite)
+    Matter Fabricator - https://game-icons.net/1x1/delapouite/factory.html (Delapouite)
+    Beast Breeding Stables - https://game-icons.net/1x1/delapouite/stable.html (Delapouite)
+    Exotic Weapon - https://game-icons.net/1x1/lorc/ray-gun.html (Lorc)
+    Notable Monastery - https://game-icons.net/1x1/delapouite/pagoda.html (Delapouite)
+    Pilgrimage Site - https://game-icons.net/1x1/delapouite/pilgrim-hat.html (Delapouite)
+    Famous Tavern - https://game-icons.net/1x1/delapouite/tavern-sign.html (Delapouite)
+    Verdant Orchards - https://game-icons.net/1x1/delapouite/fruit-tree.html (Delapouite)
+    Fighting Pit - https://game-icons.net/1x1/sbed/arena.html (Sbed)
+    Hypergeometric Building - https://game-icons.net/1x1/delapouite/cube.html (Delapouite)
+    Ancient Spacecraft - https://game-icons.net/1x1/delapouite/spaceship.html (Delapouite)
+    Vault Entrance - https://game-icons.net/1x1/delapouite/airtight-hatch.html (Delapouite)
+    Great Waste Pit - https://game-icons.net/1x1/lorc/radioactive.html (Lorc)
+    Synth Repair Facility - https://game-icons.net/1x1/delapouite/robot-grab.html (Delapouite)
+    Mystic Lodge - https://game-icons.net/1x1/lorc/third-eye.html (Lorc)
+    House of Healing - https://game-icons.net/1x1/delapouite/caduceus.html (Delapouite)
+    Master Alchemist's Workshop - https://game-icons.net/1x1/lorc/fizzing-flask.html (Lorc)
+    Grand Theatre - https://game-icons.net/1x1/lorc/drama-masks.html (Lorc)
+    Pleasure Gardens - https://game-icons.net/1x1/lorc/lotus-flower.html (Lorc)
+    Stylite's Pillar - https://game-icons.net/1x1/delapouite/ionic-column.html (Delapouite)
+    Orbital Defence Cannon - https://game-icons.net/1x1/delapouite/laser-turret.html (Delapouite)
+    Landmark - landmark-star.svg, drawn for this system (see the Region Generator entry above)
+
 Region Map Legend images (module/icons/region/legend, the Vaarn Region Map Legend compendium)
     Drawn by this system's region map painter. The location-*.png images are the
     Region Generator location icons above, recoloured, under the same CC BY 3.0

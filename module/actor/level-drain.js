@@ -2,6 +2,8 @@ import { loseLevels, ABILITY_CAP, ABILITY_LABEL } from "./advancement.js";
 import { maxHpChange } from "../effects/max-hp.js";
 // Creature flags from their sentences (Effect Engine: Creatures chunk 2c-i).
 import { creatureFlagsOf } from "../item/creature-effects.js";
+// Level Drain Without a Ledger (RULED 2026-10-09): the book's drain and the NPC's.
+import { ledgerComplete, entriesAbove, drainedAbilities, npcAbilityValue, NPC_HP_PER_LEVEL, restoreOrder } from "./level-drain-rules.js";
 
 /**
  * CREATURE-DRIVEN LEVEL DRAIN
@@ -73,7 +75,110 @@ export function drainsOn(actor)
  */
 export function victimsOf(drainerId)
 {
-  return game.actors.filter(a => drainsOn(a).some(d => d.drainerId === drainerId));
+  // An unlinked token's actor too (Level Drain Without a Ledger, 2026-10-09):
+  // an NPC victim is usually a spawned creature's token, whose drain is stored
+  // on the token, not on a world Actor.
+  const synthetic = (game.scenes?.contents ?? [])
+    .flatMap(s => s.tokens.contents.filter(t => !t.actorLink && t.actor).map(t => t.actor));
+  return [...game.actors.contents, ...synthetic].filter(a => drainsOn(a).some(d => d.drainerId === drainerId));
+}
+
+/** Keep one drain on its victim, for the drainer's death to give back. */
+async function storeDrain(victim, drainer, record)
+{
+  const drains = foundry.utils.duplicate(drainsOn(victim));
+  drains.push({ drainerId: drainer?.id ?? null, drainerName: drainer?.name ?? "an unknown drainer",
+                at: game.time?.worldTime ?? 0, ...record });
+  await victim.setFlag("vaarn", "levelDrains", drains);
+}
+
+const FLOOR_LINE = `<li><b>Level 1 is the floor.</b> Nothing below it is recorded, and whether a`
+  + ` character drained past it still exists is the Referee's call.</li>`;
+
+async function levelLostCard(victim, reason, note, lines)
+{
+  await ChatMessage.create({
+    speaker: ChatMessage.getSpeaker({ actor: victim }),
+    content: `<div class="vaarn-chat-card"><h3>Level lost</h3>` + (reason ? `<p>${reason}</p>` : "")
+      + `<p><i>${note}</i></p><ul>${lines.join("")}</ul></div>`
+  });
+}
+
+/**
+ * THE BOOK'S DRAIN, for a character whose advancement ledger is not complete
+ * (RULED 2026-10-09, Matt): per Level, the Level, 1d8 off maximum HP and a point
+ * off each of the three highest base abilities; then any ledger entry above the
+ * new Level is lifted out and kept with the drain.
+ */
+async function drainByTheBook({ drainer, victim, levels, reason })
+{
+  const record = { kind: "book", levels: 0, hp: 0, abilities: {}, entries: [] };
+  const lines = [];
+  let refused = false;
+  for(let i = 0; i < levels; i++)
+  {
+    const level = Number(victim.system.level.value);
+    if(level <= 1) { refused = true; break; }
+    const roll = await new Roll("1d8").evaluate({ async: true });
+    const picks = drainedAbilities(victim.system.abilities);
+    const oldMax = Number(victim.system.health.max ?? 0);
+    const updates = { "system.level.value": level - 1, ...maxHpChange(victim, { add: -roll.total, floor: 1 }) };
+    for(const k of picks) updates[`system.abilities.${k}.value`] = Number(victim.system.abilities[k].value) - 1;
+    await victim.update(updates);
+    const hp = oldMax - Number(victim.system.health.max ?? 0);
+    record.levels++;
+    record.hp += hp;
+    for(const k of picks) record.abilities[k] = (record.abilities[k] ?? 0) + 1;
+    lines.push(`<li>Level ${level} &rarr; ${level - 1}: maximum HP &minus;${hp} (1d8: ${roll.total})`
+      + (picks.length ? `; ${picks.map(k => ABILITY_LABEL[k]).join(", ")} &minus;1${picks.length < 3 ? " (no other ability above 0)" : ""}`
+                      : "; no ability above 0 to lose") + `.</li>`);
+  }
+  if(record.levels)
+  {
+    const level = Number(victim.system.level.value);
+    const ledger = victim.system.advancement ?? [];
+    const above = entriesAbove(ledger, level);
+    if(above.length)
+    {
+      record.entries = foundry.utils.duplicate(above);
+      await victim.update({ "system.advancement": ledger.filter(e => Number(e?.level) <= level) });
+      lines.push(`<li>The advancement record for Level${above.length === 1 ? "" : "s"} ${above.map(e => e.level).join(", ")}`
+        + ` is set aside with the drain.</li>`);
+    }
+    await storeDrain(victim, drainer, record);
+  }
+  if(refused) lines.push(FLOOR_LINE);
+  await levelLostCard(victim, reason, "No complete advancement record, so the book's drain.", lines);
+  return { taken: record.levels, refused };
+}
+
+/**
+ * AN NPC'S DRAIN (RULED 2026-10-09, Matt): it loses the Level and its
+ * level-derived stats follow - 4 maximum HP a Level, every ability set to the
+ * new Level - the mirror of applyDrainerGain. Its abilities as they were are
+ * kept, so the drainer's death sets them back exactly.
+ */
+async function drainNpc({ drainer, victim, levels, reason })
+{
+  const from = Number(victim.system.level?.value ?? 0);
+  const taken = Math.max(0, Math.min(levels, from - 1));
+  const refused = taken < levels;
+  const lines = [];
+  if(taken)
+  {
+    const to = from - taken;
+    const abilityValues = Object.fromEntries(Object.entries(victim.system.abilities ?? {}).map(([k, a]) => [k, Number(a?.value ?? 0)]));
+    const oldMax = Number(victim.system.health?.max ?? 0);
+    const updates = { "system.level.value": to, ...maxHpChange(victim, { add: -NPC_HP_PER_LEVEL * taken, floor: 1 }) };
+    for(const k of Object.keys(abilityValues)) updates[`system.abilities.${k}.value`] = npcAbilityValue(to);
+    await victim.update(updates);
+    const hp = oldMax - Number(victim.system.health?.max ?? 0);
+    await storeDrain(victim, drainer, { kind: "npc", levels: taken, hp, abilityValues });
+    lines.push(`<li>Level ${from} &rarr; ${to}: maximum HP &minus;${hp}, abilities now ${npcAbilityValue(to)}.</li>`);
+  }
+  if(refused) lines.push(FLOOR_LINE);
+  await levelLostCard(victim, reason, "A creature's Level, and the stats that follow from it.", lines);
+  return { taken, refused };
 }
 
 /**
@@ -86,10 +191,16 @@ export function victimsOf(drainerId)
  */
 export async function applyLevelDrain({ drainer, victim, spec, reason })
 {
-  if(!victim || victim.type !== "character")
+  if(!victim || (victim.type !== "character" && victim.type !== "npc"))
     return { taken: 0, refused: true, notACharacter: true };
 
   const levels = Number(spec?.levels ?? 1);
+  // Level Drain Without a Ledger (RULED 2026-10-09, Matt): an NPC by its
+  // level-derived stats; a character whose ledger is not complete by the book.
+  // A complete ledger drains as below, under the 2026-09-14 ruling.
+  if(victim.type === "npc") return drainNpc({ drainer, victim, levels, reason });
+  if(!ledgerComplete(victim.system.advancement, victim.system.level?.value))
+    return drainByTheBook({ drainer, victim, levels, reason });
 
   // Snapshot BEFORE the drain: the entries loseLevels is about to pop, plus
   // the full data of every Item those entries granted. Read from the end,
@@ -116,17 +227,13 @@ export async function applyLevelDrain({ drainer, victim, spec, reason })
   if(taken > 0)
   {
     const removed = before.slice(after.length);
-    const drains = foundry.utils.duplicate(drainsOn(victim));
-    drains.push({
-      drainerId: drainer?.id ?? null,
-      drainerName: drainer?.name ?? "an unknown drainer",
+    await storeDrain(victim, drainer, {
+      kind: "ledger",
       entries: removed,
       // Only the Items belonging to the entries that actually went.
       items: Object.fromEntries(removed.flatMap(e =>
         (e.grantedItemIds || []).filter(id => itemData[id]).map(id => [id, itemData[id]]))),
-      at: game.time?.worldTime ?? 0
     });
-    await victim.setFlag("vaarn", "levelDrains", drains);
   }
 
   return { taken, refused: taken < levels };
@@ -216,6 +323,31 @@ async function redoEntry(actor, entry, items)
   await actor.update({ "system.advancement": ledger });
 }
 
+/** Give back a book drain exactly: the Levels, the HP, the points, the set-aside ledger entries. */
+async function redoBookDrain(actor, d)
+{
+  const updates = { "system.level.value": Number(actor.system.level.value) + Number(d.levels ?? 0),
+                    ...maxHpChange(actor, { add: Number(d.hp ?? 0) }) };
+  for(const [key, n] of Object.entries(d.abilities ?? {}))
+    updates[`system.abilities.${key}.value`] = Math.min(ABILITY_CAP, Number(actor.system.abilities[key].value) + Number(n));
+  await actor.update(updates);
+  if(d.entries?.length)
+  {
+    const ledger = [...foundry.utils.duplicate(actor.system.advancement ?? []), ...d.entries]
+      .sort((a, b) => Number(a.level) - Number(b.level));
+    await actor.update({ "system.advancement": ledger });
+  }
+}
+
+/** Give back an NPC drain: the Levels, the HP, and its abilities as they were. */
+async function redoNpcDrain(actor, d)
+{
+  const updates = { "system.level.value": Number(actor.system.level.value) + Number(d.levels ?? 0),
+                    ...maxHpChange(actor, { add: Number(d.hp ?? 0) }) };
+  for(const [key, v] of Object.entries(d.abilityValues ?? {})) updates[`system.abilities.${key}.value`] = Number(v);
+  await actor.update(updates);
+}
+
 /**
  * "Slaying the monster restores all lost time to those it fed upon."
  *
@@ -232,13 +364,20 @@ export async function restoreDrainsFrom(drainer)
     for(const d of drainsOn(victim)) (d.drainerId === drainer.id ? mine : kept).push(d);
     if(!mine.length) continue;
 
+    // Newest first (level-drain-rules.js restoreOrder). A drain stored before
+    // 2026-10-09 has no kind and is a ledger drain.
     let levels = 0;
-    for(const d of mine)
-      for(const entry of d.entries)
+    for(const d of restoreOrder(mine))
+    {
+      const kind = d.kind ?? "ledger";
+      if(kind === "book") { await redoBookDrain(victim, d); levels += Number(d.levels ?? 0); }
+      else if(kind === "npc") { await redoNpcDrain(victim, d); levels += Number(d.levels ?? 0); }
+      else for(const entry of d.entries ?? [])
       {
         await redoEntry(victim, entry, d.items);
         levels++;
       }
+    }
 
     await victim.setFlag("vaarn", "levelDrains", kept);
     results.push({ name: victim.name, levels, level: victim.system.level.value });

@@ -10,9 +10,10 @@
  *
  * READ THIS BEFORE EDITING:
  *  - THE BOOK'S WORDS ARE THE TABLE'S: every text is the row's `effect`.
- *  - A USE is the rule Item's use control, as today. "Once per day" is NOT a
- *    cost here: it stays the table's (chunk 3b ruling 1, Matt, 2026-10-06), and
- *    enforcing it is the row "Bloomboon Daily Use", an open question.
+ *  - A USE is the rule Item's use control, as today. "Once per day" - the five
+ *    boons whose words say so - is a per-day cost of 1 (Bloomboon Daily Use,
+ *    RULED 2026-10-09, Matt), spent from the rule Item's pool as a once-a-day
+ *    mutation's is. It was the table's until then (chunk 3b ruling 1).
  *  - GROWING a part, a fruit or retainers is the `grow` handler carrying the
  *    row's spec (bloomboon-growth.js reads the same shape).
  *  - Mirrored Leaves is the save-gated handler with the row's whole spec, as
@@ -42,30 +43,32 @@ const compel = (name, d, extra = {}) =>
   return use(name, d, { target: "all-in-range", ...targetsGate(name), says: `releases <b>${name}</b> — ${bookText(name)}`,
                         resist: { type: "save", ability: s.ability, vs: s.vs }, ...extra });
 };
-const applied = name =>
+const applied = (name, extra = {}) =>
 {
   const a = row(name).applies;
   return compel(name, { verb: "reminder", name: a.effect, effectText: a.text },
-    a.amount ? { for: { duration: `${a.unit}s`, amount: a.amount } } : { for: { duration: "until-referee" } });
+    { ...(a.amount ? { for: { duration: `${a.unit}s`, amount: a.amount } } : { for: { duration: "until-referee" } }), ...extra });
 };
+// The book's "once per day" (Bloomboon Daily Use, 2026-10-09).
+const daily = { cost: { kind: "per-day", n: 1 } };
 
 const BLOOMBOON_SENTENCES = {
   "Barbed Bark": [{ when: "when-missed", if: [{ gate: "attack-kind", is: "melee" }], target: "attacker", do: { verb: "damage", dice: "@level" }, text: bookText("Barbed Bark") }],
   "Blast Pods": [grow("Blast Pods")],
-  "Empathogen Pollen": [applied("Empathogen Pollen")],
+  "Empathogen Pollen": [applied("Empathogen Pollen", daily)],
   "Grafting": [note("Grafting")],
-  "Glue Resin": [compel("Glue Resin", { verb: "reminder" })],
+  "Glue Resin": [compel("Glue Resin", { verb: "reminder" }, daily)],
   "Lashing Vines": [grow("Lashing Vines")],
   "Luftpods": [note("Luftpods")],
   "Medicinal Fruit": [grow("Medicinal Fruit")],
   "Mirrored Leaves": [use("Mirrored Leaves", { verb: "special", handler: "save-gated", ...row("Mirrored Leaves").saveGated })],
-  "Neurotoxic Pollen": [compel("Neurotoxic Pollen", { verb: "reminder" })],
-  "Oily Sap": [applied("Oily Sap")],
+  "Neurotoxic Pollen": [compel("Neurotoxic Pollen", { verb: "reminder" }, daily)],
+  "Oily Sap": [applied("Oily Sap", daily)],
   "Puppeteer Roots": [applied("Puppeteer Roots")],
   "Sapling Retainers": [use("Sapling Retainers", { verb: "special", handler: "grow", retainers: row("Sapling Retainers").retainers })],
   "Seed Cannon": [grow("Seed Cannon")],
   "Shield Vines": [grow("Shield Vines")],
-  "Soporific Pollen": [applied("Soporific Pollen")],
+  "Soporific Pollen": [applied("Soporific Pollen", daily)],
   "Tesla Bloom": [grow("Tesla Bloom")],
   "Toxic Fruit": [grow("Toxic Fruit")],
   "Vampiric Roots": [use("Vampiric Roots", { verb: "special", handler: "hold", ...row("Vampiric Roots").hold }, { target: "one-target", if: [bio] })],

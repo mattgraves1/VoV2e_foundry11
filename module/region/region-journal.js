@@ -26,9 +26,9 @@
  * touches Foundry.
  */
 
-import { rollLocationDetails, detailsHtml, rollSettlementDetails } from "./region-details.js";
+import { rollLocationDetails, detailsHtml, regionSettlementHtml } from "./region-details.js";
 import { encounterTable, creatureOf } from "./region-data.js";
-import { bestiaryNameOf } from "./region-names.js";
+import { bestiaryNameOf, settleLocation } from "./region-names.js";
 import { rollVaultDetails } from "../vault/vault-journal.js";
 import { localsOf, createSectionTables } from "./region-encounters.js";
 
@@ -107,6 +107,8 @@ ${R.hazard === "Lair" ? `<p class="region-lair-pending"><i>The lair on this rout
     ...W.sections.map(s => ({ _id: ids.sections[s.id], name: sectionTitle(s), text: sectionPage(s), flags: { vaarn: { regionSection: sectionFlag(s) } } })),
     ...W.locs.map(L => ({ _id: ids.locs[L.id], name: locationTitle(L), text: locationPage(L),
       flags: { vaarn: { regionLocation: { loc: L.id, type: L.type }, ...(L.type === "Vault" ? { regionVault: { name: L.name || "", generated: null } } : {}),
+                        // what Build this settlement makes the same settlement from (Settlement Creation chunk 7)
+                        ...(L.type === "Settlement" && L.settlement ? { regionSettlement: { ...L.settlement, name: L.name || "", journal: null } } : {}),
                         ...(spawns[L.id]?.length ? { regionSpawns: spawns[L.id] } : {}) } } })),
     ...W.routes.map(R => ({ _id: ids.routes[R.id], name: routeTitle(W, R), text: routePage(R),
       flags: { vaarn: { regionRoute: { route: R.id, lair: R.hazard === "Lair" ? { rolled: false } : null } } } }))
@@ -143,7 +145,15 @@ export async function rollDetails(W, random = Math.random)
   const html = [], spawns = [];
   for(const L of W.locs)
   {
-    if(L.type === "Settlement") { html.push(await rollSettlementDetails()); spawns.push([]); }
+    if(L.type === "Settlement")
+    {
+      // its settlement, as the preview rolled it (region-names.js settleLocation); a location the GM made a Settlement
+      // in the preview gets one now, and keeps the name it had
+      if(!L.settlement) { const name = L.name; settleLocation(W, L); if(name) L.name = name; }
+      const { generateSettlement } = await import("../settlement/settlement-generator.js");
+      html.push(regionSettlementHtml(generateSettlement({ seed: L.settlement.seed }, { location: L.settlement.location ?? undefined })));
+      spawns.push([]);
+    }
     else if(L.type === "Vault")
     {
       const v = rollVaultDetails(random);

@@ -34,7 +34,7 @@ import { remainingActorSentencesOf } from "./remaining-effects.js";
 import { WEAPON_TAG_EFFECTS } from "./weapon-tag-effects-data.js";
 import { activeDeltas } from "../time/stateful-effect.js";
 import { wearsMetalArmour } from "./metal.js";
-import { bearerProperties } from "../effects/body.js";
+import { bearerProperties, bodyPassives } from "../effects/body.js";
 // Creature attack flags from their sentences (Effect Engine: Creatures chunk 2a).
 import { creatureAttackOf, creatureFlagsOf, creatureActorFlagsOf, namedWoundPerSlot } from "./creature-effects.js";
 
@@ -493,6 +493,20 @@ export function resolveDamageInteractions(item, targetActor) {
     applied.push(rule);
     if (rule.mult === 0) return { mult: 0, immune: true, floor: null, applied };   // immunity short-circuits
     if (rule.floor) { floor = rule.floor; continue; }
+    mult *= rule.mult;
+  }
+  // A RESISTED TYPE from the body's sentences (Gift Effect Library chunk 3,
+  // RULED 2026-10-09): a passive "modify damage-taken <type> x0.5" (half) or
+  // "x0" (immune) on any Item the target carries - a bestowed one for a while.
+  for (const p of bodyPassives(targetActor, { verb: "modify" }))
+  {
+    const d = p.sentence.do;
+    if (d.stat !== "damage-taken" || !d.type || !props.includes(d.type)) continue;
+    const m = /^x([\d.]+)$/.exec(String(d.amount));
+    if (!m) continue;
+    const rule = { attack: d.type, target: p.source, mult: Number(m[1]), note: `${p.source}: ${Number(m[1]) === 0 ? "immune to" : "half damage from"} ${d.type}` };
+    applied.push(rule);
+    if (rule.mult === 0) return { mult: 0, immune: true, floor: null, applied };
     mult *= rule.mult;
   }
   return { mult, immune: false, floor, applied };
@@ -1239,6 +1253,16 @@ export function targetDisadvantage(item, targetActors, hasCond)
     } else {
       out.notes.push(`<b>${r.label}</b>: ${names} has it - if this attack is ranged, it rolls at DIS (the Referee's call).`);
     }
+  }
+  // A WARD from the body's sentences (Gift Effect Library chunk 3, RULED
+  // 2026-10-09): a passive "dis on attacks-against" on any Item the target
+  // carries - attacks against it roll at DIS, whatever the attack.
+  const warded = targets.map(t => ({ t, sources: bodyPassives(t, { verb: "dis" }).filter(p => p.sentence.do.on === "attacks-against").map(p => p.source) })).filter(x => x.sources.length);
+  if (warded.length)
+  {
+    const names = warded.map(x => `${x.t.name} (${[...new Set(x.sources)].join(", ")})`).join(", ");
+    if (warded.length === targets.length) { out.force = true; out.notes.push(`<b>Warded</b>: DIS - ${names}.`); }
+    else out.notes.push(`<b>Warded</b>: ${names}; the others are not - roll against them separately.`);
   }
   return out;
 }

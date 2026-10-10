@@ -27,6 +27,8 @@ import { PLACE_NAMES, TYPE_NAME_COLUMN, AUTARCHIC_TYPES, AUTARCHIC_CHANCE, LANDS
   FAMOUS_MONSTER_TABLE, encounterTable, creatureOf, GIVEN_NAMES, LAND_RESOURCES, RESOURCE_NAME_FORM, WEATHER_NAMES,
   MOUNTAIN_LANDSCAPES, WATER_LANDSCAPES, CREATURE_ALIASES } from "./region-data.js";
 import { BESTIARY } from "../actor/bestiary-data.js";
+import { generateSettlement } from "../settlement/settlement-generator.js";
+import { settlementLocationIn } from "./region-details.js";
 import { LAIR_CREATURE_ALIASES } from "../actor/lair-rooms-data.js";
 
 // A creature an encounter entry names, if the Bestiary has it ("d6 Glass Tigers" is a Glass Tiger).
@@ -54,6 +56,22 @@ const inBestiary = name => !!bestiaryNameOf(name);
 const standsAlone = n => /^the\b/i.test(n) || /\bof\b/i.test(n) || /'s\b/.test(n) || n.split(/\s+/).length >= 3;
 const shortLandmark = t => t.split(/[,;]/)[0].trim();
 
+/**
+ * A region Settlement's own settlement (Settlement Creation chunk 7, RULED 2026-10-08, Matt): a seed of the region's
+ * and the location's, its Location of Settlement from its section's Landscape (Settlement Location from Section
+ * Landscape), named from its details with the region's spent names. Sets L.name, L.nameFrom and L.settlement - what
+ * its page's Build this settlement makes the same settlement from. Returns the settlement.
+ */
+export function settleLocation(W, L, used = new Set())
+{
+  const seed = `${W.settings.seed}|settlement|${L.id}`;
+  const location = settlementLocationIn(W.sections[L.section]?.landscape, rngFrom(seed + "|location"));
+  const g = generateSettlement({ seed }, { usedNames: used, location });
+  L.name = g.name; L.nameFrom = "its details";
+  L.settlement = { seed, location: location ?? null, nameKey: g.nameKey, founder: g.founder };
+  return g;
+}
+
 /** Name a region from generateRegion. Sets L.name, sec.name, sec.nameFrom and sec.encounters. */
 export function nameRegion(W)
 {
@@ -74,6 +92,9 @@ export function nameRegion(W)
 
   for(const L of W.locs)
   {
+    // A Settlement is named by the settlement generator from its own details, rolled now - during the preview - so
+    // the name exists there (Settlement Creation, RULED 2026-10-08, Matt); the region's spent names are its own.
+    if(L.type === "Settlement") { settleLocation(W, L, used); continue; }
     const own = TYPE_NAME_COLUMN[L.type];
     const autarchic = AUTARCHIC_TYPES.has(L.type) && rnd() < AUTARCHIC_CHANCE;
     // the rolled column first, then the other one, so a used-up column falls back either way

@@ -42,7 +42,7 @@ export function rollWeaponBase(table, quality, d)
   return { base: table[d(faces) - 1], baseNote: "" };
 }
 
-export async function rollWeapon(quality,baseChoice, basicTagChoice, advancedTagChoice, exoticTagChoice, forceKind)
+export async function rollWeapon(quality,baseChoice, basicTagChoice, advancedTagChoice, exoticTagChoice, forceKind, faithChoice = null)
 {
   const { MELEE_WEAPONS, RANGED_WEAPONS, BASIC_TAGS, ADVANCED_TAGS, EXOTIC_TAGS } =
     await import("/systems/vaarn/module/actor/chargen-data.js");
@@ -69,6 +69,11 @@ export async function rollWeapon(quality,baseChoice, basicTagChoice, advancedTag
   }
 
   const basicTag = basicTagChoice ? BASIC_TAGS.find(t => t.name === basicTagChoice) : BASIC_TAGS[d(20) - 1];
+  // Faith-Named Religious Weapon Tags (RULED 2026-10-09, Matt): a Sacred or
+  // Blasphemous weapon names a faith of the world (weapon-faith.js); faithChoice
+  // is Generate Weapon's pick, null for Random. Every weapon generator rolls here.
+  const { pickWeaponFaith, hasFaithTag, faithTagHtml } = await import("/systems/vaarn/module/item/weapon-faith.js");
+  const faith = hasFaithTag([basicTag.name]) ? await pickWeaponFaith({ choice: faithChoice }) : null;
   const advancedTag = (quality === "Advanced" || quality === "Exotic")
     ? (advancedTagChoice ? ADVANCED_TAGS.find(t => t.name === advancedTagChoice) : ADVANCED_TAGS[d(20) - 1])
     : null;
@@ -87,7 +92,7 @@ export async function rollWeapon(quality,baseChoice, basicTagChoice, advancedTag
       ? `<p><b>Fragile:</b> breaks on a natural 1 attack roll. Exotic-tier weapons cannot be repaired once broken (GM ruling — leave this sheet's Broken checkbox permanently checked once it's set).</p>`
       : `<p><b>Fragile:</b> breaks on a natural 1 attack roll (cleared manually from this sheet once repaired — narratively, Advanced-tier repairs are said to take d10−INT days).</p>`);
   }
-  descLines.push(`<p><b>${basicTag.name}:</b> ${basicTag.effect}</p>`);
+  descLines.push(faithTagHtml(basicTag.name, basicTag.effect, faith));
   if(advancedTag) descLines.push(`<p><b>${advancedTag.name}:</b> ${advancedTag.effect}</p>`);
   if(exoticTag) descLines.push(`<p><b>${exoticTag.name}:</b> ${exoticTag.effect}</p>`);
   if((base.base_tags || []).length) descLines.push(`<p><b>Built-in tags:</b> ${base.base_tags.join(", ")}</p>`);
@@ -217,7 +222,7 @@ export async function rollWeapon(quality,baseChoice, basicTagChoice, advancedTag
     name: fullName,
     type: resolvedBaseKind === "Ranged" ? "weaponRanged" : "weaponMelee",
     system: weaponSystem,
-    flags: { vaarn: { liveStats: true, tier: quality } },
+    flags: { vaarn: { liveStats: true, tier: quality, ...(faith ? { faith } : {}) } },
     baseNote,
     altForm
   };

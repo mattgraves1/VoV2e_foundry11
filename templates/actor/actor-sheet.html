@@ -513,6 +513,9 @@
                       {{#if (hasAncestryUse item)}}
                       <div class="item-image ancestry-use" title="use"><img src="systems/vaarn/module/icons/d20.svg" title="use" width="24" height="24"/></div>
                       {{/if}}
+                      {{#if (hasAncestryUsePool item)}}
+                      <div class="item-image ancestry-refresh" title="refresh"><img src="systems/vaarn/module/icons/hourglass.svg" title="refresh" width="24" height="24"/></div>
+                      {{/if}}
                       {{#if (hasSaveGated item)}}{{#unless (isAncestryRule item)}}
                       <div class="item-image save-gated-use" title="{{saveGatedLabel item}}"><img src="systems/vaarn/module/icons/d20.svg" title="{{saveGatedLabel item}}" width="24" height="24"/></div>
                       {{/unless}}{{/if}}
@@ -563,7 +566,7 @@
                       {{else if (isWound item)}}
                       <h4>{{displayName item}}</h4>
                       {{else}}
-                      <h4 class="item-control item-view {{#if (isItemBroken item)}}knave-encumbered{{else if (isItemSuppressed item)}}knave-encumbered{{/if}}">{{displayName item}}{{#if (isUnidentified item)}} <span title="Unidentified — the players see it only as Unidentified Exotica, and only you can use it until it is identified — cards it posts do not name it.">(unidentified)</span>{{/if}}{{#if (isItemSuppressed item)}} <span title="Suppressed by {{suppressedByLabel item}} — its ongoing effect does nothing until that is cured or lifted. It still occupies its slots.">(suppressed)</span>{{/if}}{{#if (hasMutationUsePool item)}} ({{item.system.usesRemaining}} left){{/if}}{{#if (hasImplantUsePool item)}} ({{item.system.usesRemaining}} left){{/if}}{{#if (hasExoticaCharges item)}} ({{item.system.usesRemaining}} left){{/if}}{{#if (eq item.name "Berserker StimRig")}}{{#if (isBerserkerActive actor)}} (ACTIVE){{/if}}{{/if}}</h4>
+                      <h4 class="item-control item-view {{#if (isItemBroken item)}}knave-encumbered{{else if (isItemSuppressed item)}}knave-encumbered{{/if}}">{{displayName item}}{{#if (isUnidentified item)}} <span title="Unidentified — the players see it only as Unidentified Exotica, and only you can use it until it is identified — cards it posts do not name it.">(unidentified)</span>{{/if}}{{#if (isItemSuppressed item)}} <span title="Suppressed by {{suppressedByLabel item}} — its ongoing effect does nothing until that is cured or lifted. It still occupies its slots.">(suppressed)</span>{{/if}}{{#if (hasMutationUsePool item)}} ({{item.system.usesRemaining}} left){{/if}}{{#if (hasImplantUsePool item)}} ({{item.system.usesRemaining}} left){{/if}}{{#if (hasAncestryUsePool item)}} ({{usesLeft item}} left){{/if}}{{#if (hasExoticaCharges item)}} ({{item.system.usesRemaining}} left){{/if}}{{#if (eq item.name "Berserker StimRig")}}{{#if (isBerserkerActive actor)}} (ACTIVE){{/if}}{{/if}}</h4>
                       {{/if}}
 
                     </span>

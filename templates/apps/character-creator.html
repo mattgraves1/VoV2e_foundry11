@@ -309,6 +309,7 @@
         {{#if weaponResult.base_tags.length}}<div class="chargen-result-row"><span class="chargen-result-label">Built-in Tags</span><span class="chargen-result-value">{{#each weaponResult.base_tags}}{{this}} {{/each}}</span></div>{{/if}}
         <div class="chargen-result-row"><span class="chargen-result-label">Tag</span><span class="chargen-result-value">{{weaponResult.tag}}</span></div>
         <p class="chargen-note">{{weaponResult.tag_effect}}</p>
+        {{#if weaponResult.faith}}<div class="chargen-result-row"><span class="chargen-result-label">Religion</span><span class="chargen-result-value">{{weaponResult.faith.name}}</span></div>{{#if weaponResult.faith.detail}}<p class="chargen-note">{{weaponResult.faith.detail}}</p>{{/if}}{{/if}}
       </div>
       {{/if}}
     </div>
@@ -409,6 +410,7 @@
         {{#if boonDetail.weapon.ammo_die}}<div class="chargen-result-row"><span class="chargen-result-label">Ammo Die</span><span class="chargen-result-value">{{boonDetail.weapon.ammo_die}}</span></div>{{/if}}
         <div class="chargen-result-row"><span class="chargen-result-label">Basic Tag</span><span class="chargen-result-value">{{boonDetail.weapon.basic_tag}}</span></div>
         <p class="chargen-note">{{boonDetail.weapon.basic_tag_effect}}</p>
+        {{#if boonDetail.weapon.faith}}<div class="chargen-result-row"><span class="chargen-result-label">Religion</span><span class="chargen-result-value">{{boonDetail.weapon.faith.name}}</span></div>{{#if boonDetail.weapon.faith.detail}}<p class="chargen-note">{{boonDetail.weapon.faith.detail}}</p>{{/if}}{{/if}}
         <div class="chargen-result-row"><span class="chargen-result-label">Advanced Tag</span><span class="chargen-result-value">{{boonDetail.weapon.advanced_tag}}</span></div>
         <p class="chargen-note">{{boonDetail.weapon.advanced_tag_effect}}</p>
         <p class="chargen-warning-inline">Fragile — breaks on natural 1</p>

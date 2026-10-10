@@ -740,17 +740,20 @@ export class KnaveCharacterCreator extends Application
   /* Step 4 — Equipment                            */
   /* -------------------------------------------- */
 
-  _rollWeapon()
+  async _rollWeapon()
   {
     const table = this.state.weaponType === "melee" ? MELEE_WEAPONS : RANGED_WEAPONS;
     // The starting weapon is a Basic weapon: d12 on the base table, not d20.
     const { base } = rollWeaponBase(table, "Basic", d);
     const tag = BASIC_TAGS[d(20) - 1];
+    // Faith-Named Religious Weapon Tags (2026-10-09): a Sacred or Blasphemous one names a faith.
+    const { pickWeaponFaith, hasFaithTag } = await import("/systems/vaarn/module/item/weapon-faith.js");
+    const faith = hasFaithTag([tag.name]) ? await pickWeaponFaith() : null;
     this.state.equipment.weapon =
     {
       name: base.name, tag: tag.name, full_name: `${tag.name} ${base.name}`,
       damage: base.damage, slots: base.slots, hands: base.hands ?? 1, ammo_die: base.ammo_die || null,
-      base_tags: base.base_tags || [], tag_effect: tag.effect, type: this.state.weaponType,
+      base_tags: base.base_tags || [], tag_effect: tag.effect, type: this.state.weaponType, faith,
     };
     this.render();
   }
@@ -824,11 +827,13 @@ export class KnaveCharacterCreator extends Application
     this.render();
   }
 
-  _rollAdvancedWeapon()
+  async _rollAdvancedWeapon()
   {
     const table = this.state.boonWeaponType === "melee" ? MELEE_WEAPONS : RANGED_WEAPONS;
     const { base } = rollWeaponBase(table, "Advanced", d);
     const basicTag = BASIC_TAGS[d(20) - 1];
+    const { pickWeaponFaith, hasFaithTag } = await import("/systems/vaarn/module/item/weapon-faith.js");
+    const faith = hasFaithTag([basicTag.name]) ? await pickWeaponFaith() : null;
     const advTag = ADVANCED_TAGS[d(20) - 1];
     this.state.boon =
     {
@@ -838,7 +843,7 @@ export class KnaveCharacterCreator extends Application
         name: base.name, basic_tag: basicTag.name, advanced_tag: advTag.name,
         full_name: `${basicTag.name} ${advTag.name} ${base.name}`,
         damage: base.damage, slots: base.slots, hands: base.hands ?? 1, ammo_die: base.ammo_die || null,
-        base_tags: base.base_tags || [], basic_tag_effect: basicTag.effect, advanced_tag_effect: advTag.effect,
+        base_tags: base.base_tags || [], basic_tag_effect: basicTag.effect, advanced_tag_effect: advTag.effect, faith,
         type: this.state.boonWeaponType,
       }
     };
@@ -1057,14 +1062,14 @@ export class KnaveCharacterCreator extends Application
       // weapon was worth 1 while a Gilded generated one was worth 2. Starting
       // weapons are Basic tier, so no tier bonus applies.
       tradeValue: eq.weapon.tradeValue ?? 1,
-      description: `${eq.weapon.tag ? `<p><b>Tag:</b> ${eq.weapon.tag} — ${eq.weapon.tag_effect}</p>` : ""}${(eq.weapon.base_tags || []).length ? `<p><b>Built-in tags:</b> ${eq.weapon.base_tags.join(", ")}</p>` : ""}`,
+      description: `${eq.weapon.tag ? `<p><b>Tag:</b> ${eq.weapon.tag}${eq.weapon.faith ? ` (${eq.weapon.faith.name})` : ""} — ${eq.weapon.tag_effect}</p>` : ""}${eq.weapon.faith?.detail ? `<p><i>${eq.weapon.faith.name}: ${eq.weapon.faith.detail}</i></p>` : ""}${(eq.weapon.base_tags || []).length ? `<p><b>Built-in tags:</b> ${eq.weapon.base_tags.join(", ")}</p>` : ""}`,
     };
     if(eq.weapon.ammo_die)
     {
       const die = normalizeUsageDie(eq.weapon.ammo_die);
       weaponSystem.usageDie = { die, max: die };
     }
-    items.push({ name: eq.weapon.full_name, type: eq.weapon.type === "ranged" ? "weaponRanged" : "weaponMelee", system: weaponSystem, flags: { vaarn: { liveStats: true, tier: "Basic" } } });
+    items.push({ name: eq.weapon.full_name, type: eq.weapon.type === "ranged" ? "weaponRanged" : "weaponMelee", system: weaponSystem, flags: { vaarn: { liveStats: true, tier: "Basic", ...(eq.weapon.faith ? { faith: eq.weapon.faith } : {}) } } });
 
     // A Helmet or Shield rolled as GEAR (JADE IBIS gear 20A / 20B) is a
     // separate armor Item, +1 AV each, the same shape the retired "Helm &
@@ -1298,14 +1303,14 @@ export class KnaveCharacterCreator extends Application
         // Advanced tier: the tags' multipliers and Matt's x2 tier bonus live; the base's own value,
         // as every other site (no base table carries one, so 1 - CHECKED 2026-10-07).
         tradeValue: w.tradeValue ?? 1,
-        description: `<p><b>Fragile:</b> breaks on a natural 1 attack roll (cleared manually from this sheet once repaired — narratively, Advanced-tier repairs are said to take d10−INT days).</p><p><b>${w.basic_tag}:</b> ${w.basic_tag_effect}</p><p><b>${w.advanced_tag}:</b> ${w.advanced_tag_effect}</p>${w.ammo_die ? "<p>Ammo only available in Vaarnish cities.</p>" : ""}`,
+        description: `<p><b>Fragile:</b> breaks on a natural 1 attack roll (cleared manually from this sheet once repaired — narratively, Advanced-tier repairs are said to take d10−INT days).</p><p><b>${w.basic_tag}${w.faith ? ` (${w.faith.name})` : ""}:</b> ${w.basic_tag_effect}</p>${w.faith?.detail ? `<p><i>${w.faith.name}: ${w.faith.detail}</i></p>` : ""}<p><b>${w.advanced_tag}:</b> ${w.advanced_tag_effect}</p>${w.ammo_die ? "<p>Ammo only available in Vaarnish cities.</p>" : ""}`,
       };
       if(w.ammo_die)
       {
         const die = normalizeUsageDie(w.ammo_die);
         advWeaponSystem.usageDie = { die, max: die };
       }
-      items.push({ name: `${w.full_name} (Fragile)`, type: w.type === "ranged" ? "weaponRanged" : "weaponMelee", system: advWeaponSystem, flags: { vaarn: { liveStats: true, tier: "Advanced" } } });
+      items.push({ name: `${w.full_name} (Fragile)`, type: w.type === "ranged" ? "weaponRanged" : "weaponMelee", system: advWeaponSystem, flags: { vaarn: { liveStats: true, tier: "Advanced", ...(w.faith ? { faith: w.faith } : {}) } } });
     }
     else if(boon.name === "Cybernetic Implant" && boon.implant)
     {

@@ -82,6 +82,43 @@ export const LANDSCAPE_WORD = {
 };
 
 /**
+ * A region Settlement's Location of Settlement, from its section's Landscape
+ * (Settlement Location from Section Landscape row, RULED 2026-10-08, Matt).
+ * Fifteen are the book's own Location rows; the five marked new are Claude's
+ * wording, approved. LANDSCAPE_SETTING names the terrain beside a site feature
+ * ("Ancient Bomb Crater, among the Mesas") - Claude's wording, after Matt ruled
+ * that a site feature names its terrain.
+ */
+export const LANDSCAPE_SETTLEMENT_LOCATION = {
+  "Featureless Sands": "Amongst Rolling Dunes", "Salt Pan": "On Salt Plains",
+  "Rocky Plain": "On a Rocky Plain",                       // new
+  "Dried-Up Lake": "Dried-up Lake Bed",
+  "Dried-Up River": "Beside a Dried-Up Riverbed",          // new
+  "Towering Monoliths": "Surrounded by Monoliths",
+  "Mesas": "Atop a Mesa",                                  // new
+  "Hills": "On a Windswept Hill", "Lone Mountain": "Foot of a Lone Mountain",
+  "Toxic Lake": "Shores of a Toxic Lake", "Toxic River": "Banks of a Toxic River",
+  "Fungal Forest": "Surrounded by Fungal Groves", "Crystal Growths": "Amongst Huge Floating Crystals",
+  "Windswept Plateau": "On a Windswept Plateau",           // new
+  "Mountainous": "Nestled in a Valley", "Winding Canyons": "Amongst Desert Canyons",
+  "Abandoned City": "Within Ruins of Larger Settlement", "Cactus Fields": "Amongst Cactus Groves",
+  "Riddled with Caves": "Amidst Cave-Riddled Rock",        // new
+  "Garbage-Strewn Wastes": "Amongst Garbage-Strewn Sands"
+};
+export const LANDSCAPE_SETTING = {
+  "Featureless Sands": "in the Featureless Sands", "Salt Pan": "on the Salt Pan", "Rocky Plain": "on the Rocky Plain",
+  "Dried-Up Lake": "on the Dried-Up Lake", "Dried-Up River": "by the Dried-Up River", "Towering Monoliths": "among the Towering Monoliths",
+  "Mesas": "among the Mesas", "Hills": "in the Hills", "Lone Mountain": "by the Lone Mountain", "Toxic Lake": "by the Toxic Lake",
+  "Toxic River": "by the Toxic River", "Fungal Forest": "in the Fungal Forest", "Crystal Growths": "among the Crystal Growths",
+  "Windswept Plateau": "on the Windswept Plateau", "Mountainous": "in the Mountains", "Winding Canyons": "in the Winding Canyons",
+  "Abandoned City": "in the Abandoned City", "Cactus Fields": "in the Cactus Fields", "Riddled with Caves": "among the Caves",
+  "Garbage-Strewn Wastes": "in the Garbage-Strewn Wastes"
+};
+/** The Location of Settlement rows (d20) that are site features, not terrain: one of them one time in four. */
+export const SITE_FEATURE_ROWS = [1, 2, 6, 9, 20];
+export const SITE_FEATURE_CHANCE = 0.25;
+
+/**
  * Each Landscape's encounter table - a section's default table, which the GM
  * may change, and the source of a Local Wildlife section name's creature.
  * Environment Encounter Tables are d20, the themed Encounter Tables d12.

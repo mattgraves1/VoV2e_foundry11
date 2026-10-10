@@ -3,7 +3,7 @@
   "name": "vaarn",
   "title": "Vaults of Vaarn",
   "description": "A game system for Vaults of Vaarn (second edition) by Leo Hunt. Forked from the unofficial Knave system. Not affiliated with Leo Hunt, Ben Milton or the original Knave system's authors.",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "minimumCoreVersion": "11",
   "compatibleCoreVersion": "11",
   "compatibility": {
@@ -14,7 +14,7 @@
   "authors": [{ "name": "Matt Graves" }],
   "url": "https://github.com/mattgraves1/VoV2e_foundry11",
   "manifest": "https://github.com/mattgraves1/VoV2e_foundry11/releases/latest/download/system.json",
-  "download": "https://github.com/mattgraves1/VoV2e_foundry11/releases/download/v0.3.1/vaarn-0.3.1.zip",
+  "download": "https://github.com/mattgraves1/VoV2e_foundry11/releases/download/v0.4.0/vaarn-0.4.0.zip",
   "esmodules": ["module/knave.js"],
   "styles": ["css/knave.css"],
   "scripts": [],

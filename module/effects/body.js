@@ -60,7 +60,13 @@ export function bodyPassives(actor, { verb = null, holds = ungated } = {})
 // Implants, figments and Exotica join the body (Effect Engine: Implants, Exotica
 // and Figments chunk 2, 2026-10-06): an implant or figment installed, an Exotica
 // carried, an Exotica armour equipped - each read in its item state.
-const BODY_TYPES = new Set(["mutation", "ancestry", "implant", "figment", "exotica", "armor"]);
+// Every kind but a weapon since GM Effect Builder: Widening chunk 2 (RULED
+// 2026-10-09, Matt): a worn or carried Item's hit and roll sentences reach
+// every attack the bearer makes; a weapon's are its own attack's (ruling 1),
+// read by weapon-tags.js from the weapon itself. Exported for the builder's
+// "body" and "attack" scopes: a recipe read here is offered on exactly these.
+export const BODY_TYPES = new Set(["mutation", "ancestry", "implant", "figment", "exotica", "armor",
+  "gift", "item", "light", "spell", "codex", "crucible", "wound", "exhaustion", "affliction"]);
 
 /**
  * The BODY's sentences on one trigger - an attack roll, being hit or missed, a
@@ -114,7 +120,10 @@ export function bodyTabReminders(actor)
   const row = (item, source, n, inForce) =>
     out.push({ name: source, itemType: item?.type ?? "ancestry", category: n.tab.category, section: n.tab.section, polarity: n.tab.polarity,
                note: inForce ? (n.text ?? "") : `${n.text ?? ""} (equip it to use this)`, item });
-  const isRow = n => !n.baked && trig(n) === "passive" && n.tab && n.do?.verb === "reminder";
+  // The book's rows only (tagged by their translator): a GM's untagged note is
+  // item-readers.js builtReminders' row, filed once (Widening chunk 2, where every
+  // kind joined the body and the two would otherwise both list it).
+  const isRow = n => !n.baked && trig(n) === "passive" && n.tab && n.do?.verb === "reminder" && !!n.tag;
   for (const item of actor?.items ?? [])
   {
     if (!BODY_TYPES.has(item.type) || isSuppressed(item)) continue;

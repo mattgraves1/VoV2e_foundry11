@@ -209,8 +209,20 @@ export const VERBS = {
   "item-state":       { mode: "card", params: ["state"], example: { state: "useless" } },
   "refill":           { mode: "card", params: ["what"], example: { what: "ammo" } },
   "compel":           { mode: "card", params: ["command"], example: { command: "obey one verbal command" } },
-  "teleport":         { mode: "card", params: [], example: { to: "a random location" } },
+  // Said to its targets (GM Effect Builder: Widening chunk 3d, RULED 2026-10-09 as the default to test).
+  "teleport":         { mode: "reminder", params: [], example: { to: "a random location" } },
   "grant-attack":     { mode: "auto", params: ["dice"], example: { dice: "1d6", type: "kinetic" } },
+  // Gift Effect Library chunk 3 (RULED 2026-10-09, Matt): a passive effect for a
+  // while on anyone - the entry grants an intrinsic Item carrying `effects`
+  // (passive sentences every reader already reads) and removes it when it ends.
+  "bestow":           { mode: "auto", params: ["effects"], example: { name: "Warded", effects: [{ when: "passive", do: { verb: "dis", on: "attacks-against" } }] } },
+  // Gift Effect Library chunk 4a (RULED 2026-10-09, Matt): temporary HP is NOT
+  // a heal - its own word, the Apply writing the pool - so Deprived and
+  // Inevitable do not block it, and a Gift may give its user some.
+  "temp-hp":          { mode: "card", params: ["amount"], example: { amount: "@cost+@psy" } },
+  // Gift Effect Library chunk 4c (RULED 2026-10-09, Matt): the protector rule as a passive
+  // sentence - the bearer may take a lethal blow aimed at a ward (combat/protector.js).
+  "protector":        { mode: "auto", params: [], example: {} },
   "reflect":          { mode: "card", params: [], example: {} },
   "resurrect":        { mode: "card", params: [], example: {} },
   "auto-hit":         { mode: "auto", params: [], example: {} },
@@ -289,6 +301,17 @@ export const RULED_MODE_VERBS = new Set([
   // ignore-armour and max-hp ruled as today's behaviour (ruling G); emit-light
   // auto, the token lighting itself (chunk 5b).
   "ability-damage", "kill", "reflect", "auto-hit", "ignore-armour", "max-hp", "emit-light",
+  // GM Effect Builder: Widening chunk 3d (2026-10-09): said to the targets, as teleport, forced-move and reveal.
+  "conceal",
+  // Widening chunk 3e (RULED 2026-10-09, Matt): a granted attack, at once on the user and a card on a target.
+  "grant-attack",
+  // Gift Effect Library chunk 3 (RULED 2026-10-09, Matt): a bestowed passive, the same way.
+  "bestow",
+  // Gift Effect Library chunk 4a (RULED 2026-10-09, Matt): temp HP a card; cure, remove-wound
+  // and level on a use as the effect card's Apply (card), as today's behaviour for each.
+  "temp-hp", "cure", "remove-wound", "level",
+  // Gift Effect Library chunk 4c (RULED 2026-10-09, Matt): the protector rule, read passively.
+  "protector",
   // refill a card: Fungal's feeding is offered after a rest, the table chooses (chunk 5c).
   "refill"
 ]);

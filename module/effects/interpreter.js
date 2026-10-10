@@ -24,7 +24,7 @@
  * The decisions are in interpret.js, which is pure and tested offline; this
  * file only acts on them.
  */
-import { planUse, typesFor, fillFormula, readableFormula, conditionSpec, isTargetGate, sentencesOf, meetsState } from "./interpret.js";
+import { planUse, typesFor, fillFormula, readableFormula, conditionSpec, isTargetGate, sentencesOf, meetsState, resolveStatAmount, verbLabel } from "./interpret.js";
 import { normalise } from "./sentence.js";
 import { itemStateDefault } from "./vocabulary.js";
 import { settleGates, passiveGatesHold } from "./gates.js";
@@ -36,6 +36,12 @@ import { isSuppressed } from "../item/suppression.js";
 import { needsAttunementToUse, needsAttunement, refusalFor } from "../item/attunement.js";
 import { postSaveCard, postToxSaves } from "../combat/compelled-save.js";
 import { rollUsageDie } from "../item/usage-die.js";
+import { usesLeft } from "../actor/daily-pool.js";
+import { isBroken } from "../item/broken.js";
+import { displayNameOf } from "../item/display-name.js";
+
+/** The verbs a use says to its targets and leaves to the table (Widening chunk 3d, RULED 2026-10-09). */
+const SAY_VERBS = new Set(["teleport", "forced-move", "reveal", "conceal"]);
 
 const ABILITIES = ["str", "dex", "con", "int", "psy", "ego"];
 
@@ -83,6 +89,8 @@ export async function runUse(actor, item, sentence, ctx = {})
   const source = item?.type === "ancestry" ? (normalise(sentence).tag ?? item.name) : item.name;
   let refused = plan.refused;
   if (!refused && isSuppressed(item)) refused = "it is suppressed";
+  // Broken Item State (RULED 2026-10-06, Matt): every use of a broken Item is refused.
+  if (!refused && isBroken(item)) refused = "it is broken";
   // The sheet asks the Referee before an Exotica use (its attunement dialog), so
   // a use the Referee has just allowed is not refused here again (chunk 3b).
   if (!refused && !ctx.attunementChecked && needsAttunementToUse(actor, item)) refused = refusalFor(actor, item, "use");
@@ -110,10 +118,10 @@ export async function runUse(actor, item, sentence, ctx = {})
   // Rest or the refresh control refills. An empty pool refuses the use.
   if (plan.perDay)
   {
-    const left = Number(item.system?.usesRemaining ?? 0);
+    const left = usesLeft(actor, item);
     if (left <= 0)
     {
-      await say(actor, `<b>${actor.name}</b> has no uses of <b>${item.name}</b> left today.`);
+      await say(actor, `<b>${actor.name}</b> has no uses of <b>${displayNameOf(item)}</b> left today.`);
       return { refused: "no uses left today" };
     }
     await item.update({ "system.usesRemaining": left - 1 });
@@ -187,10 +195,11 @@ export async function runUse(actor, item, sentence, ctx = {})
 
   const cardOptions = [];
   let keepCharge = false;
-  for (const option of plan.options)
+  for (let option of plan.options)
   {
     const figure = option.expr ? rolled[option.expr] : null;
-    if (option.verb === "damage" || option.verb === "heal")
+    // An escalating beam is chunk 4a's branch below, not plain damage (Group 620: it dealt its 1 and started nothing).
+    if ((option.verb === "damage" && !option.params?.escalating) || option.verb === "heal")
     {
       const types = option.verb === "damage" ? typesFor(option, plan.rules) : null;
       if (option.mode === "card") { cardOptions.push({ verb: option.verb, amount: figure.total, min: figure.min, types, label: option.label }); continue; }
@@ -242,16 +251,76 @@ export async function runUse(actor, item, sentence, ctx = {})
       if (!chosen.length) await postSaveCard(actor, source, [save], [], { applies: onFail });
       for (const t of list) await postSaveCard(actor, source, [save], [], { token: t, applies: onFail });
     }
-    else if (option.verb === "condition" || (option.verb === "reminder" && option.lasting))
+    else if (option.verb === "temp-hp" || option.verb === "cure" || option.verb === "remove-wound" || option.verb === "level"
+             || (option.verb === "modify" && option.params?.stat === "armour-damage") || (option.verb === "damage" && option.params?.escalating))
+    {
+      // Gift Effect Library chunk 4a (RULED 2026-10-09): each the effect card's
+      // Apply per target - temporary HP (never a heal), a cure (the Toxin Die
+      // stepped down PSY steps, an affliction chosen on Apply, a fire put out),
+      // a wound closed (chosen on Apply), a Level drained (no gain for the
+      // user), armour eroded by PSY, the escalating beam started at 1.
+      const psy = Number(abilities.psy ?? 0);
+      const stepsOf = v => { const { formula, missing } = fillFormula(String(v ?? "@psy"), { cost: plan.costDie, abilities }); return missing.length ? 1 : Math.max(1, Number(formula) || 0); };
+      if (option.verb === "modify")
+      {
+        const resolved = await resolveStatAmount(option.params, { cost: plan.costDie, abilities, roll: async f => (await new Roll(f).evaluate({ async: true })).total });
+        cardOptions.push({ verb: "armour-damage", amount: Math.abs(Number(String(resolved.amount).replace(/^\+/, "")) || 0), min: 0, label: option.label });
+      }
+      else if (option.verb === "damage")
+        cardOptions.push({ verb: "escalating", amount: Number(option.params.dice) || 1, min: 0, factor: Number(option.params.escalating?.factor) || 2, label: option.label });
+      else if (option.verb === "temp-hp")
+        cardOptions.push({ verb: "temp-hp", amount: figure?.total ?? 0, min: figure?.min ?? 0, label: option.label });
+      else if (option.verb === "cure")
+        cardOptions.push({ verb: "cure", what: option.params.what, amount: option.params.what === "tox" ? stepsOf(option.params.steps) : 0, min: 0, label: option.label });
+      else if (option.verb === "remove-wound")
+        cardOptions.push({ verb: "remove-wound", amount: Number(option.params.count) || 1, min: 0, label: option.label });
+      else
+        cardOptions.push({ verb: "level", amount: Math.abs(Number(String(option.params.amount).replace(/^\+/, "")) || 1), min: 0, label: option.label });
+      void psy;
+    }
+    else if (option.verb === "ability-damage" || option.verb === "kill")
+    {
+      // Widening chunk 3a (RULED 2026-10-09, card as the default to test): the
+      // effect card's Apply deals the rolled ability loss, or the death, to each
+      // target - a resisted one went through the save cards above.
+      cardOptions.push({ verb: option.verb, ability: option.params?.ability ?? null,
+                         amount: figure?.total ?? 0, min: figure?.min ?? 0, label: option.label });
+    }
+    else if (SAY_VERBS.has(option.verb))
+    {
+      // Widening chunk 3d: a teleport, a forced move, a reveal or a conceal is
+      // said to its targets in the sentence's words - the table does the rest.
+      const names = targets.map(t => actorOfTarget(t).name).join(", ");
+      await say(actor, `<p><b>${item.name}</b> — ${option.label}${names ? ` → <b>${names}</b>` : ""}</p>${option.text ? `<p>${option.text}</p>` : ""}`);
+    }
+    else if (option.verb === "condition" || (option.verb === "reminder" && option.lasting) || ["compel", "modify", "auto-hit", "ignore-armour", "grant-attack", "bestow"].includes(option.verb))
     {
       // A lasting reminder is a board entry with no mechanics, applied the
       // way a condition is - a named Gift effect that is no registered state.
+      // A stat change's formula amount (+@psy, @cost+@psy, dice) is filled and rolled now
+      // (Gift Effect Library chunk 2): the entry carries the number.
+      if (option.verb === "modify" && option.params)
+      {
+        // The dice shown in chat, as a damage roll is (Group 618: a +4 with no roll to read).
+        const rollShown = async f =>
+        {
+          const r = await new Roll(f).evaluate({ async: true });
+          await r.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: `<b>${item.name}</b> — ${option.label} (${readableFormula(String(option.params.amount).replace(/^[+-]/, ""), plan.costDie)})` });
+          return r.total;
+        };
+        const resolved = await resolveStatAmount(option.params, { cost: plan.costDie, abilities, roll: rollShown });
+        if (resolved.missing?.length) { ui.notifications.warn(`${item.name}: no value for ${resolved.missing.join(", ")}.`); continue; }
+        option = { ...option, params: resolved, label: option.label === verbLabel(option.params) ? verbLabel(resolved) : option.label };
+      }
       const spec = conditionSpec(option, source);
       // A dice span (the Dopplegun's d6 rounds, the Phase Cape's d4) rolled now, as the
       // apply card always rolled it (Implants, Exotica and Figments chunk 3b).
       if (!Number.isFinite(spec.rounds) && option.clock.amount)
         spec.rounds = (await new Roll(String(option.clock.amount)).evaluate({ async: true })).total;
-      if (option.mode === "auto")
+      // A stat change (Widening chunk 3b, RULED 2026-10-09): applied at once on
+      // the user, a card with Apply on a target - by the target, not a stored mode.
+      const mode = ["modify", "auto-hit", "ignore-armour", "grant-attack", "bestow"].includes(option.verb) ? (plan.target === "self" ? "auto" : "card") : option.mode;
+      if (mode === "auto")
       {
         for (const t of targets) await applyEffectToActor(actorOfTarget(t), { ...spec, sourceActorId: actor.id });
         // Named, unless the use said its own line (the Phase Cape; chunk 3b).
@@ -288,6 +357,9 @@ export async function runUse(actor, item, sentence, ctx = {})
   // An Elixir's vial (Consumables chunk 3a): spent by the drink, unless a handler
   // kept it (a refused drink). A handler that already removed it is done.
   if (plan.consumed && !keepCharge && actor.items.get(item.id)) await item.delete();
+  // A card with nobody to apply it to is not posted; say so rather than nothing (Widening chunk 3a).
+  if (cardOptions.length && !targets.length)
+    await say(actor, `<b>${item.name}</b>: no target is selected, so there is nothing to apply it to.`);
   if (cardOptions.length)
     await postEffectCard(actor, item, { label: plan.options.length === 1 ? plan.label : "", options: cardOptions,
                                         targets, healsUser: plan.rules.healsUser });

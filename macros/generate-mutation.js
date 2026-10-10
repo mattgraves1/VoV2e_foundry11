@@ -40,26 +40,12 @@
  * to the hotbar. Run it to roll and create one Item immediately.
  */
 
+// The roll and the Item data live in module/item/loot-builders.js (buildMutation)
+// since 2026-10-08, shared with the Follow-Up Roll Button's "Induces Mutations".
 async function generateMutation()
 {
-  const { MUTATION_TABLE } = await import("/systems/vaarn/module/actor/mutation-data.js");
-  const { d } = await import("/systems/vaarn/module/actor/chargen-app.js");
-
-  const roll = d(100);
-  const entry = MUTATION_TABLE[roll - 1];
-
-  const itemCls = getDocumentClass("Item");
-  const item = await itemCls.create(
-  {
-    name: entry.name,
-    type: "mutation",
-    system:
-    {
-      slots: 0,
-      roll,
-      description: `<p><b>d100 roll:</b> ${roll}</p><p>${entry.effect}</p>`
-    }
-  });
+  const { buildMutation } = await import("/systems/vaarn/module/item/loot-builders.js");
+  const [item] = await getDocumentClass("Item").createDocuments(buildMutation());
 
   ui.notifications.info(`Created "${item.name}" in the Items directory.`);
   return item;

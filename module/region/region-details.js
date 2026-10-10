@@ -10,8 +10,8 @@
  *   seven types      composite generators in composite-generator-data.js (Bandit
  *                    Camp, Oasis, Fortress, Trade Post, Archive, Arcology,
  *                    Anomaly), which already roll each column on its own
- *   Settlement       Generate Settlement's results (Foundry only - see
- *                    rollSettlementDetails)
+ *   Settlement       its settlement's overview (regionSettlementHtml); the page
+ *                    builds the whole settlement when wanted (RULED)
  *   Vault            Vault Entrance, Tunnels and Original Function; the vault
  *                    itself is generated from its page when wanted (RULED)
  *
@@ -20,6 +20,11 @@
 
 import { ROLLTABLES } from "../actor/rolltable-data.js";
 import { COMPOSITE_GENERATORS } from "../actor/composite-generator-data.js";
+import { SETTLEMENT_GROUPS } from "../actor/settlement-overview-data.js";
+import { LANDSCAPE_SETTLEMENT_LOCATION, LANDSCAPE_SETTING, SITE_FEATURE_ROWS, SITE_FEATURE_CHANCE } from "./region-data.js";
+
+/** The book's Location of Settlement column, index = d20 - 1. */
+const SETTLEMENT_LOCATIONS = SETTLEMENT_GROUPS.find(g => g.cols[0] === "Location of Settlement").data["Location of Settlement"];
 
 const COMPOSITE_KEY = { "Bandit Camp": "bandit_camp", "Oasis": "oasis", "Fortress": "fortress", "Trade Post": "trade_post",
   "Archive": "archive", "Arcology": "arcology", "Anomaly": "anomaly" };
@@ -65,7 +70,7 @@ function rollComposite(gen, random)
 
 /**
  * A location's details: [{ heading, lines: [{ label, values }] }], or null for Settlement and Vault,
- * whose details are rolled in Foundry (rollSettlementDetails, and the Vault's own button).
+ * whose details are rolled elsewhere (regionSettlementHtml from its settlement, and the Vault's own button).
  */
 export function rollLocationDetails(type, random = Math.random)
 {
@@ -91,16 +96,31 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "
 export const detailsHtml = details => details.map(d =>
   `<h3>${esc(d.heading)}</h3>` + d.lines.map(l => `<p><b>${esc(l.label)}:</b> ${l.values.map(esc).join("; ")}</p>`).join("")).join("");
 
-/** A Settlement's details, as Generate Settlement rolls them, as HTML. Foundry only. */
-export async function rollSettlementDetails()
+/**
+ * A region Settlement's Location of Settlement (Settlement Location from Section
+ * Landscape row, RULED 2026-10-08, Matt): one time in four a site feature from the
+ * book's column, rolled evenly, with its terrain named; otherwise the section
+ * Landscape's own location. Pure given a random function, for the test.
+ */
+export function settlementLocationIn(landscape, random = Math.random)
 {
-  const { SETTLEMENT_GROUPS } = await import("../actor/settlement-overview-data.js");
-  const { rollSingleTable } = await import("../actor/composite-roller.js");
-  const { pickRandomResultHtml } = await import("../actor/rolltable-picker.js");
-  const { fluctuationHtml } = await import("../actor/settlement-fluctuation.js");
-  const { html } = rollSingleTable({ groups: SETTLEMENT_GROUPS });
-  const buildings = [];
-  for(let i = 0; i < 4; i++) buildings.push(`<p><b>Building ${i + 1}:</b> ${await pickRandomResultHtml("Building Types")}</p>`);
-  return `<h3>Settlement</h3>${html}<p><b>Major Asset:</b> ${await pickRandomResultHtml("Settlement Assets")}</p>${buildings.join("")}`
-    + `<p><b>Landmark:</b> ${await pickRandomResultHtml("Landmark Table (d100)")}</p>${fluctuationHtml()}`;
+  if(random() < SITE_FEATURE_CHANCE)
+  {
+    const row = SITE_FEATURE_ROWS[Math.floor(random() * SITE_FEATURE_ROWS.length)];
+    return `${SETTLEMENT_LOCATIONS[row - 1]}, ${LANDSCAPE_SETTING[landscape]}`;
+  }
+  return LANDSCAPE_SETTLEMENT_LOCATION[landscape];
+}
+
+/**
+ * A region Settlement's page details (Settlement Creation chunk 7, RULED 2026-10-08, Matt): its settlement's
+ * overview - every column as the settlement's own journal prints it - and the line Build this settlement replaces.
+ * `g` is the settlement settleLocation (region-names.js) made in the preview. Pure.
+ */
+export const SETTLEMENT_PENDING = /<p class="region-settlement-pending">.*?<\/p>/;
+export function regionSettlementHtml(g)
+{
+  const clean = v => String(v ?? "").replace(/\s*\(p\.\s*xx\)/gi, "").trim();
+  return `<h3>Settlement</h3>${g.overview.flatMap(o => o.cols.map(([k, v]) => `<p><b>${esc(k)}:</b> ${esc(clean(v))}</p>`)).join("")}`
+    + `<p class="region-settlement-pending"><i>The settlement itself is not built yet: Build this settlement makes its places, its people and its map.</i></p>`;
 }

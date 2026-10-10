@@ -5,6 +5,140 @@ by feature. Changes not yet released are listed under Unreleased.
 
 ## Unreleased
 
+## 0.4.0
+
+### New
+- A Sacred or Blasphemous weapon now names its religion: a faith from a settlement or holy place already in
+  your world, or the book's faith tables when there are none yet. A Petty God, Titan, Autarch or Quantum
+  Daemon cult is named in full ("Sacred (the Spider of Mutants)"), and a settlement keeps the god a weapon
+  first named for it. Generate Weapon lets the GM pick the faith. The reaction roll's question names it too.
+- Level drain (the Kronophage's Borrowed Time, a Gift's Drain a Level) now works on any character and on
+  creatures. A character whose level-up record is incomplete - levels typed onto the sheet, an imported
+  character - takes the book's drain: the Level, 1d8 off maximum HP, and a point off each of their three
+  highest abilities. A creature loses a Level, 4 maximum HP, and its abilities drop to the new Level.
+  Slaying the drainer gives back exactly what it took. Fixed: a character drained twice by the same
+  Kronophage got their level records back in the wrong order when it died.
+- Any item can be marked Broken (a checkbox on every item sheet, not only weapons). A broken item
+  cannot be equipped, comes off if it was worn, and refuses every use until the Referee clears the box.
+  Armour at quality 0 counts as broken. The Damaged Item wound now marks the gear in its rolled slot
+  broken (a wound or mutation in that slot is named, and nothing is damaged), and a Rustacean's
+  corrosion marks the item broken instead of renaming it "(Corroded)". Existing items start unbroken.
+- The five once-a-day Bloomboons (Empathogen Pollen, Glue Resin, Neurotoxic Pollen, Oily Sap,
+  Soporific Pollen) now count their daily use, like Ink Ducts or Gas Glands: the sheet shows the
+  uses left and a refresh icon, a second use the same day is refused, and a Long Rest refills it.
+  An existing Neobloom starts with its use available - nothing to do after updating.
+- A Gift effect can carry its own price table: the portal and telepathy are priced by distance
+  (d6 the same room ... d20 anywhere in the world), psychometry by how long the thing has been
+  held (d20 under a turn ... d6 a day or more). The cost dialog offers that table's dice with
+  their words; the builder's cost slot on a Gift offers "priced by". The Gift Effect Library is
+  complete: all 58 chosen effects.
+- The last three Library effects: Unerring strike (the target's next attack is a natural 20 - it
+  hits, its damage doubles, and the effect is spent), Take the blow (the user holds the protector
+  rule for a while, through a bestowed effect), and Invert gravity (Floating; the end card says how
+  many rounds they fell). Every one of the 58 chosen Gift effects is now in the Library.
+- Deprived, Berserk and Incorporeal can now be applied by any use (the builder's condition list),
+  and each state's own mechanics follow: no healing, double damage dealt and taken, no ordinary
+  damage taken or dealt. A Gift's old "Ghostly" effect now makes its target incorporeal rather
+  than saying so. Three more Library entries: 55 of the 58.
+- Seven more effects a use can carry, each applied from the effect card: temporary HP (its own
+  thing, not a heal - the Deprived can take it), a cure (poison stepped down by the user's PSY, an
+  affliction chosen on Apply, a fire put out), a wound closed (chosen on Apply), a Level drained
+  (no gain for the user), armour eroded by PSY, the escalating beam (1 damage, doubling each
+  round on the round card), and a jinx. Nine more Library entries for Gifts: 52 of the 58.
+- A use can bestow a passive effect for a while, on the user or a target: immunity to a condition
+  or to ambush, ADV or DIS on saves, ADV or DIS on their attacks, attacks against them at DIS,
+  half damage from a type, reflected misses, light, no need of rations, breathing underwater. It
+  arrives as an intrinsic item on the sheet, with its effect on its own Effects tab, and goes when
+  the effect ends. Eleven more Library entries for Gifts come with it.
+- A stat change can be a formula: +@psy, @cost+@psy or +1d4, filled and rolled when the effect
+  is used. The Library gains AV bonus (the die paid plus PSY) and Ability boost (the user's PSY).
+- The Gift Effect Library: every Mystic Gift's Effects tab now lists thirty effects a Gift can
+  carry - blind, entangled, asleep, paralysed, charm, mind control, a command, fear, misfortune,
+  vulnerable, cannot die, invisibility, a portal, telepathy and more - grouped, the Gift's own
+  Quality first. Each is priced the book's way (the die you choose when you use it, by the
+  targets' Level for anything but damage and healing); click Add, then change anything in the
+  builder. Cannot Die, Misfortune and Vulnerable are now conditions any effect can apply.
+- Generate Exotica: a new World Macro that rolls the book's Exotica Generator - a Material, a
+  Form, a Theme and an Action - and makes the thing as an Exotica Item ("Coral Anchor") with
+  the four words in its description. Its Effects tab offers suggestions from its words - two
+  for every Action, and typed damage when its material or theme names one - each added with a
+  click and changed in the builder, where the Referee also sets what using it costs. Worth 1
+  XP, as every Exotica is.
+- A use can grant an attack for a while - claws, a sting, a beam: its name, dice, damage type,
+  melee or ranged - on the user at once or on a target by a card with Apply. The weapon takes no
+  slots or hands and goes when the effect ends: a span, the combat's end, or the Referee's say.
+- A use can make someone's attacks auto-hit, or hit as though the target were unarmoured, for a
+  while - every attack, or melee or ranged only; on the user at once, on a target by a card with
+  Apply; until the Referee ends it, for a span, or until the combat ends. The hit card and the
+  attack roll say which effect did it.
+- A use can change a stat for a while: AV or an ability, up or down, for rounds, turns,
+  hours, days, until the combat ends or until the Referee ends it. On the user it applies at once;
+  on a target it is a card with Apply. The change lives on the Active Effects board and is gone
+  the moment the entry is.
+- Seven more effects a GM can compose on any Item's use: ability damage (STR, DEX... loss) and
+  an outright kill, each an Apply per target on the effect card; a compulsion, which goes on the
+  target's Active Effects board until the Referee ends it; and teleport, forced move, reveal
+  and conceal, said to the targets in the effect's own words. A use whose card has nobody
+  targeted now says so instead of posting nothing.
+- An effect on something worn or carried now reaches every attack its bearer makes: a monocle's
+  "target saves or Blind", a visor that ignores armour, an implant that adds EGO to damage, a
+  charm that heals on a kill or strikes a miss back. A weapon's own effects stay the weapon's.
+  The builder offers those fourteen attack effects on every Item but a weapon. A to-hit ability
+  on a worn Item is an offer: the attack rolls with the best of it and the weapon's usual
+  ability, and the card says which; a Psionic weapon keeps PSY.
+- The Effects tab's builder offers more of what the system already reads, on every Item it
+  reads it from: an ability bonus, ADV or DIS on the bearer's attacks, DIS on encounter rolls,
+  needing no rations, hidden HP, a base AV, extra helmets, a damage property (flat, gills...),
+  no helmets, and a use whose target saves or takes a condition - until it saves to end it,
+  if you like. A use can now cost a use from a daily pool (mutations and implants), a roll of
+  the Item's usage die, or the Item itself; a condition can last until the combat ends; a use
+  can reach every targeted creature. A Gift can carry a plain use with fixed dice and any of
+  those costs beside its die + PSY effects.
+- Generate Settlement opens a preview first: drag places around (the roads and wall follow),
+  change the settings, rename the town, then Create settlement.
+- Generate Settlement now makes a settlement journal in a Settlements folder, by the book's
+  Mapping a Settlement: an Overview page and a page for each marked place - the seat of
+  power, water source, assets, major problem, notable buildings and landmark - each with
+  Make an NPC here. It replaces the whispered chat card. Names are built from each
+  settlement's details and never repeat in your world.
+- A generated settlement also gets a map in a Settlement Scenes folder: its walls, roads,
+  dwellings and gathering places, with a pin for the Referee on every place. The places
+  start hidden from players: Reveal on the map, on a place's page or by the eye beside
+  its link, shows its icon and name to everyone.
+- Settlement pages get follow-up buttons too: a Drug Cafe makes the drug, a Vault Entrance
+  the vault, Banditry the bandit camp, a Jigsaw Courtier's House spawns the courtier, a
+  Titan Cult faith opens Titan Cults, and so on.
+- A region's Settlement is a real settlement now: named from its details in the preview,
+  its page shows its overview, and Build this settlement makes its journal and map. A
+  Holy Place set in a Settlement can build that town too. Region codes made before this
+  name their settlements differently; their maps are unchanged.
+- Referee's Guide chapter 11 has a full Settlements section: the preview, the journal,
+  the map and revealing places, follow-up rolls, and settlements in a region.
+- Region location pages have a Follow-up rolls box: where a page's details name
+  something the system can make - a vault entrance, a quantum daemon, an autarch, a
+  drug, Exotica - a button makes it and links it on the page. Regions you have
+  already made get the buttons too.
+- Where a location's details name another kind of place - a ruin that is now a bandit
+  hideout, a fortress that contains an archive - a button rolls that place into the
+  same page as its own section, with its own follow-up buttons and creatures.
+
+### Fixes
+- Generate Settlement, and a region's Settlement pages, now roll Majority and
+  Minority Population on 2d6 as the book says, so Cacogen are the commonest
+  residents and a town of Extradimensional Outsiders is a rarity. Before, every
+  population was equally likely.
+- Two book typos are corrected on settlements: Mycomorphs (was "Mycoorphs") and
+  Racquet Game (was "Raquet Game").
+
+### Changes
+- A settlement now rolls its Location, Houses, Industry, the two halves of its
+  Government, what it praises, despises and lacks, and its fashion, festival and
+  entertainment each separately; they used to be rolled in sets on one shared roll.
+  A town can now praise and despise the same thing - a very polarised town.
+- A region's Settlement takes its Location from the Landscape of its section - a
+  settlement among Mesas sits "Atop a Mesa" - and one time in four is instead one of
+  the book's site features, such as an Ancient Bomb Crater, with the terrain named.
+
 ## 0.3.1
 
 ### New

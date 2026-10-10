@@ -44,7 +44,9 @@ export const STATES = [
   { key: "controlled", label: "Controlled", mechanical: true,
     aliases: ["mind control", "mind controlled", "dominated", "neural puppetry", "puppeted", "commanded", "obey"],
     note: "The mind-control hold: acts as the controller directs, with an escape save where the source gives one." },
-  { key: "incorporeal", label: "Incorporeal", mechanical: true, aliases: ["phased", "spirit", "ghostly"],
+  // boardKey / flag since Gift Effect Library chunk 4b (RULED 2026-10-09): the state the readers
+  // already honour - an entry's applied.conditions key, or (Berserk) the actor flag the entry sets and clears.
+  { key: "incorporeal", label: "Incorporeal", mechanical: true, aliases: ["phased", "spirit", "ghostly"], boardKey: "incorporeal",
     note: "Damage rules: immune to all but the exceptions its source names." },
   { key: "invisible", label: "Invisible",   mechanical: false, aliases: ["transparent", "unseen", "camouflaged"] },
   { key: "charmed",   label: "Charmed",     mechanical: false,
@@ -53,9 +55,9 @@ export const STATES = [
     note: "The Unquiet Spirit's possession of a body. Not the Quantum Daemon curse." },
   { key: "daemon-possessed", label: "Daemon-Possessed", mechanical: true, aliases: ["daemon possession"],
     note: "The Quantum Daemon curse: a lost day and a Wound. Split from Possessed (2026-10-04)." },
-  { key: "deprived",  label: "Deprived",    mechanical: true,  aliases: ["starving", "parched", "dehydrated"] },
+  { key: "deprived",  label: "Deprived",    mechanical: true,  aliases: ["starving", "parched", "dehydrated"], boardKey: "Deprived" },
   { key: "exhaustion", label: "Exhaustion", mechanical: true,  aliases: ["exhausted"] },
-  { key: "berserk",   label: "Berserk",     mechanical: true,  aliases: ["killing frenzy", "frenzy", "battle madness"] },
+  { key: "berserk",   label: "Berserk",     mechanical: true,  flag: { key: "berserkerActive", value: "all" }, aliases: ["killing frenzy", "frenzy", "battle madness"] },
   { key: "hysteria",  label: "Hysteria",    mechanical: false, aliases: ["laughing"] },
   { key: "babbling",  label: "Babbling",    mechanical: false, aliases: [] },
   { key: "tarantism", label: "Tarantism",   mechanical: false, aliases: ["dancing"] },
@@ -64,6 +66,17 @@ export const STATES = [
   { key: "hallucinating", label: "Hallucinating", mechanical: false, aliases: ["mild hallucinations", "severe hallucinations", "hallucinations"] },
   { key: "mute",      label: "Mute",        mechanical: false, aliases: ["loss of language", "cannot speak", "silenced"] },
   { key: "floating",  label: "Floating",    mechanical: false, aliases: ["floating helplessly", "falling skywards", "inverted gravity"] },
+  // THE BOARD'S OWN KEYS - Gift Effect Library chunk 1 (RULED 2026-10-09, Matt):
+  // states the readers already honour as an entry's applied.conditions key
+  // (fatality.js cannotDie, stateful-effect.js disSavesAndAttacks, attack-
+  // properties.js takesDoubleDamage), registered so a sentence can name them
+  // and conditionSpec writes the key the reader looks for (boardKey).
+  { key: "cannot-die", label: "Cannot Die",  mechanical: true,  aliases: ["immortal", "unkillable"], boardKey: "cannotDie",
+    note: "Cannot be killed; every other harm still lands (fatality.js)." },
+  { key: "misfortune", label: "Misfortune",  mechanical: true,  aliases: ["doomed", "jinxed rolls"], boardKey: "disSavesAndAttacks",
+    note: "Every save and attack roll at DIS (stateful-effect.js)." },
+  { key: "vulnerable", label: "Vulnerable",  mechanical: true,  aliases: ["takes double damage"], boardKey: "takesDoubleDamage",
+    note: "Takes double damage from everything (attack-properties.js)." },
 ];
 
 const BY_KEY = new Map(STATES.map(s => [s.key, s]));

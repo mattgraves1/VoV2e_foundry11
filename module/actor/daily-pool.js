@@ -32,6 +32,8 @@
 import { MUTATION_EFFECTS } from "./mutation-effects-data.js";
 import { IMPLANT_EFFECTS } from "./implant-effects-data.js";
 import { perDaySizeOf } from "../effects/sentence.js";
+import { sentencesOf } from "../effects/interpret.js";
+import { displayNameOf } from "../item/display-name.js";
 
 /**
  * Every Item that owns a daily use pool. `size` is the full pool, evaluated
@@ -78,11 +80,37 @@ function possessive(name)
   return name.endsWith("s") ? `${name}'` : `${name}'s`;
 }
 
-/** The full pool this Item refills to for this bearer, or null if it has none. */
+/**
+ * The full pool this Item refills to for this bearer, or null if it has none.
+ * A roster entry's by name above; else the Item's own per-day use sentence -
+ * one a GM wrote in the builder (GM Effect Builder: Widening chunk 1,
+ * 2026-10-09), on any kind whose sheet shows the pool.
+ */
 export function dailyPoolSize(actor, item)
 {
   const spec = DAILY_POOLS.find(p => p.type === item?.type && p.name === item?.name);
-  return spec ? spec.size(actor) : null;
+  if (spec) return spec.size(actor);
+  const level = actor?.system?.level?.value;
+  for (const s of sentencesOf(item))
+  {
+    const size = perDaySizeOf(s, level);
+    if (size !== null) return size;
+  }
+  return null;
+}
+
+/**
+ * The uses this Item has left today. A pool never yet written reads FULL: an
+ * ancestry Item had no usesRemaining until Bloomboon Daily Use (RULED
+ * 2026-10-09, Matt, option a), so its template default is null rather than 0,
+ * and a Bloomboons Item from a world made before then is not shown as spent.
+ * Mutations and implants default to 0 and always carry a number.
+ */
+export function usesLeft(actor, item)
+{
+  const stored = item?.system?.usesRemaining;
+  if (stored !== null && stored !== undefined) return Number(stored);
+  return dailyPoolSize(actor, item) ?? 0;
 }
 
 /**
@@ -103,10 +131,10 @@ export async function refillDailyPools(actor)
   {
     const size = dailyPoolSize(actor, item);
     if(size === null) continue;
-    if((item.system.usesRemaining ?? 0) >= size) continue;
+    if(usesLeft(actor, item) >= size) continue;
 
     await item.update({ "system.usesRemaining": size });
-    refilled.push(`${possessive(item.name)} spent uses`);
+    refilled.push(`${possessive(displayNameOf(item))} spent uses`);
   }
 
   return refilled;

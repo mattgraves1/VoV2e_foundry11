@@ -231,6 +231,15 @@ export async function applyEffectToActor(actor, spec)
   // Matt), as the Planeyfication Potion's do. Written once, here; the flag
   // stays after the span ends and gates nothing for a reader who no longer
   // attunes.
+  // A state the entry switches on (GM Effect Builder: Widening chunk 3c, RULED
+  // 2026-10-09): auto-hit or ignore-armour attacks on whoever the entry goes on -
+  // set here, cleared by the entry's clearFlag when it ends, whoever ends it.
+  if (spec.setFlag?.key) await actor.setFlag("vaarn", spec.setFlag.key, spec.setFlag.value);
+  // Items the entry grants for its span (Widening chunk 3e, RULED 2026-10-09):
+  // created on whoever the entry goes on, removed by the entry's end through
+  // grantedItemIds - every exit the board has (effect-board.js undoEntryEffects).
+  const granted = Array.isArray(spec.grantItems) && spec.grantItems.length
+    ? await actor.createEmbeddedDocuments("Item", spec.grantItems.map(d => foundry.utils.deepClone(d))) : [];
   if (spec.attuneExisting)
   {
     const patches = (actor.items?.contents ?? [])
@@ -255,6 +264,7 @@ export async function applyEffectToActor(actor, spec)
     hpTick: spec.hpTick ?? null,
     endsBy: spec.endsBy ?? null,
     applied: spec.applied ?? null,
+    grantedItemIds: [...(spec.grantedItemIds ?? []), ...granted.map(i => i.id)],
     sourceActorId: spec.sourceActorId ?? null,
     sourceName: spec.sourceName ?? null,
     endsWithSource: !!spec.endsWithSource,

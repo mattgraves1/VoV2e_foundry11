@@ -31,6 +31,7 @@ import { VaarnCombat, registerInitiativeSetting } from "./combat/initiative.js";
 import { registerVaultSettings } from "./vault/vault-journal.js";
 import { registerVaultControls } from "./vault/vault-controls.js";
 import { registerRegionControls } from "./region/region-controls.js";
+import { registerSettlementControls } from "./settlement/settlement-controls.js";
 import { registerRegionLocation } from "./region/region-encounters.js";
 import { registerVaultLocation, registerVaultEncounterCards } from "./vault/vault-encounters.js";
 import { registerVaultScenes } from "./vault/vault-scene.js";
@@ -71,11 +72,12 @@ import { registerPageRefStripping } from "./text/page-refs.js";
 import { registerGambitCardButtons } from "./combat/gambit-card.js";
 import { registerThemeSettings, applyTheme } from "./ui/theme.js";
 import { registerCorrosionCardButtons, isCorroded } from "./combat/corrosion-card.js";
+import { registerBrokenHooks, isBroken } from "./item/broken.js";
 import { registerGiftApplyButtons } from "./combat/gift-damage.js";
 import { registerEffectCardButtons } from "./effects/effect-card.js";
 import { registerGateSettings, registerGateSocket } from "./effects/gates.js";
 import { registerValueReaches } from "./effects/value-reaches.js";
-import { killHealFor } from "./effects/weapon-heals.js";
+import { killHealFor, killHealSourceOf, hitHealSourceOf } from "./effects/weapon-heals.js";
 import { registerWeaponFeeding } from "./item/weapon-feeding.js";
 // Registers the weapon translator (Effect Engine: Weapon Tags, chunk 2).
 import "./item/weapon-tags.js";
@@ -100,7 +102,7 @@ import { hasSaveGated, saveGatedSpecFor, clearSaveGated, handsLapseCard } from "
 import { onTimeAdvance as onRecurrenceTime, recurrenceByKey, applyTickLosses,
          alreadyActioned, addWoundSlot, removeWoundSlot, extrudeObject, fadeOnce, fadingSummary, addFading }
   from "./time/recurrence.js";
-import { MUTATIONS_WITH_USE_POOL, IMPLANTS_WITH_USE_POOL } from "./actor/daily-pool.js";
+import { dailyPoolSize, usesLeft } from "./actor/daily-pool.js";
 import { hasDeclaredSpan } from "./time/declared-span.js";
 import { targetHealOf, fieldGeneratorOf, registerHealingFieldButtons, applyHeal } from "./actor/healing-field.js";
 import { actorValueRollData } from "./combat/actor-value-damage.js";
@@ -1073,7 +1075,7 @@ Hooks.on('renderChatMessage', (message, html) =>
     // the creature that died, exactly as the Synthhound's death is read.
     // From the weapon's sentences since Weapon Tags chunk 4 (weapon-heals.js).
     const heal = outcome === "killed" ? killHealFor(ctx.item, protector) : 0;
-    ctx.sheet._applyAttackHeals([{ verb: "feeds on the death of", label: "Blood-Rapturous", amount: heal, victims: 1 }], ctx.item?.name);
+    ctx.sheet._applyAttackHeals([{ verb: "feeds on the death of", label: killHealSourceOf(ctx.item), amount: heal, victims: 1 }], ctx.item?.name);
     if(outcome === "killed" && held.isMelee) ctx.sheet._postKillReactionReminder(1);
   });
 
@@ -1086,9 +1088,9 @@ Hooks.on('renderChatMessage', (message, html) =>
     if(!target?.actor) return ui.notifications.warn("The protectee no longer exists.");
     const res = ctx.sheet._doDamage(target, held.dmg, held.isMelee, ctx.item, held.rollMultiplier ?? 1, held.components, { skipProtect: true });
     ctx.sheet._applyAttackHeals([
-      { verb: "drains", label: "Vampiric", amount: res.vampiricHeal ?? 0, victims: 1 },
+      { verb: "drains", label: hitHealSourceOf(ctx.item), amount: res.vampiricHeal ?? 0, victims: 1 },
       { verb: "drains", label: ctx.item?.name ?? "the attack", amount: res.drainHeal ?? 0, victims: 1 },
-      { verb: "feeds on the death of", label: "Blood-Rapturous", amount: res.bloodRapturousHeal ?? 0, victims: 1 },
+      { verb: "feeds on the death of", label: killHealSourceOf(ctx.item), amount: res.bloodRapturousHeal ?? 0, victims: 1 },
     ], ctx.item?.name);
     if(res.killed && held.isMelee) ctx.sheet._postKillReactionReminder(1);
   });
@@ -1464,6 +1466,8 @@ registerRollCardVisibility();
 registerPageRefStripping();
 registerGambitCardButtons();
 registerCorrosionCardButtons();
+// Broken Item State (2026-10-09): a broken Item does not stay equipped.
+registerBrokenHooks();
 registerGiftApplyButtons();
 registerEffectCardButtons();
 registerGateSocket();
@@ -1630,6 +1634,7 @@ Hooks.once('init', async function() {
   registerVaultSettings(); // the Generate Vault window's saved settings (Vault Journal)
   registerVaultControls(); // roll a vault room's lair and treasure from its page (Contents Buttons on Vault Pages)
   registerRegionControls(); // a region's Vault page generates its vault when wanted (Region Generator)
+  registerSettlementControls(); // a settlement's places are revealed on its map from its journal (Settlement Creation)
   registerVaultLocation(); // the vault level the party is on (Vault Encounters from the Exploration Clock)
   registerRegionLocation(); // the region section the party is in (Region Generator)
   registerVaultEncounterCards(); // Spawn one on a vault encounter card
@@ -1701,6 +1706,7 @@ Hooks.once('init', async function() {
     "systems/vaarn/templates/apps/parts/faction-added.html",
     "systems/vaarn/templates/item/parts/effects-tab.html",
     "systems/vaarn/templates/item/parts/usage-die.html",
+    "systems/vaarn/templates/item/parts/broken.html",
   ]);
 
   // If you need to add Handlebars helpers, here are a few useful examples:
@@ -1936,15 +1942,9 @@ Hooks.once('init', async function() {
       return (item.system.used === "true" || !item.system.spellUsable);
     else if(usageDieOf(item).die === "expended")
       return true;
-    else if(item.type === "weaponMelee" || item.type === "weaponRanged")
-      return !!item.system.broken;
+    // Any Item marked broken, or armour at quality 0 (Broken Item State, 2026-10-09).
     else
-    {
-      if(item.system.quality)
-        return item.system.quality.value <= 0;
-      else
-        return false;
-    }
+      return isBroken(item);
   });
 
   Handlebars.registerHelper('hasQuality', function(item)
@@ -2013,9 +2013,24 @@ Hooks.once('init', async function() {
   // Gates the "refresh" icon and the Uses Remaining sheet field, for
   // mutations with a Level-per-day use pool. Deliberately separate from
   // hasMutationUse — see MUTATIONS_WITH_USE_POOL's comment above.
+  // A pool the roster names, or one a GM wrote as a per-day cost in the builder
+  // (GM Effect Builder: Widening chunk 1, 2026-10-09) - dailyPoolSize answers both.
   Handlebars.registerHelper('hasMutationUsePool', function(item)
   {
-    return item.type === 'mutation' && MUTATIONS_WITH_USE_POOL.includes(item.name);
+    return item.type === 'mutation' && dailyPoolSize(item.parent, item) !== null;
+  });
+
+  // The same for an ancestry rule - the five once-a-day Bloomboons (Bloomboon
+  // Daily Use, 2026-10-09).
+  Handlebars.registerHelper('hasAncestryUsePool', function(item)
+  {
+    return item.type === 'ancestry' && dailyPoolSize(item.parent, item) !== null;
+  });
+
+  // The uses left, a pool never yet written reading full (daily-pool.js usesLeft).
+  Handlebars.registerHelper('usesLeft', function(item)
+  {
+    return usesLeft(item.parent, item);
   });
 
   // Save-Gated Effect. Unlike every other gate in this block, this one asks
@@ -2061,7 +2076,7 @@ Hooks.once('init', async function() {
 
   Handlebars.registerHelper('hasImplantUsePool', function(item)
   {
-    return item.type === 'implant' && IMPLANTS_WITH_USE_POOL.includes(item.name);
+    return item.type === 'implant' && dailyPoolSize(item.parent, item) !== null;
   });
 
   // Same shape again, for generic `type: "item"` Items — item 10.8/10.3.8
